@@ -124,15 +124,29 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 			decodedInventory[res.inventoryId] = res.items
 		}
 
-		output := []*skycrypttypes.Item{}
+		maxIndex := -1
+		for inventoryId := range decodedInventory {
+			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
+				backpackIndex := strings.Split(inventoryId, "_")[1]
+				index := 0
+				fmt.Sscanf(backpackIndex, "%d", &index)
+				if index > maxIndex {
+					maxIndex = index
+				}
+			}
+		}
+
+		output := make([]*skycrypttypes.Item, maxIndex+1)
 		for inventoryId, items := range decodedInventory {
 			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
-
 				backpackIndex := strings.Split(inventoryId, "_")[1]
+				index := 0
+				fmt.Sscanf(backpackIndex, "%d", &index)
+
 				backpackIcon, iconExists := decodedInventory[fmt.Sprintf("backpack_icon_%s", backpackIndex)]
 				if iconExists && len(backpackIcon) > 0 {
 					backpackIcon[0].ContainsItems = items
-					output = append(output, backpackIcon[0])
+					output[index] = backpackIcon[0]
 				} else {
 					fmt.Printf("No icon found for backpack %s\n", backpackIndex)
 				}
