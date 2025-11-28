@@ -10,7 +10,6 @@ import (
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
-	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -43,33 +42,11 @@ func AccessoriesHandler(c *fiber.Ctx) error {
 		userProfile.Inventory = &skycrypttypes.Inventory{}
 	}
 
-	specifiedInventories := skyhelpernetworthgo.SpecifiedInventory{
-		"talisman_bag": userProfile.Inventory.BagContents.TalismanBag,
-	}
-
-	decodedItems, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(specifiedInventories, skyhelpernetworthgo.NetworthOptions{
-		IncludeItemData:  true,
-		KeepInvalidItems: true,
-	}.ToInternal())
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to calculate items: %v", err),
-		})
-	}
-
-	accessories := []*skycrypttypes.Item{}
-	if decodedItems.Types["talisman_bag"] != nil {
-		for _, item := range decodedItems.Types["talisman_bag"].Items {
-			if item.ItemData != nil {
-				item.ItemData.Price = item.Price
-			}
-
-			accessories = append(accessories, item.ItemData)
-		}
-	}
-
 	items := map[string][]*skycrypttypes.Item{
-		"talisman_bag": accessories,
+		"talisman_bag": stats.GetInventory(&userProfile, "talisman_bag"),
+		"inventory":    stats.GetInventory(&userProfile, "inventory"),
+		"enderchest":   stats.GetInventory(&userProfile, "enderchest"),
+		"backpack":     stats.GetInventory(&userProfile, "backpack"),
 	}
 
 	disabledPacks := []string{""}

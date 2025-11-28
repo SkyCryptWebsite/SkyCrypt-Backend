@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"fmt"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -65,7 +66,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 					continue
 				}
 
-				item.Lore = append(item.Lore, "", "§7Inactive: §cNot in accessory bag")
+				item.Lore = append(item.Lore, "", fmt.Sprintf("§7Inactive: §cFound in %s", utility.TitleCase(inventoryId)))
 				newAccessory := models.InsertAccessory{
 					ProcessedItem: item,
 					Id:            id,
@@ -103,8 +104,17 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 
 				if utility.RarityNameToInt(duplicateRarity) < utility.RarityNameToInt(rarity) {
 					duplicates[i].IsInactive = true
+
+					if !strings.Contains(strings.Join(duplicates[i].ProcessedItem.Lore, "\n"), "§7Inactive:") {
+						duplicates[i].ProcessedItem.Lore = append(duplicates[i].ProcessedItem.Lore, "", fmt.Sprintf("§7Inactive: §cLower rarity duplicate of %s", accessory.DisplayName))
+					}
 				} else if duplicate.Rarity == rarity {
 					duplicates[i].IsInactive = true
+
+					if !strings.Contains(strings.Join(duplicates[i].ProcessedItem.Lore, "\n"), "§7Inactive:") {
+						duplicates[i].ProcessedItem.Lore = append(duplicates[i].ProcessedItem.Lore, "", fmt.Sprintf("§7Inactive: §cDuplicate of %s", accessory.DisplayName))
+					}
+
 				}
 			}
 
@@ -132,6 +142,17 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 				for i, acc := range accessories {
 					if acc.Id == id && acc.Rarity == rarity {
 						accessories[i].IsInactive = false
+
+						// Remove the inactive lore line
+						for j := len(accessories[i].ProcessedItem.Lore) - 1; j >= 0; j-- {
+							if strings.HasPrefix(accessories[i].ProcessedItem.Lore[j], "§7Inactive:") {
+								accessories[i].ProcessedItem.Lore = append(accessories[i].ProcessedItem.Lore[:j], accessories[i].ProcessedItem.Lore[j+1:]...)
+								if j > 0 {
+									accessories[i].ProcessedItem.Lore = append(accessories[i].ProcessedItem.Lore[:j-1], accessories[i].ProcessedItem.Lore[j-1+1:]...)
+								}
+								break
+							}
+						}
 						break
 					}
 				}
@@ -148,6 +169,9 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 				for j, acc := range accessories {
 					if acc.Id == upgrade {
 						accessories[j].IsInactive = true
+						if !strings.Contains(strings.Join(accessories[j].ProcessedItem.Lore, "\n"), "§7Inactive:") {
+							accessories[j].ProcessedItem.Lore = append(accessories[j].ProcessedItem.Lore, "", fmt.Sprintf("§7Inactive: §cUpgraded to %s", accessory.DisplayName))
+						}
 					}
 				}
 			}
@@ -182,6 +206,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 	}
 
 	sort.Sort(itemSorter(accessories))
+
 	output := models.AccessoriesOutput{
 		Accessories:  accessories,
 		AccessoryIds: accessoryIds,
