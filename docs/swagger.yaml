@@ -1,5 +1,8 @@
 components:
   schemas:
+    fiber.Map:
+      additionalProperties: {}
+      type: object
     models.ArmorResult:
       properties:
         armor:
@@ -1096,6 +1099,8 @@ components:
       type: object
     models.PlayerResolve:
       properties:
+        displayName:
+          type: string
         username:
           type: string
         uuid:
@@ -1707,6 +1712,8 @@ components:
           uniqueItems: false
         champion_combat_xp:
           type: number
+        collected_coins:
+          type: integer
         compact_blocks:
           type: integer
         divan_powder_coating:
@@ -2094,6 +2101,26 @@ paths:
       summary: Get embed data for a specified player
       tags:
       - embed
+  /api/emojis:
+    get:
+      description: Retrieves all emojis from the database
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: {}
+                type: object
+          description: Returns fetched_at timestamp and array of emojis
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/fiber.Map'
+          description: Failed to fetch or parse emojis
+      summary: Get all emojis
+      tags:
+      - emojis
   /api/garden/{profileId}:
     get:
       description: Returns garden data for the given profile ID
