@@ -216,6 +216,10 @@ func getAuctions(userProfile *skycrypttypes.Member) models.MiscAuctions {
 
 	totalSold, totalSoldAmount, totalBought, totalBoughtAmount := map[string]float64{}, 0.0, map[string]float64{}, 0.0
 	for item, amount := range auctions.TotalSold {
+		if item == "total" {
+			continue
+		}
+
 		totalSold[item] = amount
 		totalSoldAmount += amount
 	}
@@ -223,6 +227,10 @@ func getAuctions(userProfile *skycrypttypes.Member) models.MiscAuctions {
 	totalSold["total"] = totalSoldAmount
 
 	for item, amount := range auctions.TotalBought {
+		if item == "total" {
+			continue
+		}
+
 		totalBought[item] = amount
 		totalBoughtAmount += amount
 	}

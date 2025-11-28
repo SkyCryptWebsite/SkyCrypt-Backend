@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"skycrypt/src/constants"
+	"skycrypt/src/db"
 	"strconv"
 	"strings"
 	"sync"
@@ -570,4 +571,12 @@ func GetHexColor(color string) string {
 	}
 
 	return "FFFFFF"
+}
+
+func GetDisplayName(username string, uuid string) string {
+	if db.EMOJIS[uuid] != "" {
+		return username + " " + db.EMOJIS[uuid]
+	}
+
+	return username
 }

@@ -6,7 +6,7 @@ import (
 	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/api"
-	redis "skycrypt/src/db"
+	"skycrypt/src/db"
 	"skycrypt/src/routes"
 	"skycrypt/src/utility"
 	"time"
@@ -36,12 +36,30 @@ func SetupApplication() error {
 	}
 
 	redisPassword := os.Getenv("REDIS_PASSWORD")
-
 	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
 
-	err = redis.InitRedis(redisAddr, redisPassword, 0)
+	err = db.InitRedis(redisAddr, redisPassword, 0)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Redis: %v", err)
+	}
+
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+
+	mongoDBName := os.Getenv("MONGO_DB_NAME")
+	if mongoDBName == "" {
+		mongoDBName = "SkyCrypt"
+	}
+
+	err = db.InitMongo(mongoURI, mongoDBName)
+	if err != nil {
+		return fmt.Errorf("failed to connect to MongoDB: %v", err)
+	}
+
+	if err := api.LoadSkyBlockItems(); err != nil {
+		return fmt.Errorf("error loading SkyBlock items: %v", err)
 	}
 
 	if err := api.LoadSkyBlockItems(); err != nil {
@@ -182,4 +200,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/leather/:type/:color", routes.LeatherHandlers)
 
 	api.Get("/resourcepacks", routes.ResourcePackHandler)
+
+	// OTHER
+	api.Get("/emojis", routes.EmojisHandler)
 }

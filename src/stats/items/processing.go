@@ -75,15 +75,25 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 
 		// Timestamps
 		if item.Tag.ExtraAttributes.Timestamp != nil {
-			if timestamp, ok := item.Tag.ExtraAttributes.Timestamp.(float64); ok {
-				processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Obtained: §c{TIMESTAMP:%.0f}", timestamp))
-			} else if timestamp, ok := item.Tag.ExtraAttributes.Timestamp.(string); ok {
+			var timestampStr string
+			switch timestamp := item.Tag.ExtraAttributes.Timestamp.(type) {
+			case float64:
+				timestampStr = fmt.Sprintf("%.0f", timestamp)
+			case string:
 				parsedTimestamp := utility.ParseTimestamp(timestamp)
-				processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Obtained: §c{TIMESTAMP:%d}", parsedTimestamp))
-			} else if timestamp, ok := item.Tag.ExtraAttributes.Timestamp.(int64); ok {
-				processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Obtained: §c{TIMESTAMP:%d}", timestamp))
-			} else {
+				timestampStr = fmt.Sprintf("%d", parsedTimestamp)
+			case int64:
+				timestampStr = fmt.Sprintf("%d", timestamp)
+			default:
 				fmt.Printf("Unexpected type for timestamp: %T, %s\n", item.Tag.ExtraAttributes.Timestamp, item.Tag.ExtraAttributes.Timestamp)
+			}
+
+			if timestampStr != "" {
+				if source == "museum" && len(timestampStr) == 10 {
+					timestampStr += "000"
+				}
+
+				processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Obtained: §c{TIMESTAMP:%s}", timestampStr))
 			}
 		}
 

@@ -37,7 +37,8 @@ func UsernameHandler(c *fiber.Ctx) error {
 	fmt.Printf("Returning /api/username/%s in %s\n", username, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
-		"username": username,
-		"uuid":     uuid,
+		"displayName": utility.GetDisplayName(username, uuid),
+		"username":    username,
+		"uuid":        uuid,
 	})
 }
