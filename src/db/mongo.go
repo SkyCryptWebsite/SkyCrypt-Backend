@@ -166,8 +166,6 @@ func CloseMongo() error {
 }
 
 func populateEmojis() {
-	timeNow := time.Now()
-
 	collection := GetMongoCollection("emojis")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -189,10 +187,6 @@ func populateEmojis() {
 			continue
 		}
 		EMOJIS[result.UUID] = result.Emoji
-	}
-
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		fmt.Printf("[MONGO] Emojis populated in %v\n", time.Since(timeNow))
 	}
 }
 
