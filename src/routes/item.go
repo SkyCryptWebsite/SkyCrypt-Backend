@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
@@ -42,6 +43,8 @@ func ItemHandlers(c *fiber.Ctx) error {
 			disabledPacks = strings.Split(disabledResourcePacks, ",")
 		}
 	}
+
+	fmt.Printf("[REQUEST] /api/item/%s with packs: %v\n", textureId, disabledPacks)
 
 	textureBytes, err := lib.RenderItem(textureId, disabledPacks)
 	if err != nil {
