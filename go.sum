@@ -2,6 +2,8 @@ dario.cat/mergo v1.0.0 h1:AGCNq9Evsj31mOgNPcLyXc+4PNABt905YmuqPYYpBWk=
 dario.cat/mergo v1.0.0/go.mod h1:uNxQE+84aUszobStD9th8a29P2fMDhsBdgRYvZOxGmk=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.13 h1:ITZ8hrsHxRUXIwn8LrM5itvrLxlb7D9epEBAbWCx8oc=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.13/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
+github.com/DuckySoLucky/SkyCrypt-Types v0.1.14 h1:PB3a9KXdv0bMUSEIxGnEqITrQ7lUM3WgmDoh3BpS558=
+github.com/DuckySoLucky/SkyCrypt-Types v0.1.14/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
@@ -11,6 +13,8 @@ github.com/ProtonMail/go-crypto v1.1.6 h1:ZcV+Ropw6Qn0AX9brlQLAUXfqLBc7Bl+f/DmNx
 github.com/ProtonMail/go-crypto v1.1.6/go.mod h1:rA3QumHc/FZ8pAHreoekgiAbzpNsfQAosU5td4SnOrE=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.6 h1:0KGv/qY/60Jj7f2Eq80d5izBJaljkQ9CKR84RKcitQM=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.6/go.mod h1:KO71BXu+xc/9yBpfF2+u0u7WnW0004cYn31crOzkyj0=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.7 h1:+U//ZBYpPZMkqd3ZKNOwHtN26im6Hqt4vU09j/hXybY=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.7/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
 github.com/Tnze/go-mc v1.20.2/go.mod h1:geoRj2HsXSkB3FJBuhr7wCzXegRlzWsVXd7h7jiJ6aQ=
 github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwToPjQ=
