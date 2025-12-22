@@ -40,6 +40,8 @@ func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) Applied
 		return AppliedItemTexture{}
 	}
 
+	textures = slices.Clone(textures)
+
 	disabledPacks := disabledPacksParam[0]
 	for _, disabledPack := range disabledPacks {
 		textures = slices.DeleteFunc(textures, func(t models.ItemTexture) bool {
