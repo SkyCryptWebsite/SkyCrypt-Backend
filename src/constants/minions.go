@@ -26,6 +26,9 @@ var MINION_SLOTS = map[int]int{
 	600: 25,
 	650: 26,
 	700: 27,
+	750: 28,
+	800: 29,
+	850: 30,
 }
 
 type minionInfo struct {
@@ -51,6 +54,7 @@ var MINIONS = map[string]map[string]minionInfo{
 		"CARROT":       {Texture: "/api/head/4baea990b45d330998cb0c1f8515c27b24f93bff1df0db056e647f8200d03b9d", MaxTier: 12},
 		"POTATO":       {Texture: "/api/head/7dda35a044cb0374b516015d991a0f65bf7d0fb6566e350496642cf2059ff1d9", MaxTier: 12},
 		"SHEEP":        {Texture: "/api/head/fd15d4b8bce708f77f963f1b4e87b1b969fef1766a3e9b67b249c59d5e80e8c5", MaxTier: 12},
+		"SUNFLOWER":    {Texture: "/api/head/1400c11dd48e403faa03f930b2134b8d8b0e7716c876aa1997f2eb4e548d8a10", MaxTier: 12},
 	},
 	"mining": {
 		"HARD_STONE":  {Texture: "/api/head/1e8bab9493708beda34255606d5883b8762746bcbe6c94e8ca78a77a408c8ba8", MaxTier: 12},
@@ -80,7 +84,7 @@ var MINIONS = map[string]map[string]minionInfo{
 		"SKELETON":   {Texture: "/api/head/2fe009c5cfa44c05c88e5df070ae2533bd682a728e0b33bfc93fd92a6e5f3f64"},
 		"CREEPER":    {Texture: "/api/head/54a92c2f8c1b3774e80492200d0b2218d7b019314a73c9cb5b9f04cfcacec471"},
 		"SPIDER":     {Texture: "/api/head/e77c4c284e10dea038f004d7eb43ac493de69f348d46b5c1f8ef8154ec2afdd0"},
-		"TARANTULA":  {Texture: "/api/head/97e86007064c9ce26eb4bad8ac9aa30aac309e70a9e0b615936318dea40a721"},
+		"TARANTULA":  {Texture: "/api/head/97e86007064c9ce26eb4bad8ac9aa30aac309e70a9e0b615936318dea40a721", MaxTier: 12},
 		"CAVESPIDER": {Name: "Cave Spider", Texture: "/api/head/5d815df973bcd01ee8dfdb3bd74f0b7cb8fef2a70559e4faa5905127bbb4a435"},
 		"BLAZE":      {Texture: "/api/head/3208fbd64e97c6e00853d36b3a201e4803cae43dcbd6936a3cece050912e1f20", MaxTier: 12},
 		"MAGMA_CUBE": {Texture: "/api/head/18c9a7a24da7e3182e4f62fa62762e21e1680962197c7424144ae1d2c42174f7", MaxTier: 12},
