@@ -1,0 +1,65 @@
+version: "3.8"
+services:
+  skycrypt-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skycrypt-backend
+    pid: "host"
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - HYPIXEL_API_KEY=${HYPIXEL_API_KEY}
+      - DEV=true
+      - ENABLE_ARMOR_HEX=${ENABLE_ARMOR_HEX:-false}
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-SkyCrypt}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - skycrypt-network
+  redis:
+    image: redis:latest
+    container_name: skycrypt-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - skycrypt-network
+  mongodb:
+    image: mongo:latest
+    container_name: skycrypt-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - skycrypt-network
+volumes:
+  redis-data:
+    driver: local
+  mongodb-data:
+    driver: local
+networks:
+  skycrypt-network:
+    driver: bridge
