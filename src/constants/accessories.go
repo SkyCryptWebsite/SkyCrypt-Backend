@@ -212,7 +212,7 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 	},
 	"RUNEBOOK": {
 		AllowsRecomb:     false,
-		AllowsEnrichment: true
+		AllowsEnrichment: true,
 	},
 }
 
