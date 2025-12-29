@@ -66,7 +66,10 @@ func getEnrichments(accessories []models.InsertAccessory) map[string]int {
 func GetRecombobulatedCount(accessories []models.InsertAccessory) int {
 	count := 0
 	for _, accessory := range accessories {
-		if accessory.Tag.ExtraAttributes.Recombobulated > 0 {
+		// NOTE: On the release of the new update, Hypixel forgot to stop users from recmbobulating the accessory and now some users have it recombobulated
+		// This is a temporary fix until they fix it (if they ever do). Example: https://cupcake.shiiyu.moe/stats/DeathStreeks/Blueberry
+		// Despite the accessory being Recombobulated, it's rarity does not change, so skip counting it towards recombobulated accessories but still show the item as recombobulated.
+		if accessory.Id != "RUNEBOOK" && accessory.Tag.ExtraAttributes.Recombobulated > 0 {
 			count++
 		}
 	}
