@@ -22,8 +22,12 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
-    networks:
-      - skycrypt-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
   redis:
     image: redis:latest
     container_name: skycrypt-redis
@@ -38,8 +42,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - skycrypt-network
   mongodb:
     image: mongo:latest
     container_name: skycrypt-mongodb
@@ -53,13 +55,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - skycrypt-network
 volumes:
   redis-data:
     driver: local
   mongodb-data:
     driver: local
-networks:
-  skycrypt-network:
-    driver: bridge
