@@ -66,9 +66,8 @@ func getEnrichments(accessories []models.InsertAccessory) map[string]int {
 func GetRecombobulatedCount(accessories []models.InsertAccessory) int {
 	count := 0
 	for _, accessory := range accessories {
-		specialAccessory, exists := constants.SPECIAL_ACCESSORIES[accessory.Id]
-		if exists && !specialAccessory.AllowsRecomb {
-			continue
+		if accessory.Tag.ExtraAttributes.Recombobulated > 0 {
+			count++
 		}
 	}
 
