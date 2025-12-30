@@ -9,14 +9,6 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    environment:
-      - HYPIXEL_API_KEY=${HYPIXEL_API_KEY}
-      - DEV=true
-      - ENABLE_ARMOR_HEX=${ENABLE_ARMOR_HEX:-false}
-      - MONGO_URI=mongodb://mongodb:27017
-      - MONGO_DB_NAME=${MONGO_DB_NAME:-SkyCrypt}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
     depends_on:
       redis:
         condition: service_healthy
