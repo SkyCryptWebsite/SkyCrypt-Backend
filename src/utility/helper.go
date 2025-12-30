@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"skycrypt/src/constants"
 	"skycrypt/src/db"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +24,13 @@ import (
 	"golang.org/x/text/language"
 )
 
-var colorCodeRegex = regexp.MustCompile("§[0-9a-fk-or]")
+var (
+	colorCodeRegex = regexp.MustCompile("§[0-9a-fk-or]")
+	nonAsciiRegex  = regexp.MustCompile(`[^\x00-\x7F]`)
+	variableRegex  = regexp.MustCompile(`\{(\w+)\}`) // Moved from ReplaceVariables
+)
+
+var titleCaser = cases.Title(language.English)
 
 type errorCache struct {
 	lastSent time.Time
@@ -47,11 +54,27 @@ var (
 	}
 )
 
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewBuffer(make([]byte, 0, 1024))
+	},
+}
+
+var rarityMap = func() map[string]int {
+	m := make(map[string]int)
+	for i, r := range constants.RARITIES {
+		m[strings.ToLower(r)] = i
+	}
+	return m
+}()
+
 func GetRawLore(text string) string {
 	return colorCodeRegex.ReplaceAllString(text, "")
 }
-
-var nonAsciiRegex = regexp.MustCompile(`[^\x00-\x7F]`)
 
 func RemoveNonAscii(text string) string {
 	return nonAsciiRegex.ReplaceAllString(text, "")
@@ -91,33 +114,34 @@ func Max(a, b int) int {
 }
 
 func TitleCase(s string) string {
-	if strings.Contains(s, "_") || strings.Contains(s, "-") {
-		parts := strings.FieldsFunc(s, func(r rune) bool {
-			return r == '_' || r == '-'
-		})
-		for i, part := range parts {
-			parts[i] = cases.Title(language.English).String(part)
-		}
-		return strings.Join(parts, " ")
+	if !strings.ContainsAny(s, "_-") {
+		return titleCaser.String(s)
 	}
 
-	return cases.Title(language.English).String(s)
+	parts := strings.FieldsFunc(s, func(r rune) bool {
+		return r == '_' || r == '-'
+	})
+
+	var builder strings.Builder
+	builder.Grow(len(s))
+
+	for i, part := range parts {
+		if i > 0 {
+			builder.WriteByte(' ')
+		}
+		builder.WriteString(titleCaser.String(part))
+	}
+
+	return builder.String()
 }
 
 func ParseInt(n string) (int, error) {
-	i, err := strconv.Atoi(n)
-	if err != nil {
-		return 0, err
-	}
-
-	return i, nil
+	return strconv.Atoi(n)
 }
 
 func RarityNameToInt(rarity string) int {
-	for i, r := range constants.RARITIES {
-		if strings.EqualFold(r, rarity) {
-			return i
-		}
+	if idx, ok := rarityMap[strings.ToLower(rarity)]; ok {
+		return idx
 	}
 	return 0
 }
@@ -134,39 +158,28 @@ func FormatNumber(n any) string {
 	case int64:
 		value = float64(v)
 	default:
-		fmt.Printf("Unsupported type for FormatNumber: %T\n", v)
 		return "0"
 	}
 
-	abs := value
-	if abs < 0 {
-		abs = -abs
-	}
-
-	var suffix string
-	var divisor float64
+	abs := math.Abs(value)
 
 	switch {
 	case abs >= 1e9:
-		suffix = "B"
-		divisor = 1e9
+		return formatWithSuffix(value/1e9, "B")
 	case abs >= 1e6:
-		suffix = "M"
-		divisor = 1e6
+		return formatWithSuffix(value/1e6, "M")
 	case abs >= 1e3:
-		suffix = "K"
-		divisor = 1e3
+		return formatWithSuffix(value/1e3, "K")
 	default:
 		if value == float64(int(value)) {
 			return strconv.Itoa(int(value))
 		}
-		rounded := Round(value, 2)
-		return strconv.FormatFloat(rounded, 'f', -1, 64)
+		return strconv.FormatFloat(Round(value, 2), 'f', -1, 64)
 	}
+}
 
-	result := value / divisor
-	rounded := Round(result, 2)
-
+func formatWithSuffix(value float64, suffix string) string {
+	rounded := Round(value, 2)
 	if rounded == float64(int(rounded)) {
 		return strconv.Itoa(int(rounded)) + suffix
 	}
@@ -179,10 +192,24 @@ func AddCommas(n int) string {
 	}
 
 	s := strconv.Itoa(n)
-	for i := len(s) - 3; i > 0; i -= 3 {
-		s = s[:i] + "," + s[i:]
+	length := len(s)
+	commaCount := (length - 1) / 3
+
+	var builder strings.Builder
+	builder.Grow(length + commaCount)
+
+	startOffset := length % 3
+	if startOffset == 0 {
+		startOffset = 3
 	}
-	return s
+
+	builder.WriteString(s[:startOffset])
+	for i := startOffset; i < length; i += 3 {
+		builder.WriteByte(',')
+		builder.WriteString(s[i : i+3])
+	}
+
+	return builder.String()
 }
 
 func ParseTimestamp(timestamp string) int {
@@ -190,7 +217,6 @@ func ParseTimestamp(timestamp string) int {
 	if err != nil {
 		return 0
 	}
-
 	return int(t.Unix())
 }
 
@@ -209,7 +235,6 @@ func IndexOf(slice []string, item string) int {
 			return i
 		}
 	}
-
 	return -1
 }
 
@@ -234,6 +259,14 @@ func GetSkinHash(base64String string) string {
 	return result
 }
 
+type skinTextureData struct {
+	Textures struct {
+		SKIN struct {
+			URL string `json:"url"`
+		} `json:"SKIN"`
+	} `json:"textures"`
+}
+
 func computeSkinHash(base64String string) string {
 	var data []byte
 
@@ -249,14 +282,7 @@ func computeSkinHash(base64String string) string {
 		return ""
 	}
 
-	var jsonData struct {
-		Textures struct {
-			SKIN struct {
-				URL string `json:"url"`
-			} `json:"SKIN"`
-		} `json:"textures"`
-	}
-
+	var jsonData skinTextureData
 	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return ""
 	}
@@ -266,12 +292,11 @@ func computeSkinHash(base64String string) string {
 		return ""
 	}
 
-	parts := strings.Split(url, "/")
-	if len(parts) == 0 {
+	lastSlash := strings.LastIndex(url, "/")
+	if lastSlash == -1 || lastSlash == len(url)-1 {
 		return ""
 	}
-
-	return parts[len(parts)-1]
+	return url[lastSlash+1:]
 }
 
 func Round(value float64, precision int) float64 {
@@ -283,28 +308,21 @@ func Round(value float64, precision int) float64 {
 }
 
 func ReplaceVariables(template string, variables map[string]float64) string {
-	re := regexp.MustCompile(`\{(\w+)\}`)
-
-	return re.ReplaceAllStringFunc(template, func(match string) string {
-		name := strings.Trim(match, "{}")
+	return variableRegex.ReplaceAllStringFunc(template, func(match string) string {
+		name := match[1 : len(match)-1] // Faster than strings.Trim
 
 		value, exists := variables[name]
 		if !exists {
 			return match
 		}
 
-		// fmt.Printf("Replacing variable %s with value %.2f\n", name, value)
 		if _, err := strconv.ParseFloat(name, 64); err != nil {
-			if intValue, err := strconv.Atoi(fmt.Sprintf("%.0f", value)); err == nil && intValue > 0 {
-				if strings.Contains(match, "+") {
-					return "+" + strconv.Itoa(intValue)
-				}
-
-				return "+" + fmt.Sprintf("%.0f", value)
+			if intValue := int(value); intValue > 0 {
+				return "+" + strconv.Itoa(intValue)
 			}
 		}
 
-		return fmt.Sprintf("%.0f", math.Abs(value))
+		return strconv.Itoa(int(math.Abs(value)))
 	})
 }
 
@@ -329,14 +347,14 @@ func CompareStrings(a, b string) int {
 func CompareBooleans(a, b bool) int {
 	if a == b {
 		return 0
-	} else if a && !b {
+	} else if a {
 		return 1
 	}
 	return -1
 }
 
 func Filter[T any](slice []T, predicate func(T) bool) []T {
-	var result []T
+	result := make([]T, 0, len(slice)/2) // Estimate half will match
 	for _, item := range slice {
 		if predicate(item) {
 			result = append(result, item)
@@ -346,18 +364,9 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
 }
 
 func SortBy[T any](slice []T, compare func(T, T) int) []T {
-	if len(slice) < 2 {
-		return slice
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if compare(slice[j], slice[j+1]) > 0 {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
-
+	sort.Slice(slice, func(i, j int) bool {
+		return compare(slice[i], slice[j]) < 0
+	})
 	return slice
 }
 
@@ -370,26 +379,11 @@ func Sum(slice []float64) float64 {
 }
 
 func RoundFloat(value float64, precision int) float64 {
-	if precision < 0 {
-		return value
-	}
-	pow := math.Pow(10, float64(precision))
-	return math.Round(value*pow) / pow
+	return Round(value, precision)
 }
 
 func SortInts(slice []int) []int {
-	if len(slice) < 2 {
-		return slice
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if slice[j] > slice[j+1] {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
-
+	sort.Ints(slice)
 	return slice
 }
 
@@ -402,23 +396,12 @@ func SumInt(slice []int) int {
 }
 
 func SortSlice[T any](slice []T, less func(i, j int) bool) {
-	if len(slice) < 2 {
-		return
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if less(j+1, j) {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
+	sort.Slice(slice, less)
 }
 
 func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	webhookURL := os.Getenv("DISCORD_WEBHOOK")
 	if webhookURL == "" {
-		fmt.Println("DISCORD_WEBHOOK environment variable not set")
 		return
 	}
 
@@ -426,7 +409,6 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	errorHash := generateErrorHash(endpoint, errorStr)
 
 	if !shouldSendError(errorHash) {
-		fmt.Printf("Error webhook rate limited for hash: %s\n", errorHash[:8])
 		return
 	}
 
@@ -440,17 +422,15 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	}
 
 	stackStr := string(stack)
-	maxStackLength := 800
-	if len(stackStr) > maxStackLength {
-		stackStr = stackStr[:maxStackLength] + "\n... (truncated)"
+	if len(stackStr) > 800 {
+		stackStr = stackStr[:800] + "\n... (truncated)"
 	}
 
+	// Simplify file path
 	cleanFilePath := callerInfo
-	if strings.Contains(callerInfo, "/") {
-		parts := strings.Split(callerInfo, "/")
-		if len(parts) >= 2 {
-			// Show last 2 directories + file for context
-			cleanFilePath = strings.Join(parts[len(parts)-2:], "/")
+	if lastSlash := strings.LastIndex(callerInfo, "/"); lastSlash != -1 {
+		if secondLast := strings.LastIndex(callerInfo[:lastSlash], "/"); secondLast != -1 {
+			cleanFilePath = callerInfo[secondLast+1:]
 		}
 	}
 
@@ -467,31 +447,11 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	embed := map[string]interface{}{
 		"color": 0xFF3B30,
 		"fields": []map[string]interface{}{
-			{
-				"name":   "Error Details" + countText,
-				"value":  fmt.Sprintf("```\n%s\n```", errorStr),
-				"inline": false,
-			},
-			{
-				"name":   "Endpoint",
-				"value":  fmt.Sprintf("`%s`", endpoint),
-				"inline": true,
-			},
-			{
-				"name":   "Occurred",
-				"value":  fmt.Sprintf("<t:%d:R>", time.Now().Unix()),
-				"inline": true,
-			},
-			{
-				"name":   "Location",
-				"value":  fmt.Sprintf("`%s`", cleanFilePath),
-				"inline": false,
-			},
-			{
-				"name":   "Stack Trace",
-				"value":  fmt.Sprintf("```go\n%s\n```", stackStr),
-				"inline": false,
-			},
+			{"name": "Error Details" + countText, "value": "```\n" + errorStr + "\n```", "inline": false},
+			{"name": "Endpoint", "value": "`" + endpoint + "`", "inline": true},
+			{"name": "Occurred", "value": fmt.Sprintf("<t:%d:R>", time.Now().Unix()), "inline": true},
+			{"name": "Location", "value": "`" + cleanFilePath + "`", "inline": false},
+			{"name": "Stack Trace", "value": "```go\n" + stackStr + "\n```", "inline": false},
 		},
 	}
 
@@ -500,28 +460,25 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 		"embeds":   []map[string]interface{}{embed},
 	}
 
-	jsonData, jsonErr := json.Marshal(payload)
-	if jsonErr != nil {
-		fmt.Printf("Failed to marshal webhook payload: %v\n", jsonErr)
+	// Use pooled buffer
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	if err := json.NewEncoder(buf).Encode(payload); err != nil {
 		return
 	}
 
-	resp, httpErr := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	// Use shared HTTP client
+	resp, httpErr := httpClient.Post(webhookURL, "application/json", buf)
 	if httpErr != nil {
-		fmt.Printf("Failed to send webhook: %v\n", httpErr)
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		fmt.Printf("Webhook returned non-success status: %d\n", resp.StatusCode)
-		return
-	}
+	resp.Body.Close()
 }
 
 func generateErrorHash(endpoint, errorStr string) string {
-	data := fmt.Sprintf("%s:%s", endpoint, errorStr)
-	hash := md5.Sum([]byte(data))
+	hash := md5.Sum([]byte(endpoint + ":" + errorStr))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -533,10 +490,7 @@ func shouldSendError(errorHash string) bool {
 	cache, exists := errorCacheMap[errorHash]
 
 	if !exists {
-		errorCacheMap[errorHash] = &errorCache{
-			lastSent: now,
-			count:    1,
-		}
+		errorCacheMap[errorHash] = &errorCache{lastSent: now, count: 1}
 		return true
 	}
 
@@ -562,21 +516,24 @@ func getErrorCount(errorHash string) int {
 
 func GetHexColor(color string) string {
 	parts := strings.Split(color, ",")
-	if len(parts) == 3 {
-		var r, g, b int
-		fmt.Sscanf(parts[0], "%d", &r)
-		fmt.Sscanf(parts[1], "%d", &g)
-		fmt.Sscanf(parts[2], "%d", &b)
-		return fmt.Sprintf("%02X%02X%02X", r, g, b)
+	if len(parts) != 3 {
+		return "FFFFFF"
 	}
 
-	return "FFFFFF"
+	r, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	g, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	b, err3 := strconv.Atoi(strings.TrimSpace(parts[2]))
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		return "FFFFFF"
+	}
+
+	return fmt.Sprintf("%02X%02X%02X", r, g, b)
 }
 
 func GetDisplayName(username string, uuid string) string {
-	if db.EMOJIS[uuid] != "" {
-		return username + " " + db.EMOJIS[uuid]
+	if emoji := db.EMOJIS[uuid]; emoji != "" {
+		return username + " " + emoji
 	}
-
 	return username
 }
