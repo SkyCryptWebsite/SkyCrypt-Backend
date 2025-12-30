@@ -1,33 +1,5 @@
 version: "3.8"
 services:
-  skycrypt-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: skycrypt-backend
-    pid: "host"
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - HYPIXEL_API_KEY=${HYPIXEL_API_KEY}
-      - DEV=true
-      - ENABLE_ARMOR_HEX=${ENABLE_ARMOR_HEX:-false}
-      - MONGO_URI=mongodb://mongodb:27017
-      - MONGO_DB_NAME=${MONGO_DB_NAME:-SkyCrypt}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      redis:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
-      interval: 60s
-      timeout: 30s
-      retries: 5
-      start_period: 60s
   redis:
     image: redis:latest
     container_name: skycrypt-redis
