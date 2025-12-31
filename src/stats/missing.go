@@ -135,7 +135,6 @@ func getMagicalPowerData(accessories *[]models.InsertAccessory, userProfile *sky
 
 	if userProfile.Rift.Access.ConsumedPrism {
 		output.RiftPrism += 11
-		output.Total += 11
 	}
 
 	return output
