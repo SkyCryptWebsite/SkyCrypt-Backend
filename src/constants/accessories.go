@@ -210,6 +210,10 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 		AllowsRecomb:     true,
 		AllowsEnrichment: false,
 	},
+	"RUNEBOOK": {
+		AllowsRecomb:     false,
+		AllowsEnrichment: true,
+	},
 }
 
 var MAGICAL_POWER = map[string]int{

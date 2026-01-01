@@ -66,6 +66,11 @@ func getEnrichments(accessories []models.InsertAccessory) map[string]int {
 func GetRecombobulatedCount(accessories []models.InsertAccessory) int {
 	count := 0
 	for _, accessory := range accessories {
+		specialAccessory, exists := constants.SPECIAL_ACCESSORIES[accessory.Id]
+		if exists && !specialAccessory.AllowsRecomb {
+			continue
+		}
+
 		if accessory.Tag.ExtraAttributes.Recombobulated > 0 {
 			count++
 		}
@@ -130,7 +135,6 @@ func getMagicalPowerData(accessories *[]models.InsertAccessory, userProfile *sky
 
 	if userProfile.Rift.Access.ConsumedPrism {
 		output.RiftPrism += 11
-		output.Total += 11
 	}
 
 	return output
