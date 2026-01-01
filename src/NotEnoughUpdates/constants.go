@@ -18,9 +18,9 @@ func GetItem(name string) (models.NEUItem, error) {
 
 	itemsPath := "NotEnoughUpdates-REPO/items"
 	/*
-	if _, err := os.Stat(itemsPath); os.IsNotExist(err) {
-		return models.NEUItem{}, fmt.Errorf("items directory does not exist: %w", err)
-	}
+		if _, err := os.Stat(itemsPath); os.IsNotExist(err) {
+			return models.NEUItem{}, fmt.Errorf("items directory does not exist: %w", err)
+		}
 	*/
 
 	itemPath := fmt.Sprintf("%s/%s.json", itemsPath, name)

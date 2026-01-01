@@ -335,7 +335,7 @@ func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models
 		// Setup the frame for the museum
 		itemSlot := formatMuseumItemProgress(&item, museumItems)
 		if os.Getenv("DEV") == "true" {
-			itemSlot.ProcessedItem.Texture = strings.Replace(itemSlot.ProcessedItem.Texture, "/api/", "http://localhost:8080/api/", 1)
+			itemSlot.Texture = strings.Replace(itemSlot.Texture, "/api/", "http://localhost:8080/api/", 1)
 		}
 
 		if itemSlot.InventoryType == "" {

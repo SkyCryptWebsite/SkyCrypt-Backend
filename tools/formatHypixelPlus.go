@@ -37,7 +37,7 @@ func main() {
 			continue
 		}
 
-		filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -69,14 +69,22 @@ func main() {
 						fmt.Printf("Failed to open %s: %v\n", path, err)
 						return nil
 					}
-					defer inputFile.Close()
+					defer func() {
+						if err := inputFile.Close(); err != nil {
+							fmt.Printf("Failed to close %s: %v\n", path, err)
+						}
+					}()
 
 					outputFile, err := os.Create(outputPath)
 					if err != nil {
 						fmt.Printf("Failed to create %s: %v\n", outputPath, err)
 						return nil
 					}
-					defer outputFile.Close()
+					defer func() {
+						if err := outputFile.Close(); err != nil {
+							fmt.Printf("Failed to close %s: %v\n", outputPath, err)
+						}
+					}()
 
 					if _, err := inputFile.Seek(0, 0); err != nil {
 						fmt.Printf("Failed to seek in %s: %v\n", path, err)
@@ -98,7 +106,11 @@ func main() {
 							fmt.Printf("Failed to open %s: %v\n", mcmetaPath, err)
 							return nil
 						}
-						defer mcmetaInputFile.Close()
+						defer func() {
+							if err := mcmetaInputFile.Close(); err != nil {
+								fmt.Printf("Failed to close %s: %v\n", mcmetaPath, err)
+							}
+						}()
 
 						mcmetaOutputFile, err := os.Create(mcmetaOutputPath)
 						if err != nil {
@@ -106,7 +118,11 @@ func main() {
 							return nil
 						}
 
-						defer mcmetaOutputFile.Close()
+						defer func() {
+							if err := mcmetaOutputFile.Close(); err != nil {
+								fmt.Printf("Failed to close %s: %v\n", mcmetaOutputPath, err)
+							}
+						}()
 
 						if _, err := mcmetaInputFile.Seek(0, 0); err != nil {
 							fmt.Printf("Failed to seek in %s: %v\n", mcmetaPath, err)
@@ -182,6 +198,7 @@ func main() {
 					*/
 				} else {
 					// fmt.Printf("Skipped non-PNG file: %s\n", path)
+					_ = 0
 				}
 
 				return nil
@@ -193,7 +210,7 @@ func main() {
 
 	outputAssetsPath := "output/assets/textures"
 
-	filepath.WalkDir(outputAssetsPath, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(outputAssetsPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -211,7 +228,11 @@ func main() {
 			fmt.Printf("Failed to open %s: %v\n", path, err)
 			return nil
 		}
-		defer file.Close()
+		defer func() {
+			if err := file.Close(); err != nil {
+				fmt.Printf("Failed to close %s: %v\n", path, err)
+			}
+		}()
 
 		img, _, err := image.Decode(file)
 		if err != nil {
@@ -261,7 +282,11 @@ func main() {
 				fmt.Printf("Failed to create APNG %s: %v\n", path, err)
 				return nil
 			}
-			defer outFile.Close()
+			defer func() {
+				if err := outFile.Close(); err != nil {
+					fmt.Printf("Failed to close %s: %v\n", path, err)
+				}
+			}()
 			if err := apng.Encode(outFile, apngImg); err != nil {
 				fmt.Printf("Failed to encode APNG %s: %v\n", path, err)
 				return nil

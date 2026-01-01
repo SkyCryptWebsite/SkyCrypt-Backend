@@ -34,6 +34,7 @@ func InitializeNEURepository() error {
 
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository cloned successfully")
 	} else {
+		_ = 0
 		// fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
 	}
 

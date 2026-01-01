@@ -42,7 +42,9 @@ func ResourcePackHandler(c *fiber.Ctx) error {
 				continue
 			}
 
-			defer configFile.Close()
+			defer func() {
+				_ = configFile.Close()
+			}()
 
 			var configData models.ResourcePackConfig
 			if err := json.NewDecoder(configFile).Decode(&configData); err != nil {

@@ -33,7 +33,9 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 		}
 		return "", nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -67,8 +69,8 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 		return "", nil
 	}
 
-	redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cache for 24 hours
-	redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cache for 24 hours
 
 	return post.UUID, nil
 }
@@ -93,7 +95,9 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 		}
 		return "", nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -123,8 +127,8 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 		return "", nil
 	}
 
-	redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), uuid, 24*60*60) // Cache for 24 hours
-	redis.Set(fmt.Sprintf("username:%s", uuid), post.Name, 24*60*60)              // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), uuid, 24*60*60) // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("username:%s", uuid), post.Name, 24*60*60)              // Cache for 24 hours
 
 	return post.Name, nil
 }
@@ -160,7 +164,9 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 	if err != nil {
 		return &post, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -184,7 +190,7 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 		return &post, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60) // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60) // Cache for 24 hours
 
 	return &post, nil
 }

@@ -42,7 +42,9 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return &response, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -63,7 +65,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 		return &rawReponse.Player, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set(fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
+	_ = redis.Set(fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
 	return &rawReponse.Player, nil
 }
 
@@ -91,7 +93,9 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return &response, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -116,7 +120,7 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 		return &response, fmt.Errorf("error fetching profiles: %s", response.Cause)
 	}
 
-	redis.Set(fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
+	_ = redis.Set(fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
 	return &response, nil
 }
 
@@ -168,7 +172,9 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -189,7 +195,7 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set(fmt.Sprintf(`museum:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
+	_ = redis.Set(fmt.Sprintf(`museum:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
 	return rawReponse.Members, nil
 }
 
@@ -209,7 +215,9 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -230,6 +238,6 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set(fmt.Sprintf(`garden:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
+	_ = redis.Set(fmt.Sprintf(`garden:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
 	return &rawReponse.Garden, nil
 }

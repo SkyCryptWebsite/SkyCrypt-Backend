@@ -59,5 +59,7 @@ func main() {
 
 	src.SetupRoutes(app)
 
-	app.Listen(":8080")
+	if err := app.Listen(":8080"); err != nil {
+		panic(err)
+	}
 }

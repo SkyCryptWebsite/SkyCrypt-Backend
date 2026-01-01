@@ -3,8 +3,8 @@ package models
 import skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 
 type HypixelMuseumResponse struct {
-	Success bool                                     `json:"success"`
-	Cause   string                                   `json:"cause,omitempty"`
+	Success bool                             `json:"success"`
+	Cause   string                           `json:"cause,omitempty"`
 	Members map[string]*skycrypttypes.Museum `json:"members"`
 }
 

@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"skycrypt/src/db"
 	"time"
 
@@ -25,7 +26,11 @@ func EmojisHandler(c *fiber.Ctx) error {
 			"error": "Failed to fetch emojis",
 		})
 	}
-	defer cursor.Close(c.Context())
+	defer func() {
+		if err := cursor.Close(c.Context()); err != nil {
+			fmt.Println("Failed to close emoji cursor:", err)
+		}
+	}()
 
 	var results []map[string]interface{}
 	if err := cursor.All(c.Context(), &results); err != nil {

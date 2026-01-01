@@ -251,7 +251,7 @@ func init() {
 			continue
 		}
 
-		filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -275,7 +275,7 @@ func init() {
 			}
 
 			if packDir.Name() != "Vanilla" {
-				var model models.ItemTexture = models.ItemTexture{ResourcePackId: config.Id}
+				model := models.ItemTexture{ResourcePackId: config.Id}
 				if err := json.Unmarshal(data, &model); err != nil {
 					fmt.Printf("Failed to parse %s: %v\n", path, err)
 					return nil
