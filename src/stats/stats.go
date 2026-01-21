@@ -8,6 +8,10 @@ import (
 )
 
 func GetStats(mowojang *models.MowojangReponse, profiles *models.HypixelProfilesResponse, profile *skycrypttypes.Profile, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, museum *skycrypttypes.Museum, members []*models.MemberStats) (*models.StatsOutput, error) {
+	if userProfile.Profile == nil {
+		userProfile.Profile = &skycrypttypes.ProfileData{}
+	}
+
 	return &models.StatsOutput{
 		Username:        mowojang.Name,
 		DisplayName:     utility.GetDisplayName(mowojang.Name, mowojang.UUID),
