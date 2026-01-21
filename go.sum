@@ -11,6 +11,8 @@ github.com/ProtonMail/go-crypto v1.3.0 h1:ILq8+Sf5If5DCpHQp4PbZdS1J7HDFRXz/+xKBi
 github.com/ProtonMail/go-crypto v1.3.0/go.mod h1:9whxjD8Rbs29b4XWbB8irEcE8KHMqaR2e7GWU1R+/PE=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.9 h1:eU8FBvbGEP2UNtuU7MTpcB4UPYL2jwBNjsn43b1cbQs=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.9/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.10 h1:FowjdACDEGG9NTLnDdjPuB1IBmfWLkqeAkRxZ2brZA0=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.10/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
 github.com/Tnze/go-mc v1.20.2/go.mod h1:geoRj2HsXSkB3FJBuhr7wCzXegRlzWsVXd7h7jiJ6aQ=
 github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwToPjQ=
