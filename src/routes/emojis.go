@@ -9,13 +9,14 @@ import (
 )
 
 // EmojisHandler godoc
-// @Summary Get all emojis
-// @Description Retrieves all emojis from the database
-// @Tags emojis
-// @Produce json
-// @Success 200 {object} map[string]interface{} "Returns fetched_at timestamp and array of emojis"
-// @Failure 500 {object} fiber.Map "Failed to fetch or parse emojis"
-// @Router /api/emojis [get]
+//
+//	@Summary		Get all emojis
+//	@Description	Retrieves all emojis from the database
+//	@Tags			emojis
+//	@Produce		json
+//	@Success		200	{object}	map[string]interface{}	"Returns fetched_at timestamp and array of emojis"
+//	@Failure		500	{object}	fiber.Map				"Failed to fetch or parse emojis"
+//	@Router			/api/emojis [get]
 func EmojisHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

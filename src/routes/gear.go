@@ -18,16 +18,17 @@ import (
 )
 
 // GearHandler godoc
-// @Summary Get gear stats of a specified player
-// @Description Returns gear for the given user and profile ID
-// @Tags gear
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.Gear
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/gear/{uuid}/{profileId} [get]
+//
+//	@Summary		Get gear stats of a specified player
+//	@Description	Returns gear for the given user and profile ID
+//	@Tags			gear
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.Gear
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/gear/{uuid}/{profileId} [get]
 func GearHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

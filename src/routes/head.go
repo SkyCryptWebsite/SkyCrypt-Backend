@@ -8,15 +8,16 @@ import (
 )
 
 // HeadHandlers godoc
-// @Summary Render and return a head image
-// @Description Returns a PNG image of a head for the given texture ID
-// @Tags head
-// @Produce  png
-// @Param textureId path string true "Texture ID"
-// @Success 200 {file} binary "PNG image of the head"
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {string} string "Failed to render head"
-// @Router /api/head/{textureId} [get]
+//
+//	@Summary		Render and return a head image
+//	@Description	Returns a PNG image of a head for the given texture ID
+//	@Tags			head
+//	@Produce		png
+//	@Param			textureId	path		string	true	"Texture ID"
+//	@Success		200			{file}		binary	"PNG image of the head"
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{string}	string	"Failed to render head"
+//	@Router			/api/head/{textureId} [get]
 func HeadHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("textureId")

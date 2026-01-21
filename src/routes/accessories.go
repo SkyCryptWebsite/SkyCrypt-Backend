@@ -14,16 +14,17 @@ import (
 )
 
 // AccessoriesHandler godoc
-// @Summary Get accessories stats of a specified player
-// @Description Returns accessories for the given user and profile ID
-// @Tags accessories
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.GetMissingAccessoresOutput
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/accessories/{uuid}/{profileId} [get]
+//
+//	@Summary		Get accessories stats of a specified player
+//	@Description	Returns accessories for the given user and profile ID
+//	@Tags			accessories
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.GetMissingAccessoresOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/accessories/{uuid}/{profileId} [get]
 func AccessoriesHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

@@ -11,14 +11,15 @@ import (
 )
 
 // UsernameHandler godoc
-// @Summary Get username for a specified UUID
-// @Description Returns the username associated with the given UUID
-// @Tags username
-// @Produce  json
-// @Param uuid path string true "UUID"
-// @Success 200 {object} models.PlayerResolve
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/username/{uuid} [get]
+//
+//	@Summary		Get username for a specified UUID
+//	@Description	Returns the username associated with the given UUID
+//	@Tags			username
+//	@Produce		json
+//	@Param			uuid	path		string	true	"UUID"
+//	@Success		200		{object}	models.PlayerResolve
+//	@Failure		400		{object}	models.ProcessingError
+//	@Router			/api/username/{uuid} [get]
 func UsernameHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

@@ -13,12 +13,13 @@ import (
 var RESOURCE_PACKS = []models.ResourcePackConfig{}
 
 // ResourcePackHandler godoc
-// @Summary Get list of resource packs
-// @Description Returns a list of resource packs
-// @Tags resourcepacks
-// @Produce  json
-// @Success 200 {object} []models.ResourcePackConfig
-// @Router /api/resourcepacks [get]
+//
+//	@Summary		Get list of resource packs
+//	@Description	Returns a list of resource packs
+//	@Tags			resourcepacks
+//	@Produce		json
+//	@Success		200	{object}	[]models.ResourcePackConfig
+//	@Router			/api/resourcepacks [get]
 func ResourcePackHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

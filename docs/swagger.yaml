@@ -1760,6 +1760,8 @@ components:
           type: integer
         jalapeno_count:
           type: integer
+        levelable_overclocks:
+          type: integer
         line:
           $ref: '#/components/schemas/skycrypttypes.RodPart'
         mana_disintegrator_count:
@@ -2074,9 +2076,10 @@ paths:
         required: true
         schema:
           type: string
-      - description: Profile ID (optional)
+      - description: Profile ID (optional, can be empty)
         in: path
         name: profileId
+        required: true
         schema:
           type: string
       responses:
@@ -2247,6 +2250,7 @@ paths:
       - description: Search string (required when inventoryId is 'search')
         in: path
         name: search
+        required: true
         schema:
           type: string
       responses:
@@ -2299,6 +2303,7 @@ paths:
       - description: Search string (required when inventoryId is 'search')
         in: path
         name: search
+        required: true
         schema:
           type: string
       responses:

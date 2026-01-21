@@ -10,15 +10,16 @@ import (
 )
 
 // BestiaryHandler godoc
-// @Summary Get bestiary stats of a specified player
-// @Description Returns bestiary for the given user and profile ID
-// @Tags bestiary
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.BestiaryOutput
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/bestiary/{uuid}/{profileId} [get]
+//
+//	@Summary		Get bestiary stats of a specified player
+//	@Description	Returns bestiary for the given user and profile ID
+//	@Tags			bestiary
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.BestiaryOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/bestiary/{uuid}/{profileId} [get]
 func BestiaryHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

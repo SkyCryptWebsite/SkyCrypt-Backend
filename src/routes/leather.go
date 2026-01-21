@@ -9,16 +9,17 @@ import (
 )
 
 // LeatherHandlers godoc
-// @Summary Render and return a leather armor image
-// @Description Returns a PNG image of leather armor for the given type and color
-// @Tags leather
-// @Produce  png
-// @Param type path string true "Armor Type"
-// @Param color path string true "Armor Color"
-// @Success 200 {file} binary "PNG image of the leather armor"
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/leather/{type}/{color} [get]
+//
+//	@Summary		Render and return a leather armor image
+//	@Description	Returns a PNG image of leather armor for the given type and color
+//	@Tags			leather
+//	@Produce		png
+//	@Param			type	path		string	true	"Armor Type"
+//	@Param			color	path		string	true	"Armor Color"
+//	@Success		200		{file}		binary	"PNG image of the leather armor"
+//	@Failure		400		{object}	models.ProcessingError
+//	@Failure		500		{object}	models.ProcessingError
+//	@Router			/api/leather/{type}/{color} [get]
 func LeatherHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	armorType := c.Params("type")

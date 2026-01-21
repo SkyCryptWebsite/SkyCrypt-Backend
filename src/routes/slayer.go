@@ -10,15 +10,16 @@ import (
 )
 
 // SlayersHandler godoc
-// @Summary Get slayer stats of a specified player
-// @Description Returns slayer statistics for the given user and profile ID
-// @Tags slayers
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.SlayersOutput
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/slayer/{uuid}/{profileId} [get]
+//
+//	@Summary		Get slayer stats of a specified player
+//	@Description	Returns slayer statistics for the given user and profile ID
+//	@Tags			slayers
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.SlayersOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/slayer/{uuid}/{profileId} [get]
 func SlayersHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

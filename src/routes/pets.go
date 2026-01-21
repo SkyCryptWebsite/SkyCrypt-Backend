@@ -10,15 +10,16 @@ import (
 )
 
 // PetsHandler godoc
-// @Summary Get pets stats of a specified player
-// @Description Returns pets for the given user and profile ID
-// @Tags pets
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.OutputPets
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/pets/{uuid}/{profileId} [get]
+//
+//	@Summary		Get pets stats of a specified player
+//	@Description	Returns pets for the given user and profile ID
+//	@Tags			pets
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.OutputPets
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/pets/{uuid}/{profileId} [get]
 func PetsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

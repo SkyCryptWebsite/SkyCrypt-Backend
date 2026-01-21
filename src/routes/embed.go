@@ -14,16 +14,17 @@ import (
 )
 
 // EmbedHandler godoc
-// @Summary Get embed data for a specified player
-// @Description Returns embed data for the given user (UUID or username) and optional profile ID
-// @Tags embed
-// @Produce  json
-// @Param uuid path string true "User UUID or username"
-// @Param profileId path string false "Profile ID (optional)"
-// @Success 200 {object} models.EmbedData
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/embed/{uuid}/{profileId} [get]
+//
+//	@Summary		Get embed data for a specified player
+//	@Description	Returns embed data for the given user (UUID or username) and optional profile ID
+//	@Tags			embed
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID or username"
+//	@Param			profileId	path		string	true	"Profile ID (optional, can be empty)"
+//	@Success		200			{object}	models.EmbedData
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/embed/{uuid}/{profileId} [get]
 func EmbedHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
