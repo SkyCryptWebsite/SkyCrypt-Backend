@@ -2076,7 +2076,7 @@ paths:
         required: true
         schema:
           type: string
-      - description: Profile ID (optional, can be empty)
+      - description: Profile ID
         in: path
         name: profileId
         required: true
@@ -2248,62 +2248,8 @@ paths:
         schema:
           type: string
       - description: Search string (required when inventoryId is 'search')
-        in: path
+        in: query
         name: search
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/models.StrippedItem'
-                type: array
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get inventory items for a specified player
-      tags:
-      - inventory
-  /api/inventory/{uuid}/{profileId}/search/{search}:
-    get:
-      description: Returns inventory items for the given user, profile ID, and inventory
-        ID. Supports museum, search, and other inventories.
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      - description: Inventory ID (e.g., museum, search, or other inventory types)
-        in: path
-        name: inventoryId
-        required: true
-        schema:
-          type: string
-      - description: Search string (required when inventoryId is 'search')
-        in: path
-        name: search
-        required: true
         schema:
           type: string
       responses:

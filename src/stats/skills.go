@@ -35,7 +35,7 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 
 		experienceMap["SKILL_SOCIAL"] = 0
 		for _, memberData := range profile.Members {
-			if memberData.PlayerData.Experience == nil {
+			if memberData.PlayerData == nil || memberData.PlayerData.Experience == nil {
 				continue
 			}
 

@@ -20,7 +20,7 @@ import (
 //	@Tags			embed
 //	@Produce		json
 //	@Param			uuid		path		string	true	"User UUID or username"
-//	@Param			profileId	path		string	true	"Profile ID (optional, can be empty)"
+//	@Param			profileId	path		string	true	"Profile ID"
 //	@Success		200			{object}	models.EmbedData
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
