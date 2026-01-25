@@ -20,11 +20,11 @@ import (
 //	@Tags			embed
 //	@Produce		json
 //	@Param			uuid		path		string	true	"User UUID or username"
-//	@Param			profileId	path		string	true	"Profile ID"
+//	@Param			profileId	query		string	false	"Profile ID (optional, defaults to selected profile)"
 //	@Success		200			{object}	models.EmbedData
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
-//	@Router			/api/embed/{uuid}/{profileId} [get]
+//	@Router			/api/embed/{uuid} [get]
 func EmbedHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

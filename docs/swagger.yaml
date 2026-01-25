@@ -2065,7 +2065,7 @@ paths:
       summary: Get dungeons stats of a specified player
       tags:
       - dungeons
-  /api/embed/{uuid}/{profileId}:
+  /api/embed/{uuid}:
     get:
       description: Returns embed data for the given user (UUID or username) and optional
         profile ID
@@ -2076,10 +2076,9 @@ paths:
         required: true
         schema:
           type: string
-      - description: Profile ID
-        in: path
+      - description: Profile ID (optional, defaults to selected profile)
+        in: query
         name: profileId
-        required: true
         schema:
           type: string
       responses:
