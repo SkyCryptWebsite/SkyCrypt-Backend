@@ -53,7 +53,7 @@ func getIcon(source string, uuid string) string {
 //	@Param			uuid		path		string	true	"User UUID"
 //	@Param			profileId	path		string	true	"Profile ID"
 //	@Param			inventoryId	path		string	true	"Inventory ID (e.g., museum, search, or other inventory types)"
-//	@Param			search		query		string	false	"Search string (required when inventoryId is 'search')"
+//	@Param			query		query		string	false	"Search query (required when inventoryId is 'search')"
 //	@Success		200			{object}	[]models.StrippedItem
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
@@ -143,7 +143,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			}
 		}
 
-		searchString := c.Params("search")
+		searchString := c.Query("query")
 		if searchString == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Search string cannot be empty",

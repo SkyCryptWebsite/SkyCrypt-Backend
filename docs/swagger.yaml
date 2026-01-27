@@ -2246,9 +2246,9 @@ paths:
         required: true
         schema:
           type: string
-      - description: Search string (required when inventoryId is 'search')
+      - description: Search query (required when inventoryId is 'search')
         in: query
-        name: search
+        name: query
         schema:
           type: string
       responses:
