@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	stats "skycrypt/src/stats/items"
 
@@ -190,10 +189,7 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 			pet.Rarity = constants.RARITIES[slices.Index(constants.RARITIES, strings.ToLower(pet.Rarity))+1]
 		}
 
-		texture := "/api/head/bc8ea1f51f253ff5142ca11ae45193a4ad8c3ab5e9c6eec8ba7a4fcb7bac40"
-		if os.Getenv("DEV") == "true" {
-			texture = "http://localhost:8080/api/head/bc8ea1f51f253ff5142ca11ae45193a4ad8c3ab5e9c6eec8ba7a4fcb7bac40"
-		}
+		texture := fmt.Sprintf("%s/api/head/bc8ea1f51f253ff5142ca11ae45193a4ad8c3ab5e9c6eec8ba7a4fcb7bac40", utility.GetDomain())
 
 		outputPet := models.ProcessedPet{
 			Type:      pet.Type,
@@ -229,21 +225,13 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 			skinData, err := notenoughupdates.GetItem(skinId)
 			if err == nil && skinData.NBT.SkullOwner != nil && len(skinData.NBT.SkullOwner.Properties.Textures) > 0 {
 				var textureId = utility.GetSkinHash(skinData.NBT.SkullOwner.Properties.Textures[0].Value)
-				if os.Getenv("DEV") == "true" {
-					outputPet.Texture = fmt.Sprintf("http://localhost:8080/api/head/%s", textureId)
-				} else {
-					outputPet.Texture = fmt.Sprintf("/api/head/%s", textureId)
-				}
+				outputPet.Texture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), textureId)
 
 				outputPet.Name += " ✦"
 			}
 		} else if NEUItem.NBT.SkullOwner != nil && len(NEUItem.NBT.SkullOwner.Properties.Textures) > 0 {
 			var textureId = utility.GetSkinHash(NEUItem.NBT.SkullOwner.Properties.Textures[0].Value)
-			if os.Getenv("DEV") == "true" {
-				outputPet.Texture = fmt.Sprintf("http://localhost:8080/api/head/%s", textureId)
-			} else {
-				outputPet.Texture = fmt.Sprintf("/api/head/%s", textureId)
-			}
+			outputPet.Texture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), textureId)
 		}
 
 		data := getPetData(outputPet.Level.Level, pet.Type, strings.ToUpper(petDataRarity))

@@ -1,8 +1,8 @@
 package stats
 
 import (
+	"fmt"
 	"math"
-	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -158,9 +158,7 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 		}
 	}
 
-	if os.Getenv("DEV") == "true" {
-		texture = strings.Replace(texture, "/api/", "http://localhost:8080/api/", 1)
-	}
+	texture = fmt.Sprintf("%s%s", utility.GetDomain(), texture)
 
 	return models.Skill{
 		XP:                          xp,
@@ -316,9 +314,7 @@ func GetXpByLevel(level int, extra *ExtraSkillData) models.Skill {
 		}
 	}
 
-	if os.Getenv("DEV") == "true" {
-		texture = strings.Replace(texture, "/api/", "http://localhost:8080/api/", 1)
-	}
+	texture = fmt.Sprintf("%s%s", utility.GetDomain(), texture)
 
 	return models.Skill{
 		XP:                          xpCurrent,

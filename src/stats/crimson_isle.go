@@ -2,9 +2,9 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"skycrypt/src/utility"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -37,12 +37,8 @@ func getKuudra(userProfile *skycrypttypes.Member) models.CrimsonIsleKuudra {
 		tier := models.CrimsonIsleKuudraTier{
 			Name:    constants.KUUDRA_TIERS[kuudraId].Name,
 			Id:      kuudraId,
-			Texture: constants.KUUDRA_TIERS[kuudraId].Texture,
+			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), constants.KUUDRA_TIERS[kuudraId].Texture),
 			Kills:   userProfile.CrimsonIsle.Kuudra[kuudraId],
-		}
-
-		if os.Getenv("DEV") == "true" {
-			tier.Texture = strings.Replace(tier.Texture, "/api/head/", "http://localhost:8080/api/head/", 1)
 		}
 
 		totalKills += tier.Kills
@@ -79,14 +75,10 @@ func getDojo(userProfile *skycrypttypes.Member) models.CrimsonIsleDojo {
 		challenge := models.CrimsonIsleDojoChallenge{
 			Name:    challengeData.Name,
 			Id:      challengeId,
-			Texture: challengeData.Texture,
+			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), challengeData.Texture),
 			Points:  points,
 			Time:    time,
 			Rank:    getDojoRank(points),
-		}
-
-		if os.Getenv("DEV") == "true" {
-			challenge.Texture = strings.Replace(challenge.Texture, "/api/item/", "http://localhost:8080/api/item/", 1)
 		}
 
 		totalPoints += points

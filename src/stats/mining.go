@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
@@ -216,11 +215,7 @@ func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels 
 		corpseData := models.Corpse{
 			Amount:  userProfile.GlaciteTunnels.CorpsesLooted[corpseId],
 			Name:    utility.TitleCase(corpseId),
-			Texture: corpseTexture,
-		}
-
-		if os.Getenv("DEV") == "true" {
-			corpseData.Texture = strings.Replace(corpseData.Texture, "/api/item/", "http://localhost:8080/api/item/", 1)
+			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), corpseTexture),
 		}
 
 		output.Corpses.Corpses = append(output.Corpses.Corpses, corpseData)
@@ -236,13 +231,9 @@ func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels 
 			found++
 		}
 
-		texture := fmt.Sprintf("/api/item/%s_FOSSIL", fossil)
+		texture := fmt.Sprintf("%s/api/item/%s_FOSSIL", utility.GetDomain(), fossil)
 		if fossil == "HELIX" {
-			texture = fmt.Sprintf("/api/item/%s", fossil)
-		}
-
-		if os.Getenv("DEV") == "true" {
-			texture = strings.Replace(texture, "/api/item/", "http://localhost:8080/api/item/", 1)
+			texture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), fossil)
 		}
 
 		fossilData := models.Fossil{

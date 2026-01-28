@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"os"
+	"fmt"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -89,15 +89,11 @@ func GetMinions(profile *skycrypttypes.Profile) models.MinionsOutput {
 	for categoryId, categoryData := range constants.MINIONS {
 		category := models.MinionCategory{
 			Minions:      []models.Minion{},
-			Texture:      constants.MINION_CATEGORY_ICONS[categoryId],
+			Texture:      fmt.Sprintf("%s%s", utility.GetDomain(), constants.MINION_CATEGORY_ICONS[categoryId]),
 			TotalMinions: 0,
 			MaxedMinions: 0,
 			TotalTiers:   0,
 			MaxedTiers:   0,
-		}
-
-		if os.Getenv("DEV") == "true" {
-			category.Texture = strings.Replace(category.Texture, "/api/", "http://localhost:8080/api/", 1)
 		}
 
 		totalTiers := 0
@@ -119,13 +115,9 @@ func GetMinions(profile *skycrypttypes.Profile) models.MinionsOutput {
 
 			minionData := models.Minion{
 				Name:    name,
-				Texture: minionData.Texture,
+				Texture: fmt.Sprintf("%s%s", utility.GetDomain(), minionData.Texture),
 				MaxTier: maxTier,
 				Tiers:   craftedTiers,
-			}
-
-			if os.Getenv("DEV") == "true" {
-				minionData.Texture = strings.Replace(minionData.Texture, "/api/", "http://localhost:8080/api/", 1)
 			}
 
 			category.Minions = append(category.Minions, minionData)

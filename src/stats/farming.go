@@ -1,9 +1,11 @@
 package stats
 
 import (
+	"fmt"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
+	"skycrypt/src/utility"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -69,7 +71,7 @@ func GetFarming(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		if output.Contests[cropId] == nil {
 			output.Contests[cropId] = &models.Contest{
 				Name:      constants.CROPS[cropId],
-				Texture:   "http://localhost:8080/api/item/" + cropId,
+				Texture:   fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId),
 				Collected: contestData.Collected,
 				Amount:    1,
 				Medals: map[string]int{

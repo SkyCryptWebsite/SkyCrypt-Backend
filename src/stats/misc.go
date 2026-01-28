@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -16,12 +15,8 @@ func getEssence(userProfile *skycrypttypes.Member) []models.MiscEssence {
 	for essenceId, essenceData := range constants.ESSENCE {
 		essenceData := models.MiscEssence{
 			Name:    essenceData.Name,
-			Texture: essenceData.Texture,
+			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), essenceData.Texture),
 			Amount:  userProfile.Currencies.Essence[strings.ToUpper(essenceId)].Current,
-		}
-
-		if os.Getenv("DEV") == "true" {
-			essenceData.Texture = strings.Replace(essenceData.Texture, "/api/head/", "http://localhost:8080/api/head/", 1)
 		}
 
 		essence = append(essence, essenceData)

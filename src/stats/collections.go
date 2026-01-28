@@ -1,12 +1,11 @@
 package stats
 
 import (
-	"os"
+	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
-	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -34,7 +33,7 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 		item := models.CollectionCategoryItem{
 			Name:        boss.Name,
 			Id:          floor,
-			Texture:     boss.Texture,
+			Texture:     fmt.Sprintf("%s%s", utility.GetDomain(), boss.Texture),
 			Amount:      amount,
 			TotalAmount: amount,
 			Tier:        tier,
@@ -49,10 +48,6 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 					Amount:   dungeons.Master[floor],
 				},
 			},
-		}
-
-		if os.Getenv("DEV") == "true" {
-			item.Texture = strings.Replace(item.Texture, "/api/head/", "http://localhost:8080/api/head/", 1)
 		}
 
 		floorId, _ := utility.ParseInt(floor)
@@ -88,16 +83,12 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 	kuudraBoss := models.CollectionCategoryItem{
 		Name:        KUUDRA_CONSTANTS.Name,
 		Id:          "kuudra",
-		Texture:     KUUDRA_CONSTANTS.Texture,
+		Texture:     fmt.Sprintf("%s%s", utility.GetDomain(), KUUDRA_CONSTANTS.Texture),
 		Amount:      kuudraCompletions,
 		TotalAmount: kuudraCompletions,
 		Tier:        kuudraTier,
 		MaxTier:     len(KUUDRA_CONSTANTS.Collections),
 		Amounts:     kuudraAmounts,
-	}
-
-	if os.Getenv("DEV") == "true" {
-		kuudraBoss.Texture = strings.Replace(kuudraBoss.Texture, "/api/head/", "http://localhost:8080/api/head/", 1)
 	}
 
 	floorItems = append(floorItems, models.BossCollectionsFloorData{
@@ -119,7 +110,7 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 
 	return models.CollectionCategory{
 		Name:       "Boss",
-		Texture:    "http://localhost:8080/api/item/SKULL_ITEM:1",
+		Texture:    fmt.Sprintf("%s/api/item/SKULL_ITEM:1", utility.GetDomain()),
 		Items:      bossCollections,
 		TotalTiers: len(bossCollections),
 		MaxedTiers: maxedTiers,

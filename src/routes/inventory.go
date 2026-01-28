@@ -34,11 +34,7 @@ var ICONS map[string]string = map[string]string{
 
 func getIcon(source string, uuid string) string {
 	if icon, exists := ICONS[source]; exists {
-		if os.Getenv("DEV") == "true" {
-			return fmt.Sprintf("http://localhost:8080%s", icon)
-		}
-
-		return icon
+		return fmt.Sprintf("%s%s", utility.GetDomain(), icon)
 	}
 
 	return fmt.Sprintf(`https://crafatar.com/renders/head/%s?overlay`, uuid)
