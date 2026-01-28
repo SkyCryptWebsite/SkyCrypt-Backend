@@ -45,19 +45,19 @@ func getIcon(source string, uuid string) string {
 }
 
 // InventoryHandler godoc
-// @Summary Get inventory items for a specified player
-// @Description Returns inventory items for the given user, profile ID, and inventory ID. Supports museum, search, and other inventories.
-// @Tags inventory
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Param inventoryId path string true "Inventory ID (e.g., museum, search, or other inventory types)"
-// @Param search path string false "Search string (required when inventoryId is 'search')"
-// @Success 200 {object} []models.StrippedItem
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/inventory/{uuid}/{profileId}/{inventoryId} [get]
-// @Router /api/inventory/{uuid}/{profileId}/search/{search} [get]
+//
+//	@Summary		Get inventory items for a specified player
+//	@Description	Returns inventory items for the given user, profile ID, and inventory ID. Supports museum, search, and other inventories.
+//	@Tags			inventory
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Param			inventoryId	path		string	true	"Inventory ID (e.g., museum, search, or other inventory types)"
+//	@Param			query		query		string	false	"Search query (required when inventoryId is 'search')"
+//	@Success		200			{object}	[]models.StrippedItem
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/inventory/{uuid}/{profileId}/{inventoryId} [get]
 func InventoryHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
@@ -143,7 +143,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			}
 		}
 
-		searchString := c.Params("search")
+		searchString := c.Query("query")
 		if searchString == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "Search string cannot be empty",

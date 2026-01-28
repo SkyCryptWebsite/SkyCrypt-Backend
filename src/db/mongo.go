@@ -75,7 +75,11 @@ func indexCollections() error {
 	if err != nil {
 		return fmt.Errorf("could not list indexes: %v", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			fmt.Printf("could not close cursor: %v\n", err)
+		}
+	}()
 
 	indexExists := false
 	for cursor.Next(ctx) {
@@ -175,7 +179,11 @@ func populateEmojis() {
 		fmt.Printf("could not find emojis: %v\n", err)
 		return
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			fmt.Printf("could not close cursor: %v\n", err)
+		}
+	}()
 
 	for cursor.Next(ctx) {
 		var result struct {

@@ -10,16 +10,17 @@ import (
 )
 
 // StatsHandler godoc
-// @Summary Get stats of a specified player
-// @Description Returns stats for the given user and profile ID
-// @Tags stats
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.StatsOutput
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/stats/{uuid}/{profileId} [get]
+//
+//	@Summary		Get stats of a specified player
+//	@Description	Returns stats for the given user and profile ID
+//	@Tags			stats
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.StatsOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/stats/{uuid}/{profileId} [get]
 func StatsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

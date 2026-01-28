@@ -29,7 +29,9 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -51,7 +53,7 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set("skyblock_items", string(body), 12*60*60) // Cache for 12 hours
+	_ = redis.Set("skyblock_items", string(body), 12*60*60) // Cache for 12 hours
 
 	return data.Items, nil
 }
@@ -71,7 +73,9 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
@@ -93,7 +97,7 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	redis.Set("skyblock_collections", string(body), 12*60*60) // Cache for 12 hours
+	_ = redis.Set("skyblock_collections", string(body), 12*60*60) // Cache for 12 hours
 
 	return data.Collections, nil
 }

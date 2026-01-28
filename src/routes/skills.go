@@ -18,16 +18,17 @@ import (
 )
 
 // SkillsHandler godoc
-// @Summary Get skills stats of a specified player
-// @Description Returns skills for the given user and profile ID
-// @Tags skills
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.SkillsOutput
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/skills/{uuid}/{profileId} [get]
+//
+//	@Summary		Get skills stats of a specified player
+//	@Description	Returns skills for the given user and profile ID
+//	@Tags			skills
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.SkillsOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/skills/{uuid}/{profileId} [get]
 func SkillsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

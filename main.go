@@ -13,11 +13,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
-// @title SkyCrypt API
-// @version 1.0
-// @description API for SkyCrypt - A Hypixel SkyBlock Stats Viewer
-// @host localhost:8080
-// @BasePath /
+// @title			SkyCrypt API
+// @version		1.0
+// @description	API for SkyCrypt - A Hypixel SkyBlock Stats Viewer
+// @host			localhost:8080
+// @BasePath		/
 func main() {
 	app := fiber.New(fiber.Config{
 		Prefork:                   true,  // Enable prefork (requires --pid=host in Docker)
@@ -59,5 +59,7 @@ func main() {
 
 	src.SetupRoutes(app)
 
-	app.Listen(":8080")
+	if err := app.Listen(":8080"); err != nil {
+		panic(err)
+	}
 }

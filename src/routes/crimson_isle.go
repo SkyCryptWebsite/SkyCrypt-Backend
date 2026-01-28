@@ -10,15 +10,16 @@ import (
 )
 
 // CrimsonIsleHandler godoc
-// @Summary Get Crimson Isle stats of a specified player
-// @Description Returns Crimson Isle stats for the given user and profile ID
-// @Tags crimson_isle
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.CrimsonIsleOutput
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/crimson_isle/{uuid}/{profileId} [get]
+//
+//	@Summary		Get Crimson Isle stats of a specified player
+//	@Description	Returns Crimson Isle stats for the given user and profile ID
+//	@Tags			crimson_isle
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.CrimsonIsleOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/crimson_isle/{uuid}/{profileId} [get]
 func CrimsonIsleHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

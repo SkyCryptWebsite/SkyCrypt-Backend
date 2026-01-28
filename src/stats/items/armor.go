@@ -82,8 +82,8 @@ func GetArmor(armor []models.ProcessedItem) models.ArmorResult {
 				name = pieceTypeRegex.ReplaceAllString(name, "")
 				name = strings.TrimSpace(name)
 			} else {
-				name = strings.Replace(name, "Armor", "", -1)
-				name = strings.Replace(name, "  ", " ", -1)
+				name = strings.ReplaceAll(name, "Armor", "")
+				name = strings.ReplaceAll(name, "  ", " ")
 				name = strings.TrimSpace(name)
 				pieceTypeRegex := regexp.MustCompile(`(Helmet|Chestplate|Leggings|Boots)`)
 				name = pieceTypeRegex.ReplaceAllString(name, "Armor")

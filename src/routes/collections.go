@@ -10,15 +10,16 @@ import (
 )
 
 // CollectionsHandler godoc
-// @Summary Get collections stats of a specified player
-// @Description Returns collections for the given user and profile ID
-// @Tags collections
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.CollectionsOutput
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/collections/{uuid}/{profileId} [get]
+//
+//	@Summary		Get collections stats of a specified player
+//	@Description	Returns collections for the given user and profile ID
+//	@Tags			collections
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.CollectionsOutput
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/collections/{uuid}/{profileId} [get]
 func CollectionsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

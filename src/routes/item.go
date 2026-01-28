@@ -11,15 +11,16 @@ import (
 )
 
 // ItemHandlers godoc
-// @Summary Render and return an item image
-// @Description Returns a PNG image of an item for the given texture ID
-// @Tags item
-// @Produce  png
-// @Param itemId path string true "Item ID"
-// @Success 200 {file} binary "PNG image of the item"
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {string} string "Failed to render item"
-// @Router /api/item/{itemId} [get]
+//
+//	@Summary		Render and return an item image
+//	@Description	Returns a PNG image of an item for the given texture ID
+//	@Tags			item
+//	@Produce		png
+//	@Param			itemId	path		string	true	"Item ID"
+//	@Success		200		{file}		binary	"PNG image of the item"
+//	@Failure		400		{object}	models.ProcessingError
+//	@Failure		500		{string}	string	"Failed to render item"
+//	@Router			/api/item/{itemId} [get]
 func ItemHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("itemId")

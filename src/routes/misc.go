@@ -10,15 +10,16 @@ import (
 )
 
 // MiscHandler godoc
-// @Summary Get misc stats of a specified player
-// @Description Returns misc stats for the given user and profile ID
-// @Tags misc
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.MiscOutput
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/misc/{uuid}/{profileId} [get]
+//
+//	@Summary		Get misc stats of a specified player
+//	@Description	Returns misc stats for the given user and profile ID
+//	@Tags			misc
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.MiscOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/misc/{uuid}/{profileId} [get]
 func MiscHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

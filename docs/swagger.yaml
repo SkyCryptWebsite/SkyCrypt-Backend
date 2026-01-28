@@ -1760,6 +1760,8 @@ components:
           type: integer
         jalapeno_count:
           type: integer
+        levelable_overclocks:
+          type: integer
         line:
           $ref: '#/components/schemas/skycrypttypes.RodPart'
         mana_disintegrator_count:
@@ -2063,7 +2065,7 @@ paths:
       summary: Get dungeons stats of a specified player
       tags:
       - dungeons
-  /api/embed/{uuid}/{profileId}:
+  /api/embed/{uuid}:
     get:
       description: Returns embed data for the given user (UUID or username) and optional
         profile ID
@@ -2074,8 +2076,8 @@ paths:
         required: true
         schema:
           type: string
-      - description: Profile ID (optional)
-        in: path
+      - description: Profile ID (optional, defaults to selected profile)
+        in: query
         name: profileId
         schema:
           type: string
@@ -2244,61 +2246,9 @@ paths:
         required: true
         schema:
           type: string
-      - description: Search string (required when inventoryId is 'search')
-        in: path
-        name: search
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/models.StrippedItem'
-                type: array
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get inventory items for a specified player
-      tags:
-      - inventory
-  /api/inventory/{uuid}/{profileId}/search/{search}:
-    get:
-      description: Returns inventory items for the given user, profile ID, and inventory
-        ID. Supports museum, search, and other inventories.
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      - description: Inventory ID (e.g., museum, search, or other inventory types)
-        in: path
-        name: inventoryId
-        required: true
-        schema:
-          type: string
-      - description: Search string (required when inventoryId is 'search')
-        in: path
-        name: search
+      - description: Search query (required when inventoryId is 'search')
+        in: query
+        name: query
         schema:
           type: string
       responses:

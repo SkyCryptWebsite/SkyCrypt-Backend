@@ -17,16 +17,17 @@ import (
 )
 
 // RiftHandler godoc
-// @Summary Get rift stats of a specified player
-// @Description Returns rift data for the given user and profile ID
-// @Tags rift
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.RiftOutput
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/rift/{uuid}/{profileId} [get]
+//
+//	@Summary		Get rift stats of a specified player
+//	@Description	Returns rift data for the given user and profile ID
+//	@Tags			rift
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.RiftOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/rift/{uuid}/{profileId} [get]
 func RiftHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

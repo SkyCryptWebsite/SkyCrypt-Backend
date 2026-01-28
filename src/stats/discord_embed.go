@@ -97,5 +97,5 @@ func StoreEmbedData(mowojang *models.MowojangReponse, userProfile *skycrypttypes
 		return
 	}
 
-	redis.Set(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profile.ProfileID), outputString, 7*24*60*60) // Cache for 7 days
+	_ = redis.Set(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profile.ProfileID), outputString, 7*24*60*60) // Cache for 7 days
 }

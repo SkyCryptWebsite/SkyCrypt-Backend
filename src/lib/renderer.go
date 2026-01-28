@@ -160,7 +160,10 @@ func RenderHead(textureId string) []byte {
 		log.Println("Error fetching texture:", err)
 		return nil
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
 	if response.StatusCode != http.StatusOK {
 		log.Println("Error fetching texture, status code:", response.StatusCode)
 		return nil
@@ -428,7 +431,11 @@ func loadImage(path string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Error closing file %s: %v", path, err)
+		}
+	}()
 
 	img, _, err := image.Decode(file)
 	return img, err
@@ -516,14 +523,24 @@ func imageToPNGBuffer(img image.Image) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			log.Printf("Error removing temp file: %v", err)
+		}
+	}()
+	defer func() {
+		if err := tmpFile.Close(); err != nil {
+			log.Printf("Error closing temp file: %v", err)
+		}
+	}()
 
 	if err := png.Encode(tmpFile, img); err != nil {
 		return nil, err
 	}
 
-	tmpFile.Seek(0, 0)
+	if _, err := tmpFile.Seek(0, 0); err != nil {
+		return nil, err
+	}
 	buffer := make([]byte, 0)
 	chunk := make([]byte, 1024)
 	for {
@@ -830,7 +847,10 @@ func RenderItem(itemID string, disabledPacks ...[]string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error fetching item texture: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("error fetching item texture: %v", err)
 	}

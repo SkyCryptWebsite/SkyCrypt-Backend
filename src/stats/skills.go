@@ -28,10 +28,18 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 			"SKILL_ENCHANTING":   userProfile.PlayerData.Experience.SkillEnchanting,
 			"SKILL_TAMING":       userProfile.PlayerData.Experience.SkillTaming,
 			"SKILL_FORAGING":     userProfile.PlayerData.Experience.SkillForaging,
-			"SKILL_SOCIAL":       userProfile.PlayerData.Experience.SkillSocial,
 			"SKILL_CARPENTRY":    userProfile.PlayerData.Experience.SkillCarpentry,
 			"SKILL_COMBAT":       userProfile.PlayerData.Experience.SkillCombat,
 			"SKILL_RUNECRAFTING": userProfile.PlayerData.Experience.SkillRunecrafting,
+		}
+
+		experienceMap["SKILL_SOCIAL"] = 0
+		for _, memberData := range profile.Members {
+			if memberData.PlayerData == nil || memberData.PlayerData.Experience == nil {
+				continue
+			}
+
+			experienceMap["SKILL_SOCIAL"] += memberData.PlayerData.Experience.SkillSocial
 		}
 
 		for skillId, experience := range experienceMap {

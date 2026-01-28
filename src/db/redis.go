@@ -50,7 +50,7 @@ func InitRedis(addr string, password string, db int) error {
 
 	_, err := redisClient.Ping(ctxTimeout).Result()
 	if err != nil {
-		redisClient.Close()
+		_ = redisClient.Close()
 		redisClient = nil
 		return fmt.Errorf("could not connect to Redis: %v", err)
 	}

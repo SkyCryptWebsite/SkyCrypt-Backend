@@ -11,16 +11,17 @@ import (
 )
 
 // NetworthHandler godoc
-// @Summary Get networth of a specified player
-// @Description Returns networth for the given user and profile ID
-// @Tags networth
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.Networth
-// @Failure 400 {object} models.ProcessingError
-// @Failure 500 {object} models.ProcessingError
-// @Router /api/networth/{uuid}/{profileId} [get]
+//
+//	@Summary		Get networth of a specified player
+//	@Description	Returns networth for the given user and profile ID
+//	@Tags			networth
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.Networth
+//	@Failure		400			{object}	models.ProcessingError
+//	@Failure		500			{object}	models.ProcessingError
+//	@Router			/api/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

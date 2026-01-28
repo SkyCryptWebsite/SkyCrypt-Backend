@@ -10,15 +10,16 @@ import (
 )
 
 // MinionsHandler godoc
-// @Summary Get minions stats of a specified player
-// @Description Returns minions for the given user and profile ID
-// @Tags minions
-// @Produce  json
-// @Param uuid path string true "User UUID"
-// @Param profileId path string true "Profile ID"
-// @Success 200 {object} models.MinionsOutput
-// @Failure 400 {object} models.ProcessingError
-// @Router /api/minions/{uuid}/{profileId} [get]
+//
+//	@Summary		Get minions stats of a specified player
+//	@Description	Returns minions for the given user and profile ID
+//	@Tags			minions
+//	@Produce		json
+//	@Param			uuid		path		string	true	"User UUID"
+//	@Param			profileId	path		string	true	"Profile ID"
+//	@Success		200			{object}	models.MinionsOutput
+//	@Failure		400			{object}	models.ProcessingError
+//	@Router			/api/minions/{uuid}/{profileId} [get]
 func MinionsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

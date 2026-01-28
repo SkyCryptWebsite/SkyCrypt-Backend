@@ -129,7 +129,9 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
 				backpackIndex := strings.Split(inventoryId, "_")[1]
 				index := 0
-				fmt.Sscanf(backpackIndex, "%d", &index)
+				if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
+					continue
+				}
 				if index > maxIndex {
 					maxIndex = index
 				}
@@ -141,7 +143,9 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
 				backpackIndex := strings.Split(inventoryId, "_")[1]
 				index := 0
-				fmt.Sscanf(backpackIndex, "%d", &index)
+				if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
+					continue
+				}
 
 				backpackIcon, iconExists := decodedInventory[fmt.Sprintf("backpack_icon_%s", backpackIndex)]
 				if iconExists && len(backpackIcon) > 0 {
@@ -288,7 +292,7 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string) (map[string][]
 	if err != nil {
 		fmt.Printf("Error marshaling items for caching: %v\n", err)
 	} else {
-		redis.Set(fmt.Sprintf("items:%s", profileId), string(jsonData), 5*60)
+		_ = redis.Set(fmt.Sprintf("items:%s", profileId), string(jsonData), 5*60)
 	}
 
 	return output, nil

@@ -511,7 +511,9 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 		fmt.Printf("Failed to send webhook: %v\n", httpErr)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		fmt.Printf("Webhook returned non-success status: %d\n", resp.StatusCode)
@@ -564,9 +566,15 @@ func GetHexColor(color string) string {
 	parts := strings.Split(color, ",")
 	if len(parts) == 3 {
 		var r, g, b int
-		fmt.Sscanf(parts[0], "%d", &r)
-		fmt.Sscanf(parts[1], "%d", &g)
-		fmt.Sscanf(parts[2], "%d", &b)
+		if _, err := fmt.Sscanf(parts[0], "%d", &r); err != nil {
+			return "FFFFFF"
+		}
+		if _, err := fmt.Sscanf(parts[1], "%d", &g); err != nil {
+			return "FFFFFF"
+		}
+		if _, err := fmt.Sscanf(parts[2], "%d", &b); err != nil {
+			return "FFFFFF"
+		}
 		return fmt.Sprintf("%02X%02X%02X", r, g, b)
 	}
 
