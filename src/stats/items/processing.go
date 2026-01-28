@@ -161,11 +161,7 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 			potionType = "normal"
 		}
 
-		if os.Getenv("DEV") != "true" {
-			processedItem.Texture = fmt.Sprintf("/api/potion/%s/%s", potionType, color)
-		} else {
-			processedItem.Texture = fmt.Sprintf("http://localhost:8080/api/potion/%s/%s", potionType, color)
-		}
+		processedItem.Texture = fmt.Sprintf("%s/api/potion/%s/%s", utility.GetDomain(), potionType, color)
 	}
 
 	if processedItem.Texture == "" {

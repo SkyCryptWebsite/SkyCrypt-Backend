@@ -47,6 +47,15 @@ var (
 	}
 )
 
+func GetDomain() string {
+	output := os.Getenv("DOMAIN")
+	if output != "" {
+		return output
+	}
+
+	return "https://sky.shiiyu.moe"
+}
+
 func GetRawLore(text string) string {
 	return colorCodeRegex.ReplaceAllString(text, "")
 }

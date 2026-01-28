@@ -27,11 +27,7 @@ func GetTexturePath(texturePath string, textureString string) string {
 		formattedPath = fmt.Sprintf("resourcepacks/%s/assets/cittofirmgenerated/textures/item/%s.png", texturePath, textureId)
 	}
 
-	if os.Getenv("DEV") != "true" {
-		return fmt.Sprintf("/assets/%s", formattedPath)
-	}
-
-	return "http://localhost:8080/assets/" + formattedPath
+	return fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath)
 }
 
 func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
@@ -335,11 +331,7 @@ type AppliedItemTexture struct {
 func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
 	// ? NOTE: we're ignoring enchanted books because they're quite expensive to render and not really worth the performance hit
 	if item.Tag.ExtraAttributes == nil || item.Tag.ExtraAttributes["id"] == "ENCHANTED_BOOK" {
-		if os.Getenv("DEV") == "true" {
-			return AppliedItemTexture{Texture: "http://localhost:8080/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.png"}
-		}
-
-		return AppliedItemTexture{Texture: "/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.png"}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.png", utility.GetDomain())}
 	}
 
 	disabledPacks := []string{}
@@ -356,20 +348,12 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 
 	if item.Tag.SkullOwner != nil && len(item.Tag.SkullOwner.Properties.Textures) > 0 && item.Tag.SkullOwner.Properties.Textures[0].Value != "" {
 		skinHash := utility.GetSkinHash(item.Tag.SkullOwner.Properties.Textures[0].Value)
-		if os.Getenv("DEV") != "true" {
-			return AppliedItemTexture{Texture: fmt.Sprintf("/api/head/%s", skinHash)}
-		}
-
-		return AppliedItemTexture{Texture: fmt.Sprintf("http://localhost:8080/api/head/%s", skinHash)}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), skinHash)}
 	}
 
 	// Preparsed texture from /api/item endpoint
 	if item.Texture != "" {
-		if os.Getenv("DEV") != "true" {
-			return AppliedItemTexture{Texture: fmt.Sprintf("/api/head/%s", item.Texture)}
-		}
-
-		return AppliedItemTexture{Texture: fmt.Sprintf("http://localhost:8080/api/head/%s", item.Texture)}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), item.Texture)}
 	}
 
 	if *item.ID >= 298 && *item.ID <= 301 {
@@ -388,11 +372,7 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 			}
 		}
 
-		if os.Getenv("DEV") != "true" {
-			return AppliedItemTexture{Texture: fmt.Sprintf("/api/leather/%s/%s", armorType, armorColor)}
-		}
-
-		return AppliedItemTexture{Texture: fmt.Sprintf("http://localhost:8080/api/leather/%s/%s", armorType, armorColor)}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", utility.GetDomain(), armorType, armorColor)}
 	}
 
 	textureId := fmt.Sprintf("%d:%d", *item.ID, *item.Damage)
@@ -412,17 +392,9 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 
 	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/%s.png", strings.ToLower(item.RawId))
 	if _, err := os.Stat(vanillaPath); err == nil {
-		if os.Getenv("DEV") != "true" {
-			return AppliedItemTexture{Texture: "/" + vanillaPath}
-		}
-
-		return AppliedItemTexture{Texture: "http://localhost:8080/" + vanillaPath}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/%s", utility.GetDomain(), vanillaPath)}
 	}
 
 	fmt.Printf("[CUSTOM_RESOURCES] No custom texture found for item %s, returning default barrier texture\n", item.Tag.ExtraAttributes["id"])
-	if os.Getenv("DEV") != "true" {
-		return AppliedItemTexture{Texture: "/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.png"}
-	}
-
-	return AppliedItemTexture{Texture: "http://localhost:8080/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.png"}
+	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.png", utility.GetDomain())}
 }

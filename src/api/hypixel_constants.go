@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"skycrypt/src/constants"
 	redis "skycrypt/src/db"
 	"skycrypt/src/models"
@@ -109,10 +108,7 @@ func processItems(items *[]models.HypixelItem) map[string]models.ProcessedHypixe
 			item.Rarity = "common"
 		}
 
-		texture := fmt.Sprintf("/api/item/%s", item.SkyBlockID)
-		if os.Getenv("DEV") == "true" {
-			texture = fmt.Sprintf("http://localhost:8080/api/item/%s", item.SkyBlockID)
-		}
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), item.SkyBlockID)
 
 		processed[item.SkyBlockID] = models.ProcessedHypixelItem{
 			SkyblockID:        item.SkyBlockID,
@@ -139,25 +135,17 @@ func processCollections(collections map[string]models.HypixelCollection) models.
 	for categoryId, categoryData := range collections {
 		category := models.ProcessedHypixelCollectionCategory{
 			Name:        categoryData.Name,
-			Texture:     constants.COLLECTION_ICONS[strings.ToLower(categoryId)],
+			Texture:     fmt.Sprintf("%s%s", utility.GetDomain(), constants.COLLECTION_ICONS[strings.ToLower(categoryId)]),
 			Collections: []models.ProcessedHypixelCollectionItem{},
-		}
-
-		if os.Getenv("DEV") == "true" {
-			category.Texture = strings.Replace(category.Texture, "/api/item/", "http://localhost:8080/api/item/", 1)
 		}
 
 		for collectionId, collectionData := range categoryData.Items {
 			processedItem := models.ProcessedHypixelCollectionItem{
 				Id:      collectionId,
 				Name:    collectionData.Name,
-				Texture: fmt.Sprintf("/api/item/%s", collectionId),
+				Texture: fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), collectionId),
 				MaxTier: collectionData.MaxTiers,
 				Tiers:   collectionData.Tiers,
-			}
-
-			if os.Getenv("DEV") == "true" {
-				processedItem.Texture = fmt.Sprintf("http://localhost:8080/api/item/%s", collectionId)
 			}
 
 			category.Collections = append(category.Collections, processedItem)

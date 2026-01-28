@@ -1,7 +1,7 @@
 package stats
 
 import (
-	"os"
+	"fmt"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats/leveling"
@@ -48,12 +48,8 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 			capValue := skillLevelCaps[skill]
 			extra := &stats.ExtraSkillData{
 				Type:    skill,
-				Texture: constants.SKILL_ICONS[skill],
+				Texture: fmt.Sprintf("%s%s", utility.GetDomain(), constants.SKILL_ICONS[skill]),
 				Cap:     &capValue,
-			}
-
-			if os.Getenv("DEV") == "true" {
-				extra.Texture = strings.Replace(extra.Texture, "/api/item/", "http://localhost:8080/api/item/", 1)
 			}
 
 			output.Skills[skill] = stats.GetLevelByXp(int(experience), extra)

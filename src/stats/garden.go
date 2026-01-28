@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -51,10 +50,7 @@ func getVisitors(gardenData *skycrypttypes.Garden) models.Visitors {
 func getCropMilestones(gardenData *skycrypttypes.Garden) []models.CropMilestone {
 	milestones := make([]models.CropMilestone, 0, len(gardenData.ResourcesCollected))
 	for cropId, cropName := range constants.CROPS {
-		texture := fmt.Sprintf("/api/item/%s", cropId)
-		if os.Getenv("DEV") == "true" {
-			texture = fmt.Sprintf("http://localhost:8080/api/item/%s", cropId)
-		}
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId)
 
 		milestones = append(milestones, models.CropMilestone{
 			Name:    cropName,
@@ -72,10 +68,7 @@ func getCropUpgrades(gardenData *skycrypttypes.Garden) []models.CropUpgrade {
 	upgrades := make([]models.CropUpgrade, 0, len(gardenData.CropUpgradeLevels))
 	for cropId, cropName := range constants.CROPS {
 		experience := stats.GetSkillExperience("crop_upgrade", int(gardenData.CropUpgradeLevels[cropId]))
-		texture := fmt.Sprintf("/api/item/%s", cropId)
-		if os.Getenv("DEV") == "true" {
-			texture = fmt.Sprintf("http://localhost:8080/api/item/%s", cropId)
-		}
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId)
 
 		upgrades = append(upgrades, models.CropUpgrade{
 			Name:    cropName,
@@ -140,10 +133,7 @@ func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
 				output.BarnSkin = utility.GetRawLore(item.Name)
 			}
 
-			texture := fmt.Sprintf("http://localhost:8080/api/item/%s", strings.ReplaceAll(item.ItemId, "-", ":"))
-			if os.Getenv("DEV") != "true" {
-				texture = fmt.Sprintf("/api/item/%s", strings.ReplaceAll(item.ItemId, "-", ":"))
-			}
+			texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), strings.ReplaceAll(item.ItemId, "-", ":"))
 
 			output.Layout = append(output.Layout, models.ProcessedItem{
 				DisplayName: item.Name,
@@ -158,10 +148,7 @@ func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
 			textureId = "WOOD_BUTTON"
 		}
 
-		texture := fmt.Sprintf("/api/item/%s", textureId)
-		if os.Getenv("DEV") == "true" {
-			texture = fmt.Sprintf("http://localhost:8080/api/item/%s", textureId)
-		}
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), textureId)
 
 		output.Layout = append(output.Layout, models.ProcessedItem{
 			DisplayName: PLOT_NAMES[plot],

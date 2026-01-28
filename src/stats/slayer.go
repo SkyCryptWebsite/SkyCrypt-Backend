@@ -2,10 +2,9 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
-	"strings"
+	"skycrypt/src/utility"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -77,10 +76,7 @@ func GetSlayers(userProfile *skycrypttypes.Member) models.SlayersOutput {
 
 	totalExperience := 0
 	for slayerId, slayerData := range userProfile.Slayer.SlayerBosses {
-		texture := constants.SLAYER_INFO[slayerId].Head
-		if os.Getenv("DEV") == "true" {
-			texture = strings.Replace(texture, "/api/head/", "http://localhost:8080/api/head/", 1)
-		}
+		texture := fmt.Sprintf("%s%s", utility.GetDomain(), constants.SLAYER_INFO[slayerId].Head)
 
 		output.Data[slayerId] = models.SlayerData{
 			Name:    constants.SLAYER_INFO[slayerId].Name,

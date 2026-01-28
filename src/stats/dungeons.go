@@ -1,12 +1,11 @@
 package stats
 
 import (
-	"os"
+	"fmt"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats/leveling"
 	"skycrypt/src/utility"
-	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -148,13 +147,9 @@ func formatCatacombsFloor(data *skycrypttypes.DungeonData, dungeonType string) [
 
 		floorData := models.FormattedDungeonFloor{
 			Name:    f.Name,
-			Texture: f.Texture,
+			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), f.Texture),
 			Stats:   stats,
 			BestRun: getBestRun(data.BestRuns[f.ID]),
-		}
-
-		if os.Getenv("DEV") == "true" {
-			floorData.Texture = strings.Replace(floorData.Texture, "/api/head/", "http://localhost:8080/api/head/", 1)
 		}
 
 		output = append(output, floorData)
