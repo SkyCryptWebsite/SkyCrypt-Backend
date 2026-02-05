@@ -44,7 +44,7 @@ func ItemHandlers(c *fiber.Ctx) error {
 		}
 	}
 
-	textureBytes, err := lib.RenderItem(textureId, disabledPacks)
+	textureBytes, err := lib.RenderItem(textureId, disabledPacks, false)
 	if err != nil {
 		if redirectErr, ok := err.(lib.RedirectError); ok {
 			return c.Redirect(redirectErr.URL, 302)

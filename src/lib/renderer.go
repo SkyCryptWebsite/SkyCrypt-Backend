@@ -785,7 +785,7 @@ func (e RedirectError) Error() string {
 	return "redirect:" + e.URL
 }
 
-func RenderItem(itemID string, disabledPacks ...[]string) ([]byte, error) {
+func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool) ([]byte, error) {
 	damage := 0
 	if strings.Contains(itemID, ":") {
 		splitId := strings.Split(itemID, ":")
@@ -813,8 +813,12 @@ func RenderItem(itemID string, disabledPacks ...[]string) ([]byte, error) {
 		TextureItem.Damage = &damage
 	}
 
-	appliedTexure := ApplyTexture(TextureItem, disabledPacks...)
+	appliedTexure := ApplyTexture(TextureItem, disabledPacks)
 	if appliedTexure.Texture == "" {
+		return nil, fmt.Errorf("couldn't find the texture")
+	}
+
+	if !returnBarrierIfNone && strings.HasSuffix(appliedTexure.Texture, "/Vanilla/assets/firmskyblock/models/item/barrier.png") {
 		return nil, fmt.Errorf("couldn't find the texture")
 	}
 
