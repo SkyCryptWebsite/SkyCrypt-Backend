@@ -199,7 +199,7 @@ func getForge(userProfile *skycrypttypes.Member) []models.ForgeOutput {
 
 func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels {
 	if userProfile.GlaciteTunnels == nil {
-		return models.GlaciteTunnels{}
+		userProfile.GlaciteTunnels = &skycrypttypes.GlaciteData{}
 	}
 
 	output := models.GlaciteTunnels{

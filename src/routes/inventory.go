@@ -88,11 +88,11 @@ func InventoryHandler(c *fiber.Ctx) error {
 			return c.JSON([]models.StrippedItem{})
 		}
 
-		fmt.Printf("Returning /api/inventory/%s/%s in %s\n", uuid, inventoryId, time.Since(timeNow))
-
 		museumItems := statsItems.GetMuseum(museum, disabledPacks)
 
 		output := statsItems.StripItems(&museumItems)
+
+		fmt.Printf("Returning /api/inventory/%s/%s in %s\n", uuid, inventoryId, time.Since(timeNow))
 
 		return c.JSON(output)
 	}

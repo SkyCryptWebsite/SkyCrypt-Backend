@@ -154,6 +154,10 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 	// POTIONS
 	if *item.ID == 373 {
 		color := constants.POTION_COLORS[*item.Damage]
+		if color == "" {
+			color = constants.POTION_COLORS[15] // Uncraftable potion
+		}
+
 		var potionType string
 		if *item.Damage&16384 != 0 {
 			potionType = "splash"

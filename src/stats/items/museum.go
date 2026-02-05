@@ -123,8 +123,12 @@ func getMaxMissingItems(category string, output map[string]ProcessedMuseumItem) 
 */
 
 func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]string) models.MuseumResult {
-	if museumData.Items == nil || museumData.Special == nil {
-		return models.MuseumResult{}
+	if museumData.Items == nil {
+		museumData.Items = &map[string]skycrypttypes.MuseumItem{}
+	}
+
+	if museumData.Special == nil {
+		museumData.Special = &[]skycrypttypes.MuseumItem{}
 	}
 
 	decodedMuseum := decodeMuseumItems(museumData, disabledPacks...)
