@@ -13,6 +13,8 @@ github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.9 h1:eU8FBvbGEP2UNtuU7MTpc
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.9/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.10 h1:FowjdACDEGG9NTLnDdjPuB1IBmfWLkqeAkRxZ2brZA0=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.10/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.11 h1:HLjp/X6o1dnPkgX8SsGf7yfo858WWDyIbknG5eg4j08=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.11/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
 github.com/Tnze/go-mc v1.20.2/go.mod h1:geoRj2HsXSkB3FJBuhr7wCzXegRlzWsVXd7h7jiJ6aQ=
 github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwToPjQ=
