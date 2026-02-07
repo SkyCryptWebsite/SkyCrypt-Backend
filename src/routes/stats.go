@@ -43,7 +43,7 @@ func StatsHandler(c *fiber.Ctx) error {
 	var profiles *models.HypixelProfilesResponse
 	var player *skycrypttypes.Player
 
-	g, _ := errgroup.WithContext(c.Context())
+	var g errgroup.Group
 	g.Go(func() error {
 		var err error
 		profiles, err = api.GetProfiles(mowojang.UUID)

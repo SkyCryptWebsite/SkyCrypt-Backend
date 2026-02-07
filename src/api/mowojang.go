@@ -26,7 +26,7 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 		return cache, nil
 	}
 
-	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", username))
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", username))
 	if err != nil {
 		if shouldThrowError {
 			return post.UUID, fmt.Errorf("error making request: %v", err)
@@ -88,7 +88,7 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 		return cache, nil
 	}
 
-	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
 	if err != nil {
 		if shouldThrowError {
 			return post.Name, fmt.Errorf("error making request: %v", err)
@@ -160,7 +160,7 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 		}
 	}
 
-	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
 	if err != nil {
 		return &post, fmt.Errorf("error making request: %v", err)
 	}

@@ -155,12 +155,12 @@ func RenderHead(textureId string) []byte {
 		return data
 	}
 
-	result, _, _ := headGroup.Do(textureId, func() (interface{}, error) {
+	result, err, _ := headGroup.Do(textureId, func() (interface{}, error) {
 		if data, err := os.ReadFile(cachePath); err == nil {
 			return data, nil
 		}
 
-		response, err := api.HTTP_CLIENT.Get("https://textures.minecraft.net/texture/" + textureId)
+		response, err := api.HTTPClient.Get("https://textures.minecraft.net/texture/" + textureId)
 		if err != nil {
 			log.Println("Error fetching texture:", err)
 			return nil, err
@@ -210,10 +210,21 @@ func RenderHead(textureId string) []byte {
 		return data, nil
 	})
 
+	if err != nil {
+		log.Printf("Error rendering head for texture %s: %v", textureId, err)
+		return nil
+	}
+
 	if result == nil {
 		return nil
 	}
-	return result.([]byte)
+
+	b, ok := result.([]byte)
+	if !ok {
+		log.Printf("Error: unexpected type %T from head render for texture %s", result, textureId)
+		return nil
+	}
+	return b
 }
 
 type imageResult struct {
@@ -836,7 +847,7 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 	}
 
 	// Otherwise, fetch from the URL (this shouldn't ever happen but just as a fallback)
-	response, err := api.HTTP_CLIENT.Get(appliedTexure.Texture)
+	response, err := api.HTTPClient.Get(appliedTexure.Texture)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching item texture: %v", err)
 	}

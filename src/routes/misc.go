@@ -31,7 +31,7 @@ func MiscHandler(c *fiber.Ctx) error {
 	var profile *skycrypttypes.Profile
 	var player *skycrypttypes.Player
 
-	g, _ := errgroup.WithContext(c.Context())
+	var g errgroup.Group
 	g.Go(func() error {
 		var err error
 		profile, err = api.GetProfile(uuid, profileId)

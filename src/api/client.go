@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-var HTTP_CLIENT = &http.Client{
+var HTTPClient = &http.Client{
 	Timeout: 10 * time.Second,
 	Transport: &http.Transport{
 		MaxIdleConns:        100,
