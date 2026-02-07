@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"sync"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -55,31 +56,57 @@ func FormatProfiles(profiles *models.HypixelProfilesResponse) []*models.Profiles
 	return profileStats
 }
 
+type memberResult struct {
+	uuid   string
+	member *models.MemberStats
+	err    error
+}
+
 func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
-	memberStats := make([]*models.MemberStats, 0, len(profile.Members))
+	results := make(chan memberResult, len(profile.Members))
+	var wg sync.WaitGroup
 
 	for memberUUID, memberData := range profile.Members {
-		mowojang, err := api.ResolvePlayer(memberUUID)
-		if err != nil {
-			return nil, err
-		}
-
-		memberStats = append(memberStats, &models.MemberStats{
-			UUID:      mowojang.UUID,
-			CuteName:  profile.CuteName,
-			ProfileId: profile.ProfileID,
-			Name:      mowojang.Name,
-			Removed:   isMemberRemoved(&memberData),
-		})
+		wg.Add(1)
+		go func(uuid string, data skycrypttypes.Member) {
+			defer wg.Done()
+			mowojang, err := api.ResolvePlayer(uuid)
+			if err != nil {
+				results <- memberResult{uuid: uuid, err: err}
+				return
+			}
+			results <- memberResult{uuid: uuid, member: &models.MemberStats{
+				UUID:      mowojang.UUID,
+				CuteName:  profile.CuteName,
+				ProfileId: profile.ProfileID,
+				Name:      mowojang.Name,
+				Removed:   isMemberRemoved(&data),
+			}}
+		}(memberUUID, memberData)
 	}
 
-	return memberStats, nil
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	members := make([]*models.MemberStats, 0, len(profile.Members))
+	for res := range results {
+		if res.err != nil {
+			continue
+		}
+
+		members = append(members, res.member)
+	}
+
+	return members, nil
 }
 
 func isMemberRemoved(memberData *skycrypttypes.Member) bool {
 	if memberData.CoopInvitation != nil && !memberData.CoopInvitation.Confirmed {
 		return true
 	}
+
 	if memberData.Profile.DeletionNotice != nil && memberData.Profile.DeletionNotice.Timestamp != 0 {
 		return true
 	}

@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"slices"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -77,7 +78,7 @@ func getCategories(itemType string, item skycrypttypes.Item) []string {
 	enchantments := item.Tag.ExtraAttributes.Enchantments
 	for enchantment := range enchantments {
 		for category, enchantmentList := range constants.ENCHANTMENTS_TO_CATEGORIES {
-			if utility.Contains(enchantmentList, enchantment) {
+			if slices.Contains(enchantmentList, enchantment) {
 				categories = append(categories, category)
 			}
 		}
@@ -116,7 +117,7 @@ func ParseItemGems(gems map[string]any, rarity string) []gemstone {
 		}
 		slotType := slotTypeParts[0]
 
-		if utility.Contains(slots.ignore, key) || (utility.Contains(slots.special, slotType) && strings.HasSuffix(key, "_gem")) {
+		if slices.Contains(slots.ignore, key) || (slices.Contains(slots.special, slotType) && strings.HasSuffix(key, "_gem")) {
 			continue
 		}
 
@@ -132,7 +133,7 @@ func ParseItemGems(gems map[string]any, rarity string) []gemstone {
 			}
 		}
 
-		if utility.Contains(slots.special, slotType) {
+		if slices.Contains(slots.special, slotType) {
 			gemTypeKey := fmt.Sprintf("%s_gem", key)
 			gemType := ""
 			if gemTypeValue, exists := gems[gemTypeKey]; exists {
@@ -150,7 +151,7 @@ func ParseItemGems(gems map[string]any, rarity string) []gemstone {
 				GemTier:    gemTier,
 				Lore:       "",
 			})
-		} else if utility.Contains(slots.normal, slotType) {
+		} else if slices.Contains(slots.normal, slotType) {
 			gemTier := extractGemTier(value)
 
 			parsed = append(parsed, gemstone{

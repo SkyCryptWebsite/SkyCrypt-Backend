@@ -60,7 +60,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 		}
 
 		for _, item := range processedItems[inventoryId] {
-			if utility.Contains(item.Categories, "accessory") {
+			if slices.Contains(item.Categories, "accessory") {
 				id := stats.GetId(item)
 				if len(id) == 0 {
 					continue

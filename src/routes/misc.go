@@ -6,7 +6,9 @@ import (
 	"skycrypt/src/stats"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // MiscHandler godoc
@@ -26,17 +28,23 @@ func MiscHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 
-	profile, err := api.GetProfile(uuid, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
-		})
-	}
+	var profile *skycrypttypes.Profile
+	var player *skycrypttypes.Player
 
-	player, err := api.GetPlayer(uuid)
-	if err != nil {
+	var g errgroup.Group
+	g.Go(func() error {
+		var err error
+		profile, err = api.GetProfile(uuid, profileId)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		player, err = api.GetPlayer(uuid)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get player: %v", err),
+			"error": fmt.Sprintf("Failed to get profile/player: %v", err),
 		})
 	}
 
