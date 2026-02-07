@@ -37,7 +37,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 		}
 	}
 
-	resp, err := http.Get(fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
 
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
@@ -89,7 +89,7 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 		}
 	}
 
-	resp, err := http.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
 	}
@@ -168,7 +168,7 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 		}
 	}
 
-	resp, err := http.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -211,7 +211,7 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 		}
 	}
 
-	resp, err := http.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	resp, err := HTTP_CLIENT.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}

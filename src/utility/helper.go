@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"skycrypt/src/constants"
 	"skycrypt/src/db"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,13 +48,17 @@ var (
 	}
 )
 
-func GetDomain() string {
-	output := os.Getenv("DOMAIN")
-	if output != "" {
-		return output
-	}
+var domain string
 
-	return "https://sky.shiiyu.moe"
+func init() {
+	domain = os.Getenv("DOMAIN")
+	if domain == "" {
+		domain = "https://sky.shiiyu.moe"
+	}
+}
+
+func GetDomain() string {
+	return domain
 }
 
 func GetRawLore(text string) string {
@@ -64,15 +69,6 @@ var nonAsciiRegex = regexp.MustCompile(`[^\x00-\x7F]`)
 
 func RemoveNonAscii(text string) string {
 	return nonAsciiRegex.ReplaceAllString(text, "")
-}
-
-func Contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 func GetLastValue(m map[int]int) int {
@@ -291,10 +287,10 @@ func Round(value float64, precision int) float64 {
 	return math.Round(value*pow) / pow
 }
 
-func ReplaceVariables(template string, variables map[string]float64) string {
-	re := regexp.MustCompile(`\{(\w+)\}`)
+var replaceVarRegex = regexp.MustCompile(`\{(\w+)\}`)
 
-	return re.ReplaceAllStringFunc(template, func(match string) string {
+func ReplaceVariables(template string, variables map[string]float64) string {
+	return replaceVarRegex.ReplaceAllStringFunc(template, func(match string) string {
 		name := strings.Trim(match, "{}")
 
 		value, exists := variables[name]
@@ -355,18 +351,9 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
 }
 
 func SortBy[T any](slice []T, compare func(T, T) int) []T {
-	if len(slice) < 2 {
-		return slice
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if compare(slice[j], slice[j+1]) > 0 {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
-
+	sort.Slice(slice, func(i, j int) bool {
+		return compare(slice[i], slice[j]) < 0
+	})
 	return slice
 }
 
@@ -387,18 +374,7 @@ func RoundFloat(value float64, precision int) float64 {
 }
 
 func SortInts(slice []int) []int {
-	if len(slice) < 2 {
-		return slice
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if slice[j] > slice[j+1] {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
-
+	sort.Ints(slice)
 	return slice
 }
 
@@ -411,17 +387,7 @@ func SumInt(slice []int) int {
 }
 
 func SortSlice[T any](slice []T, less func(i, j int) bool) {
-	if len(slice) < 2 {
-		return
-	}
-
-	for i := 0; i < len(slice)-1; i++ {
-		for j := 0; j < len(slice)-i-1; j++ {
-			if less(j+1, j) {
-				slice[j], slice[j+1] = slice[j+1], slice[j]
-			}
-		}
-	}
+	sort.Slice(slice, less)
 }
 
 func SendWebhook(endpoint string, err interface{}, stack []byte) {

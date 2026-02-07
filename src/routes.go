@@ -14,6 +14,7 @@ import (
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/joho/godotenv"
 )
 
@@ -58,28 +59,21 @@ func SetupApplication() error {
 		return fmt.Errorf("failed to connect to MongoDB: %v", err)
 	}
 
-	if err := api.LoadSkyBlockItems(); err != nil {
-		return fmt.Errorf("error loading SkyBlock items: %v", err)
-	}
-
-	if err := api.LoadSkyBlockItems(); err != nil {
-		return fmt.Errorf("error loading SkyBlock items: %v", err)
-	}
-
-	if err := notenoughupdates.InitializeNEURepository(); err != nil {
-		return fmt.Errorf("error initializing repository: %v", err)
-	}
-
-	if err := notenoughupdates.UpdateNEURepository(); err != nil {
-		return fmt.Errorf("error updating repository: %v", err)
-	}
-
-	err = notenoughupdates.ParseNEURepository()
-	if err != nil {
-		return fmt.Errorf("error parsing NEU repository: %v", err)
-	}
-
+	// Main process: fetch all remote data, init/update repos, then parse
+	// Prefork children: only parse local data and read from Redis cache
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+		if err := notenoughupdates.InitializeNEURepository(); err != nil {
+			return fmt.Errorf("error initializing repository: %v", err)
+		}
+
+		if err := notenoughupdates.UpdateNEURepository(); err != nil {
+			return fmt.Errorf("error updating repository: %v", err)
+		}
+
+		if err := api.LoadSkyBlockItems(); err != nil {
+			return fmt.Errorf("error loading SkyBlock items: %v", err)
+		}
+
 		_, err = skyhelpernetworthgo.GetPrices(true, 0, 0)
 		if err != nil {
 			return fmt.Errorf("error fetching SkyHelper prices: %v", err)
@@ -93,6 +87,17 @@ func SetupApplication() error {
 		fmt.Print("[SKYCRYPT] SkyCrypt initialized successfully\n")
 
 		utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
+	} else {
+		// Prefork children: load items from Redis cache
+		if err := api.LoadSkyBlockItems(); err != nil {
+			return fmt.Errorf("error loading SkyBlock items: %v", err)
+		}
+	}
+
+	// All processes need the parsed NEU data in memory
+	err = notenoughupdates.ParseNEURepository()
+	if err != nil {
+		return fmt.Errorf("error parsing NEU repository: %v", err)
 	}
 
 	return nil
@@ -111,8 +116,8 @@ func SetupRoutes(app *fiber.App) {
 			fmt.Println("[ENVIROMENT] Running in production mode")
 		}
 
+		app.Use(etag.New())
 		/*
-			app.Use(etag.New())
 			app.Use("/api", cache.New(cache.Config{
 				Expiration:   5 * time.Minute,
 				CacheControl: true,

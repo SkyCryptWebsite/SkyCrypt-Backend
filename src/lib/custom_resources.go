@@ -12,6 +12,7 @@ import (
 	"skycrypt/src/utility"
 	"slices"
 	"strings"
+	"sync"
 )
 
 func GetTexturePath(texturePath string, textureString string) string {
@@ -28,6 +29,20 @@ func GetTexturePath(texturePath string, textureString string) string {
 	}
 
 	return fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath)
+}
+
+var regexCache sync.Map
+
+func matchString(pattern, s string) (bool, error) {
+	if cached, ok := regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp).MatchString(s), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, err
+	}
+	regexCache.Store(pattern, re)
+	return re.MatchString(s), nil
 }
 
 func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
@@ -58,7 +73,7 @@ func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) Applied
 			case map[string]interface{}:
 				if regexVal, ok := v["regex"]; ok {
 					if regexStr, ok := regexVal.(string); ok {
-						matched, err := regexp.MatchString(regexStr, item.Tag.Display.Name)
+						matched, err := matchString(regexStr, item.Tag.Display.Name)
 						return err == nil && matched
 					}
 				}
@@ -71,7 +86,7 @@ func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) Applied
 				if regexVal, ok := v["regex"]; ok {
 					if regexStr, ok := regexVal.(string); ok {
 						for _, line := range item.Tag.Display.Lore {
-							matched, err := regexp.MatchString(regexStr, line)
+							matched, err := matchString(regexStr, line)
 							if err == nil && matched {
 								return true
 							}

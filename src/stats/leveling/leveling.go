@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"slices"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -89,7 +90,7 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 	}
 
 	// Whether the skill has infinite leveling
-	isInfiniteLevelable := utility.Contains(constants.INFINITE, extra.Type)
+	isInfiniteLevelable := slices.Contains(constants.INFINITE, extra.Type)
 
 	// adds support for infinite leveling
 	if isInfiniteLevelable {
@@ -254,7 +255,7 @@ func GetXpByLevel(level int, extra *ExtraSkillData) models.Skill {
 	}
 
 	// Whether the skill has infinite leveling
-	isInfiniteLevelable := utility.Contains(constants.INFINITE, extra.Type)
+	isInfiniteLevelable := slices.Contains(constants.INFINITE, extra.Type)
 
 	// adds support for infinite leveling
 	if isInfiniteLevelable {

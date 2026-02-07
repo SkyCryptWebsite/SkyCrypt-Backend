@@ -19,16 +19,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strconv"
 	"strings"
+	"sync"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	"golang.org/x/sync/singleflight"
 )
 
 var textureDir = "assets/static"
+
+var headGroup singleflight.Group
 
 // ========== ITEM RENDERING (Potions & Armor) ==========
 
@@ -146,63 +151,69 @@ func RenderArmor(armorType, hexColor string) ([]byte, error) {
 
 func RenderHead(textureId string) []byte {
 	cachePath := filepath.Join(CACHE_DIR, "heads", textureId+".png")
-	if _, err := os.Stat(cachePath); err == nil {
-		data, err := os.ReadFile(cachePath)
-		if err == nil {
-			return data
+	if data, err := os.ReadFile(cachePath); err == nil {
+		return data
+	}
+
+	result, _, _ := headGroup.Do(textureId, func() (interface{}, error) {
+		if data, err := os.ReadFile(cachePath); err == nil {
+			return data, nil
 		}
 
-		log.Println("Error reading cached head:", err)
-	}
-
-	response, err := http.Get("https://textures.minecraft.net/texture/" + textureId)
-	if err != nil {
-		log.Println("Error fetching texture:", err)
-		return nil
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-
-	if response.StatusCode != http.StatusOK {
-		log.Println("Error fetching texture, status code:", response.StatusCode)
-		return nil
-	}
-
-	img, err := png.Decode(response.Body)
-	if err != nil {
-		log.Println("Error decoding texture:", err)
-		return nil
-	}
-
-	var rgbaImg *image.RGBA
-	switch v := img.(type) {
-	case *image.RGBA:
-		rgbaImg = v
-	default:
-		bounds := img.Bounds()
-		rgbaImg = image.NewRGBA(bounds)
-		draw.Draw(rgbaImg, bounds, img, bounds.Min, draw.Src)
-	}
-
-	head := To3DHead(rgbaImg)
-
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, head); err != nil {
-		log.Println("Error encoding head to PNG:", err)
-		return nil
-	}
-	data := buf.Bytes()
-
-	if err := os.MkdirAll(filepath.Join(CACHE_DIR, "heads"), 0755); err == nil {
-		if err := os.WriteFile(cachePath, data, 0644); err != nil {
-			log.Println("Error saving head to cache:", err)
+		response, err := api.HTTP_CLIENT.Get("https://textures.minecraft.net/texture/" + textureId)
+		if err != nil {
+			log.Println("Error fetching texture:", err)
+			return nil, err
 		}
-	} else {
-		log.Println("Error creating cache directory:", err)
-	}
+		defer func() {
+			_ = response.Body.Close()
+		}()
 
-	return data
+		if response.StatusCode != http.StatusOK {
+			log.Println("Error fetching texture, status code:", response.StatusCode)
+			return nil, fmt.Errorf("texture fetch failed: status %d", response.StatusCode)
+		}
+
+		img, err := png.Decode(response.Body)
+		if err != nil {
+			log.Println("Error decoding texture:", err)
+			return nil, err
+		}
+
+		var rgbaImg *image.RGBA
+		switch v := img.(type) {
+		case *image.RGBA:
+			rgbaImg = v
+		default:
+			bounds := img.Bounds()
+			rgbaImg = image.NewRGBA(bounds)
+			draw.Draw(rgbaImg, bounds, img, bounds.Min, draw.Src)
+		}
+
+		head := To3DHead(rgbaImg)
+
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, head); err != nil {
+			log.Println("Error encoding head to PNG:", err)
+			return nil, err
+		}
+		data := buf.Bytes()
+
+		if err := os.MkdirAll(filepath.Join(CACHE_DIR, "heads"), 0755); err == nil {
+			if err := os.WriteFile(cachePath, data, 0644); err != nil {
+				log.Println("Error saving head to cache:", err)
+			}
+		} else {
+			log.Println("Error creating cache directory:", err)
+		}
+
+		return data, nil
+	})
+
+	if result == nil {
+		return nil
+	}
+	return result.([]byte)
 }
 
 type imageResult struct {
@@ -426,19 +437,28 @@ func To3DHead(img image.Image) *image.RGBA {
 
 // ========== SHARED UTILITY FUNCTIONS ==========
 
+var imageCache sync.Map
+
 func loadImage(path string) (image.Image, error) {
+	if cached, ok := imageCache.Load(path); ok {
+		return cached.(image.Image), nil
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		if err := file.Close(); err != nil {
-			log.Printf("Error closing file %s: %v", path, err)
-		}
+		_ = file.Close()
 	}()
 
-	img, _, err := image.Decode(file)
-	return img, err
+	img, err := png.Decode(file)
+	if err != nil {
+		return nil, err
+	}
+
+	imageCache.Store(path, img)
+	return img, nil
 }
 
 func parseHexColor(hexColor string) (color.RGBA, error) {
@@ -517,43 +537,12 @@ func destinationInBlend(canvas *image.RGBA, src image.Image) {
 		}
 	}
 }
-
 func imageToPNGBuffer(img image.Image) ([]byte, error) {
-	tmpFile, err := os.CreateTemp("", "render_*.png")
-	if err != nil {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := os.Remove(tmpFile.Name()); err != nil {
-			log.Printf("Error removing temp file: %v", err)
-		}
-	}()
-	defer func() {
-		if err := tmpFile.Close(); err != nil {
-			log.Printf("Error closing temp file: %v", err)
-		}
-	}()
-
-	if err := png.Encode(tmpFile, img); err != nil {
-		return nil, err
-	}
-
-	if _, err := tmpFile.Seek(0, 0); err != nil {
-		return nil, err
-	}
-	buffer := make([]byte, 0)
-	chunk := make([]byte, 1024)
-	for {
-		n, err := tmpFile.Read(chunk)
-		if n > 0 {
-			buffer = append(buffer, chunk[:n]...)
-		}
-		if err != nil {
-			break
-		}
-	}
-
-	return buffer, nil
+	return buf.Bytes(), nil
 }
 
 // ========== 3D HEAD RENDERING HELPER FUNCTIONS ==========
@@ -847,7 +836,7 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 	}
 
 	// Otherwise, fetch from the URL (this shouldn't ever happen but just as a fallback)
-	response, err := http.Get(appliedTexure.Texture)
+	response, err := api.HTTP_CLIENT.Get(appliedTexure.Texture)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching item texture: %v", err)
 	}

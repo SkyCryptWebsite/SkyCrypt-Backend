@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats/leveling"
 	"skycrypt/src/utility"
+	"slices"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -82,7 +83,7 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 	var skillCount int
 
 	for skillName, skillData := range output.Skills {
-		if utility.Contains(constants.COSMETIC_SKILLS, skillName) {
+		if slices.Contains(constants.COSMETIC_SKILLS, skillName) {
 			continue
 		}
 

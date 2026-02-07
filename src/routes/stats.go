@@ -3,10 +3,13 @@ package routes
 import (
 	"fmt"
 	"skycrypt/src/api"
+	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // StatsHandler godoc
@@ -37,38 +40,51 @@ func StatsHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	profiles, err := api.GetProfiles(mowojang.UUID)
-	if err != nil {
+	var profiles *models.HypixelProfilesResponse
+	var player *skycrypttypes.Player
+
+	g, _ := errgroup.WithContext(c.Context())
+	g.Go(func() error {
+		var err error
+		profiles, err = api.GetProfiles(mowojang.UUID)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		player, err = api.GetPlayer(mowojang.UUID)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+			"error": fmt.Sprintf("Failed to get player data: %v", err),
 		})
 	}
 
-	player, err := api.GetPlayer(mowojang.UUID)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get player: %v", err),
-		})
-	}
-
+	// Now GetMuseum and FormatMembers can also run in parallel
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get profile: %v", err),
 		})
 	}
 
-	profileMuseum, err := api.GetMuseum(profile.ProfileID)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get museum: %v", err),
-		})
-	}
+	var profileMuseum map[string]*skycrypttypes.Museum
+	var members []*models.MemberStats
 
-	members, err := stats.FormatMembers(profile)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to format members: %v", err),
+	g2, _ := errgroup.WithContext(c.Context())
+	g2.Go(func() error {
+		var err error
+		profileMuseum, err = api.GetMuseum(profile.ProfileID)
+		return err
+	})
+	g2.Go(func() error {
+		var err error
+		members, err = stats.FormatMembers(profile)
+		return err
+	})
+	if err := g2.Wait(); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get profile museum or members: %v", err),
 		})
 	}
 

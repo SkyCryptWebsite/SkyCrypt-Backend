@@ -24,7 +24,7 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 		}
 	}
 
-	resp, err := http.Get("https://api.hypixel.net/v2/resources/skyblock/items")
+	resp, err := HTTP_CLIENT.Get("https://api.hypixel.net/v2/resources/skyblock/items")
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -68,7 +68,7 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 		}
 	}
 
-	resp, err := http.Get("https://api.hypixel.net/v2/resources/skyblock/collections")
+	resp, err := HTTP_CLIENT.Get("https://api.hypixel.net/v2/resources/skyblock/collections")
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}

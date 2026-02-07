@@ -15,6 +15,7 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // SkillsHandler godoc
@@ -50,17 +51,23 @@ func SkillsHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	profile, err := api.GetProfile(uuid, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
-		})
-	}
+	var profile *skycrypttypes.Profile
+	var player *skycrypttypes.Player
 
-	player, err := api.GetPlayer(uuid)
-	if err != nil {
+	g, _ := errgroup.WithContext(c.Context())
+	g.Go(func() error {
+		var err error
+		profile, err = api.GetProfile(uuid, profileId)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		player, err = api.GetPlayer(uuid)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get player: %v", err),
+			"error": fmt.Sprintf("Failed to get profile/player: %v", err),
 		})
 	}
 

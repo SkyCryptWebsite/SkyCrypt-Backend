@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"skycrypt/src"
 	"skycrypt/src/utility"
+	"time"
 
 	_ "skycrypt/docs"
 
@@ -28,9 +29,9 @@ func main() {
 		BodyLimit:                 10 << 20, // 10MB
 		ReadBufferSize:            4096,
 		WriteBufferSize:           4096,
-		ReadTimeout:               0, // No timeout for max throughput
-		WriteTimeout:              0,
-		IdleTimeout:               0,
+		ReadTimeout:               15 * time.Second,
+		WriteTimeout:              30 * time.Second,
+		IdleTimeout:               120 * time.Second,
 	})
 
 	app.Use(recover.New(recover.Config{
