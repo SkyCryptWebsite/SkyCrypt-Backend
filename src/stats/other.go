@@ -80,7 +80,7 @@ func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error
 				CuteName:  profile.CuteName,
 				ProfileId: profile.ProfileID,
 				Name:      mowojang.Name,
-				Removed:   isMemberRemoved(&memberData),
+				Removed:   isMemberRemoved(&data),
 			}}
 		}(memberUUID, memberData)
 	}
