@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
+	"skycrypt/src/forensics"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func MuseumHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Museum")()
 	timeNow := time.Now()
 
 	profileId := c.Params("profileId")

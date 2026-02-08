@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"skycrypt/src/forensics"
 	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.uber.org/zap"
 )
 
 var mongoClient *mongo.Client
@@ -119,6 +121,7 @@ func GetMongoCollection(name string) *mongo.Collection {
 }
 
 func UpdateEmoji(uuid string, emoji string) error {
+	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -128,9 +131,21 @@ func UpdateEmoji(uuid string, emoji string) error {
 	update := bson.M{"$set": bson.M{"emoji": emoji}}
 
 	_, err := collection.UpdateOne(ctx, filter, update, opts)
+	duration := time.Since(start)
+
 	if err != nil {
+		forensics.Logger.Error("mongo_update_emoji_error",
+			zap.String("uuid", uuid),
+			zap.Error(err),
+			zap.Duration("duration", duration),
+		)
 		return fmt.Errorf("could not update emoji: %v", err)
 	}
+
+	forensics.Logger.Debug("mongo_update_emoji_completed",
+		zap.String("uuid", uuid),
+		zap.Duration("duration", duration),
+	)
 
 	return nil
 }

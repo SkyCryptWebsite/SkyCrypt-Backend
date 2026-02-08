@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
+	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/garden/{profileId} [get]
 func GardenHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Garden")()
 	timeNow := time.Now()
 
 	profileId := c.Params("profileId")

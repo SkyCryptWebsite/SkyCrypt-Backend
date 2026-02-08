@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"skycrypt/src/api"
+	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	statsItems "skycrypt/src/stats/items"
@@ -29,6 +30,7 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/rift/{uuid}/{profileId} [get]
 func RiftHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Rift")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")

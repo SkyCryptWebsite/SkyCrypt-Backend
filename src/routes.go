@@ -7,6 +7,7 @@ import (
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/api"
 	"skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/routes"
 	"skycrypt/src/utility"
 	"time"
@@ -16,10 +17,12 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func SetupApplication() error {
 	timeNow := time.Now()
+	forensics.Logger.Info("setup_application_started")
 
 	err := godotenv.Load()
 	if err != nil && os.Getenv("FIBER_PREFORK_CHILD") == "" {
@@ -41,8 +44,10 @@ func SetupApplication() error {
 
 	err = db.InitRedis(redisAddr, redisPassword, 0)
 	if err != nil {
+		forensics.Logger.Error("redis_init_failed", zap.Error(err))
 		return fmt.Errorf("failed to connect to Redis: %v", err)
 	}
+	forensics.Logger.Info("redis_initialized", zap.String("addr", redisAddr))
 
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
@@ -56,8 +61,10 @@ func SetupApplication() error {
 
 	err = db.InitMongo(mongoURI, mongoDBName)
 	if err != nil {
+		forensics.Logger.Error("mongo_init_failed", zap.Error(err))
 		return fmt.Errorf("failed to connect to MongoDB: %v", err)
 	}
+	forensics.Logger.Info("mongo_initialized", zap.String("db", mongoDBName))
 
 	// Main process: fetch all remote data, init/update repos, then parse
 	// Prefork children: only parse local data and read from Redis cache
@@ -85,6 +92,9 @@ func SetupApplication() error {
 		}
 
 		fmt.Print("[SKYCRYPT] SkyCrypt initialized successfully\n")
+		forensics.Logger.Info("setup_application_completed",
+			zap.Duration("startup_time", time.Since(timeNow)),
+		)
 
 		utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
 	} else {
@@ -126,6 +136,10 @@ func SetupRoutes(app *fiber.App) {
 	}
 
 	api := app.Group("/api")
+
+	// Forensic dashboard (live in-memory report)
+	api.Get("/forensics", forensics.DashboardHandler())
+	api.Get("/forensics/dashboard", forensics.DashboardHTMLHandler())
 
 	// Documentation - serve openapi files directly
 	api.Static("/openapi/doc.json", "./docs/swagger.json")

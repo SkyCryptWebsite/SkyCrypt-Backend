@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	redis "skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
@@ -14,6 +15,7 @@ import (
 )
 
 func GetUUID(username string, throwAnError ...bool) (string, error) {
+	defer forensics.TrackSpan("api.GetUUID")()
 	shouldThrowError := true
 	if len(throwAnError) > 0 {
 		shouldThrowError = throwAnError[0]
@@ -76,6 +78,8 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 }
 
 func GetUsername(uuid string, throwAnError ...bool) (string, error) {
+	defer forensics.TrackSpan("api.GetUsername")()
+
 	shouldThrowError := true
 	if len(throwAnError) > 0 {
 		shouldThrowError = throwAnError[0]
@@ -134,6 +138,8 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 }
 
 func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, error) {
+	defer forensics.TrackSpan("api.ResolvePlayer")()
+
 	shouldThrowError := true
 	if len(throwAnError) > 0 {
 		shouldThrowError = throwAnError[0]

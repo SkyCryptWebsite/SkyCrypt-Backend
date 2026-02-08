@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
+	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 func PlayerHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Player")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
