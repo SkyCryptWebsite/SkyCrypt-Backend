@@ -88,7 +88,7 @@ func main() {
 
 	err := src.SetupApplication()
 	if err != nil {
-		forensics.Logger.Fatal("application_setup_failed", zap.Error(err))
+		forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
 		panic(err)
 	}
 
@@ -99,7 +99,7 @@ func main() {
 	)
 
 	if err := app.Listen(":8080"); err != nil {
-		forensics.Logger.Fatal("listen_failed", zap.Error(err))
+		forensics.PrintFatal(fmt.Sprintf("Listen failed: %v", err), zap.Error(err))
 		panic(err)
 	}
 }

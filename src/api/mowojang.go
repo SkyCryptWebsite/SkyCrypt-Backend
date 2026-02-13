@@ -12,7 +12,10 @@ import (
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/singleflight"
 )
+
+var resolvePlayerGroup singleflight.Group
 
 func GetUUID(username string, throwAnError ...bool) (string, error) {
 	defer forensics.TrackSpan("api.GetUUID")()
@@ -73,6 +76,7 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 
 	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cache for 24 hours
 	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("mowojang:%s", post.UUID), string(body), 24*60*60)           // Cross-cache for ResolvePlayer
 
 	return post.UUID, nil
 }
@@ -133,11 +137,12 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 
 	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), uuid, 24*60*60) // Cache for 24 hours
 	_ = redis.Set(fmt.Sprintf("username:%s", uuid), post.Name, 24*60*60)              // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60)           // Cross-cache for ResolvePlayer
 
 	return post.Name, nil
 }
 
-func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, error) {
+func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse, error) {
 	defer forensics.TrackSpan("api.ResolvePlayer")()
 
 	shouldThrowError := true
@@ -146,6 +151,7 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 	}
 
 	var post models.MowojangReponse
+	uuid := input
 	if !utility.IsUUID(uuid) {
 		tempUUID, err := GetUUID(uuid, shouldThrowError)
 		if err != nil {
@@ -156,6 +162,24 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 		}
 		uuid = tempUUID
 	}
+
+	// Singleflight: deduplicate concurrent resolutions for the same UUID
+	// (e.g. handler + FormatMembers resolving the same player simultaneously)
+	resultIface, err, _ := resolvePlayerGroup.Do(uuid, func() (interface{}, error) {
+		return resolvePlayerByUUID(uuid)
+	})
+	if err != nil {
+		if shouldThrowError {
+			return &post, err
+		}
+		return &post, nil
+	}
+
+	return resultIface.(*models.MowojangReponse), nil
+}
+
+func resolvePlayerByUUID(uuid string) (*models.MowojangReponse, error) {
+	var post models.MowojangReponse
 
 	cache, err := redis.Get(fmt.Sprintf("mowojang:%s", uuid))
 	if err == nil && cache != "" {
@@ -196,7 +220,9 @@ func ResolvePlayer(uuid string, throwAnError ...bool) (*models.MowojangReponse, 
 		return &post, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60) // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60)                // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cross-cache for GetUUID
+	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cross-cache for GetUsername
 
 	return &post, nil
 }

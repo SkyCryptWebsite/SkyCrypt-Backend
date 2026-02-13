@@ -1,6 +1,7 @@
 package forensics
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"time"
@@ -56,9 +57,6 @@ func InitLogger() {
 		Compress:   true,
 	}
 
-	// Build core outputs: rotating app.log (all levels) + error.log (warn+).
-	// Stdout is included only when LOG_STDOUT=1 (off by default in prefork children
-	// where it adds measurable overhead from synchronous JSON writes to the terminal).
 	cores := []zapcore.Core{
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(appLogWriter), zapcore.DebugLevel),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(errorLogWriter), zapcore.WarnLevel),
@@ -94,6 +92,30 @@ func InitLogger() {
 func Sync() {
 	if Logger != nil {
 		_ = Logger.Sync()
+	}
+}
+
+// PrintError prints a message to stderr in red AND logs it as an error in zap.
+func PrintError(msg string, fields ...zap.Field) {
+	fmt.Fprintf(os.Stderr, "\033[31m[ERROR] %s\033[0m\n", msg)
+	if Logger != nil {
+		Logger.Error(msg, fields...)
+	}
+}
+
+// PrintWarn prints a message to stderr in yellow AND logs it as a warning in zap.
+func PrintWarn(msg string, fields ...zap.Field) {
+	fmt.Fprintf(os.Stderr, "\033[33m[WARN] %s\033[0m\n", msg)
+	if Logger != nil {
+		Logger.Warn(msg, fields...)
+	}
+}
+
+// PrintFatal prints a message to stderr in red AND logs it as fatal in zap (which calls os.Exit).
+func PrintFatal(msg string, fields ...zap.Field) {
+	fmt.Fprintf(os.Stderr, "\033[31m[FATAL] %s\033[0m\n", msg)
+	if Logger != nil {
+		Logger.Fatal(msg, fields...)
 	}
 }
 
