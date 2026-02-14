@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"skycrypt/src/api"
+	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/accessories/{uuid}/{profileId} [get]
 func AccessoriesHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Accessories")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")

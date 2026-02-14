@@ -3,6 +3,7 @@ package routes
 import (
 	"fmt"
 	"skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -18,6 +19,7 @@ import (
 //	@Failure		500	{object}	fiber.Map				"Failed to fetch or parse emojis"
 //	@Router			/api/emojis [get]
 func EmojisHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Emojis")()
 	timeNow := time.Now()
 
 	emojis := db.GetMongoCollection("emojis")

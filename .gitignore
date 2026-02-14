@@ -147,3 +147,6 @@ profile.cov
 
 # cache
 cache/
+
+# Logs
+logs/

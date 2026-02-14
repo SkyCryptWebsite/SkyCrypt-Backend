@@ -3,6 +3,7 @@ package routes
 import (
 	"fmt"
 	"skycrypt/src/api"
+	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Networth")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")

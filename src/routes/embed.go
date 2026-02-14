@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	redis "skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"time"
@@ -26,6 +27,7 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/embed/{uuid} [get]
 func EmbedHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Embed")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -63,8 +65,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 
 	var embedData models.EmbedData
 	if err := json.Unmarshal([]byte(embed), &embedData); err != nil {
-		c.Status(500)
-		return c.JSON(constants.InternalServerError)
+		return c.JSON(embedData)
 	}
 
 	fmt.Printf("Returning /api/embed/%s in %s\n", profileId, time.Since(timeNow))

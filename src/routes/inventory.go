@@ -6,6 +6,7 @@ import (
 	"os"
 	"skycrypt/src/api"
 	redis "skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	statsItems "skycrypt/src/stats/items"
@@ -55,6 +56,7 @@ func getIcon(source string, uuid string) string {
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/inventory/{uuid}/{profileId}/{inventoryId} [get]
 func InventoryHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Inventory")()
 	timeNow := time.Now()
 
 	disabledPacks := []string{""}

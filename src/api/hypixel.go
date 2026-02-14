@@ -6,16 +6,20 @@ import (
 	"net/http"
 	"os"
 	redis "skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 )
 
 var HYPIXEL_API_KEY = os.Getenv("HYPIXEL_API_KEY")
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
+	defer forensics.TrackSpan("api.GetPlayer")()
+
 	var rawReponse models.HypixelPlayerResponse
 	var response skycrypttypes.Player
 
@@ -66,10 +70,17 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 	}
 
 	_ = redis.Set(fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
+	forensics.Logger.Info("api_response_parsed",
+		zap.String("api", "GetPlayer"),
+		zap.String("uuid", uuid),
+		zap.Int("response_size_bytes", len(body)),
+	)
 	return &rawReponse.Player, nil
 }
 
 func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
+	defer forensics.TrackSpan("api.GetProfiles")()
+
 	var response models.HypixelProfilesResponse
 	if !utility.IsUUID(uuid) {
 		respUUID, err := GetUUID(uuid)
@@ -121,10 +132,17 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 	}
 
 	_ = redis.Set(fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
+	forensics.Logger.Info("api_response_parsed",
+		zap.String("api", "GetProfiles"),
+		zap.String("uuid", uuid),
+		zap.Int("response_size_bytes", len(body)),
+	)
 	return &response, nil
 }
 
 func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error) {
+	defer forensics.TrackSpan("api.GetProfile")()
+
 	profiles, err := GetProfiles(uuid)
 	if err != nil {
 		return &skycrypttypes.Profile{}, err
@@ -157,6 +175,8 @@ func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error
 }
 
 func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
+	defer forensics.TrackSpan("api.GetMuseum")()
+
 	var rawReponse models.HypixelMuseumResponse
 
 	cache, err := redis.Get(fmt.Sprintf(`museum:%s`, profileId))
@@ -200,6 +220,8 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 }
 
 func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
+	defer forensics.TrackSpan("api.GetGarden")()
+
 	var rawReponse models.HypixelGardenResponse
 
 	cache, err := redis.Get(fmt.Sprintf(`garden:%s`, profileId))

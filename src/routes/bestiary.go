@@ -3,6 +3,7 @@ package routes
 import (
 	"fmt"
 	"skycrypt/src/api"
+	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/bestiary/{uuid}/{profileId} [get]
 func BestiaryHandler(c *fiber.Ctx) error {
+	defer forensics.TrackSpan("handler.Bestiary")()
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
