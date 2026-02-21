@@ -2,6 +2,7 @@ package stats
 
 import (
 	"fmt"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
@@ -16,17 +17,17 @@ import (
 
 func getPeakOfTheMountain(userProfile *skycrypttypes.Member) models.PeakOfTheMountain {
 	return models.PeakOfTheMountain{
-		Level:    userProfile.Mining.Nodes["special_0"],
+		Level:    userProfile.SkillTree.Nodes["mining"].Levels["core_of_the_mountain"],
 		MaxLevel: constants.MAX_PEAK_OF_THE_MOUNTAIN_LEVEL,
 	}
 }
 
 func getSelectedPickaxeAbility(userProfile *skycrypttypes.Member) string {
-	if userProfile.Mining.SelectedPickaxeAbility == "" {
+	if userProfile.SkillTree.SelectedAbility["mining"] == "" {
 		return "None"
 	}
 
-	return userProfile.Mining.SelectedPickaxeAbility
+	return utility.TitleCase(userProfile.SkillTree.SelectedAbility["mining"])
 }
 
 func calcHotmTokens(hotmTier int, potmTier int) int {
@@ -48,12 +49,12 @@ func calcHotmTokens(hotmTier int, potmTier int) int {
 }
 
 func getHotmTokens(hotmLevel models.Skill, userProfile *skycrypttypes.Member) models.HotmTokens {
-	potmTier := userProfile.Mining.Nodes["special_0"]
+	potmTier := userProfile.SkillTree.Nodes["mining"].Levels["core_of_the_mountain"]
 	hotmTokensAmount := calcHotmTokens(hotmLevel.Level, potmTier)
 	return models.HotmTokens{
 		Total:     hotmTokensAmount,
-		Spent:     userProfile.Mining.TokensSpent,
-		Available: hotmTokensAmount - userProfile.Mining.TokensSpent,
+		Spent:     userProfile.SkillTree.TokensSpent["mountain"],
+		Available: hotmTokensAmount - userProfile.SkillTree.TokensSpent["mountain"],
 	}
 }
 
@@ -138,15 +139,15 @@ func getPowderAmount(userProfile *skycrypttypes.Member, powderType string) model
 	case "mithril":
 		available = userProfile.Mining.PowderMithril
 		spent = userProfile.Mining.PowderSpentMithril
-		total = userProfile.Mining.PowderMithrilTotal
+		total = userProfile.Mining.PowderMithril + userProfile.Mining.PowderSpentMithril
 	case "gemstone":
 		available = userProfile.Mining.PowderGemstone
 		spent = userProfile.Mining.PowderSpentGemstone
-		total = userProfile.Mining.PowderGemstoneTotal
+		total = userProfile.Mining.PowderGemstone + userProfile.Mining.PowderSpentGemstone
 	case "glacite":
 		available = userProfile.Mining.PowderGlacite
 		spent = userProfile.Mining.PowderSpentGlacite
-		total = userProfile.Mining.PowderGlaciteTotal
+		total = userProfile.Mining.PowderGlacite + userProfile.Mining.PowderSpentGlacite
 	}
 
 	return models.PowderAmount{
@@ -168,7 +169,7 @@ func getPowder(userProfile *skycrypttypes.Member) models.PowderOutput {
 func getForge(userProfile *skycrypttypes.Member) []models.ForgeOutput {
 	output := []models.ForgeOutput{}
 
-	quickForgeLevel := userProfile.Mining.Nodes["forge_time"]
+	quickForgeLevel := userProfile.SkillTree.Nodes["mining"].Levels["quick_forge"]
 	var quickForge float64
 	if quickForgeLevel > 0 {
 		if quickForgeLevel <= 19 {
@@ -252,10 +253,12 @@ func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels 
 }
 
 func GetMining(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, items []models.ProcessedItem) models.MiningOutput {
-	HOTMLevel := stats.GetLevelByXp(int(userProfile.Mining.Experience), &stats.ExtraSkillData{Type: "hotm"})
+	HOTMLevel := stats.GetLevelByXp(int(userProfile.SkillTree.Experience["mining"]), &stats.ExtraSkillData{Type: "hotm"})
+	skills := GetSkills(userProfile, nil, player)
 
 	return models.MiningOutput{
 		Level:                  HOTMLevel,
+		MiningLevel:            skills.Skills["mining"],
 		PeakOfTheMountain:      getPeakOfTheMountain(userProfile),
 		SelectedPickaxeAbility: getSelectedPickaxeAbility(userProfile),
 		Tokens:                 getHotmTokens(HOTMLevel, userProfile),
@@ -265,6 +268,12 @@ func GetMining(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, 
 		GlaciteTunnels:         getGlaciteTunnels(userProfile),
 		Forge:                  getForge(userProfile),
 		Tools:                  statsItems.GetSkillTools("mining", items),
-		Hotm:                   []models.ProcessedItem{},
+		Hotm: getSkillTree(
+			userProfile,
+			notenoughupdates.NEUConstants.HeartOfTheMountain.Hotm.Perks,
+			notenoughupdates.NEUConstants.HeartOfTheMountain.Prelude,
+			"mining",
+			HOTMLevel,
+		),
 	}
 }

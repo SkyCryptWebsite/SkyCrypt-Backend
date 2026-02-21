@@ -236,6 +236,10 @@ func init() {
 			continue
 		}
 
+		if packDir.Name() != "Vanilla" {
+			continue
+		}
+
 		packAssetsPath := filepath.Join(assetsRoot, packDir.Name(), "assets")
 		if _, err := os.Stat(packAssetsPath); os.IsNotExist(err) {
 			continue
@@ -275,17 +279,17 @@ func init() {
 				return nil
 			}
 
-			if !strings.HasSuffix(path, ".json") {
-				return nil
-			}
-
-			data, err := os.ReadFile(path)
-			if err != nil {
-				fmt.Printf("Failed to read %s: %v\n", path, err)
-				return nil
-			}
-
 			if packDir.Name() != "Vanilla" {
+				if !strings.HasSuffix(path, ".json") {
+					return nil
+				}
+
+				data, err := os.ReadFile(path)
+				if err != nil {
+					fmt.Printf("Failed to read %s: %v\n", path, err)
+					return nil
+				}
+
 				model := models.ItemTexture{ResourcePackId: config.Id}
 				if err := json.Unmarshal(data, &model); err != nil {
 					fmt.Printf("Failed to parse %s: %v\n", path, err)
@@ -318,14 +322,9 @@ func init() {
 				ITEM_MAP[itemName] = append(ITEM_MAP[itemName], model)
 				return nil
 			} else {
-				var model models.VanillaTexture
-				if err := json.Unmarshal(data, &model); err != nil {
-					fmt.Printf("Failed to parse %s: %v\n", path, err)
-					return nil
-				}
+				fileName := filepath.Base(path)
+				textureId := strings.Replace(fileName, ".webp", "", 1)
 
-				textureId := fmt.Sprintf("%s:%d", model.VanillaId, model.Damage)
-				fileName := strings.ReplaceAll(filepath.Base(path), ".json", ".png")
 				VANILLA_ITEM_MAP[textureId] = models.ItemTexture{
 					Parent:    "item/generated",
 					Textures:  map[string]string{"layer0": GetTexturePath(packDir.Name(), fileName)},
@@ -346,7 +345,7 @@ type AppliedItemTexture struct {
 func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
 	// ? NOTE: we're ignoring enchanted books because they're quite expensive to render and not really worth the performance hit
 	if item.Tag.ExtraAttributes == nil || item.Tag.ExtraAttributes["id"] == "ENCHANTED_BOOK" {
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.png", utility.GetDomain())}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.webp", utility.GetDomain())}
 	}
 
 	disabledPacks := []string{}
@@ -390,7 +389,11 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", utility.GetDomain(), armorType, armorColor)}
 	}
 
-	textureId := fmt.Sprintf("%d:%d", *item.ID, *item.Damage)
+	textureId := constants.GetVanillaItemId(constants.ItemModel{
+		NumericId:  *item.ID,
+		ItemDamage: *item.Damage,
+	})
+
 	if texture, ok := VANILLA_ITEM_MAP[textureId]; ok {
 		if tex, ok := texture.Textures["layer0"]; ok && tex != "" {
 			return AppliedItemTexture{Texture: tex}
@@ -405,11 +408,11 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 		}
 	}
 
-	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/%s.png", strings.ToLower(item.RawId))
+	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/%s.webp", strings.ToLower(item.RawId))
 	if _, err := os.Stat(vanillaPath); err == nil {
 		return AppliedItemTexture{Texture: fmt.Sprintf("%s/%s", utility.GetDomain(), vanillaPath)}
 	}
 
 	fmt.Printf("[CUSTOM_RESOURCES] No custom texture found for item %s, returning default barrier texture\n", item.Tag.ExtraAttributes["id"])
-	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.png", utility.GetDomain())}
+	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.webp", utility.GetDomain())}
 }

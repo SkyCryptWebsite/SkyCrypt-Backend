@@ -19,6 +19,7 @@ var skillTables = map[string]map[int]int{
 	"social":         constants.SOCIAL_XP,
 	"dungeoneering":  constants.DUNGEONEERING_XP,
 	"hotm":           constants.HOTM_XP,
+	"hotf":           constants.HOTF_XP,
 	"skyblock_level": constants.SKYBLOCK_XP,
 }
 
@@ -62,6 +63,7 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 	if extra.Cap != nil && *extra.Cap != 0 {
 		levelCap = *extra.Cap
 	}
+
 	if levelCap == 0 {
 		maxKey := 0
 		for key := range xpTable {
@@ -81,9 +83,14 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 	// like xpCurrent but ignores cap
 	xpRemaining := xp
 
-	for xpTable[uncappedLevel+1] <= xpRemaining && xpTable[uncappedLevel+1] > 0 {
+	for {
+		nextXp, exists := xpTable[uncappedLevel+1]
+		if !exists || nextXp > xpRemaining {
+			break
+		}
+
 		uncappedLevel++
-		xpRemaining -= xpTable[uncappedLevel]
+		xpRemaining -= nextXp
 		if uncappedLevel <= levelCap {
 			xpCurrent = xpRemaining
 		}
@@ -182,6 +189,7 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		"farming":      50,
 		"taming":       50,
 		"runecrafting": 3,
+		"foraging":     52,
 	}
 
 	if userProfile.JacobsContest.Perks != nil {
@@ -196,10 +204,13 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		caps["runecrafting"] = 25
 	}
 
+	if slices.Contains(userProfile.Foraging.Hina.Tasks.ClaimedRewards, "REACH_AGATHA_4") {
+		caps["foraging"] += 2
+	}
+
 	return caps
 }
 
-// GetSocialSkillExperience calculates the total social skill experience for a given profile
 func GetSocialSkillExperience(profile *skycrypttypes.Profile) float64 {
 	total := 0.00
 	for _, member := range profile.Members {
