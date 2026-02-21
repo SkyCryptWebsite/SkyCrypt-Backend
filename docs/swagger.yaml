@@ -102,6 +102,13 @@ components:
         totalFamilies:
           type: integer
       type: object
+    models.CenterOfTheForest:
+      properties:
+        level:
+          type: integer
+        maxLevel:
+          type: integer
+      type: object
     models.ClassData:
       properties:
         classAverage:
@@ -527,6 +534,13 @@ components:
         uniqueGolds:
           type: integer
       type: object
+    models.FishFamily:
+      properties:
+        collected:
+          type: integer
+        total:
+          type: integer
+      type: object
     models.FishingOuput:
       properties:
         itemsFished:
@@ -550,6 +564,36 @@ components:
           type: integer
         trophyFish:
           $ref: '#/components/schemas/models.TrophyFishOutput'
+      type: object
+    models.ForagingOutput:
+      properties:
+        cotf:
+          $ref: '#/components/schemas/models.CenterOfTheForest'
+        fishFamily:
+          $ref: '#/components/schemas/models.FishFamily'
+        foragingLevel:
+          $ref: '#/components/schemas/models.Skill'
+        hinaChapter:
+          $ref: '#/components/schemas/models.HinaChapter'
+        hotf:
+          items:
+            $ref: '#/components/schemas/models.ProcessedItem'
+          type: array
+          uniqueItems: false
+        level:
+          $ref: '#/components/schemas/models.Skill'
+        selectedAxeAbility:
+          type: string
+        tokens:
+          $ref: '#/components/schemas/models.HotfTokens'
+        tools:
+          $ref: '#/components/schemas/models.SkillToolsResult'
+        treeGift:
+          additionalProperties:
+            $ref: '#/components/schemas/models.TreeGift'
+          type: object
+        whispers:
+          $ref: '#/components/schemas/models.Whispers'
       type: object
     models.ForgeOutput:
       properties:
@@ -614,6 +658,10 @@ components:
             $ref: '#/components/schemas/models.CropUpgrade'
           type: array
           uniqueItems: false
+        gardenUpgrades:
+          additionalProperties:
+            type: integer
+          type: object
         level:
           $ref: '#/components/schemas/models.Skill'
         plot:
@@ -715,6 +763,22 @@ components:
         mineshaftsEntered:
           type: integer
       type: object
+    models.HinaChapter:
+      properties:
+        maxTier:
+          type: integer
+        tier:
+          type: integer
+      type: object
+    models.HotfTokens:
+      properties:
+        available:
+          type: integer
+        spent:
+          type: integer
+        total:
+          type: integer
+      type: object
     models.HotmTokens:
       properties:
         available:
@@ -774,6 +838,8 @@ components:
           type: array
           uniqueItems: false
         level:
+          $ref: '#/components/schemas/models.Skill'
+        miningLevel:
           $ref: '#/components/schemas/models.Skill'
         peakOfTheMountain:
           $ref: '#/components/schemas/models.PeakOfTheMountain'
@@ -984,6 +1050,10 @@ components:
             $ref: '#/components/schemas/models.MiscEssence'
           type: array
           uniqueItems: false
+        garden_chips:
+          additionalProperties:
+            type: integer
+          type: object
         gifts:
           $ref: '#/components/schemas/models.MiscGifts'
         kills:
@@ -1379,6 +1449,8 @@ components:
           $ref: '#/components/schemas/models.FarmingOutput'
         fishing:
           $ref: '#/components/schemas/models.FishingOuput'
+        foraging:
+          $ref: '#/components/schemas/models.ForagingOutput'
         mining:
           $ref: '#/components/schemas/models.MiningOutput'
       type: object
@@ -1547,6 +1619,13 @@ components:
         type:
           type: string
       type: object
+    models.TreeGift:
+      properties:
+        maxMilestone:
+          type: integer
+        milestone:
+          type: integer
+      type: object
     models.TrophyFish:
       properties:
         bronze:
@@ -1632,6 +1711,15 @@ components:
             $ref: '#/components/schemas/models.StrippedItem'
           type: array
           uniqueItems: false
+      type: object
+    models.Whispers:
+      properties:
+        available:
+          type: integer
+        spent:
+          type: integer
+        total:
+          type: integer
       type: object
     models.WikipediaLinks:
       properties:
