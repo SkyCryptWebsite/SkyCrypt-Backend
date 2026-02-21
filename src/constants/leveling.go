@@ -13,13 +13,15 @@ var DEFAULT_SKILL_CAPS = map[string]int{
 	"runecrafting":  25,
 	"social":        25,
 	"dungeoneering": 50,
+	"hunting":       25,
 }
 
 const NON_RUNECRAFTING_LEVEL_CAP = 3
 
 var MaxedSkillCaps = map[string]int{
-	"farming": 60,
-	"taming":  60,
+	"farming":  60,
+	"taming":   60,
+	"foraging": 54,
 }
 
 var RUNECRAFTING_XP = map[int]int{
@@ -105,4 +107,5 @@ var SKILL_ICONS = map[string]string{
 	"berserk":        "/api/item/IRON_SWORD",
 	"tank":           "/api/leather/chestplate/955e3b",
 	"garden":         "/api/item/DOUBLE_PLANT",
+	"hunting":        "/api/item/LEAD",
 }

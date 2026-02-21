@@ -189,6 +189,7 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		"farming":      50,
 		"taming":       50,
 		"runecrafting": 3,
+		"foraging":     52,
 	}
 
 	if userProfile.JacobsContest.Perks != nil {
@@ -203,10 +204,13 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		caps["runecrafting"] = 25
 	}
 
+	if slices.Contains(userProfile.Foraging.Hina.Tasks.ClaimedRewards, "REACH_AGATHA_4") {
+		caps["foraging"] += 2
+	}
+
 	return caps
 }
 
-// GetSocialSkillExperience calculates the total social skill experience for a given profile
 func GetSocialSkillExperience(profile *skycrypttypes.Profile) float64 {
 	total := 0.00
 	for _, member := range profile.Members {

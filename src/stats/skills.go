@@ -32,6 +32,7 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 			"SKILL_CARPENTRY":    userProfile.PlayerData.Experience.SkillCarpentry,
 			"SKILL_COMBAT":       userProfile.PlayerData.Experience.SkillCombat,
 			"SKILL_RUNECRAFTING": userProfile.PlayerData.Experience.SkillRunecrafting,
+			"SKILL_HUNTING":      userProfile.PlayerData.Experience.SkillHunting,
 		}
 
 		experienceMap["SKILL_SOCIAL"] = 0
@@ -70,6 +71,7 @@ func GetSkills(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile
 			"SKILL_SOCIAL":       0,
 			"SKILL_CARPENTRY":    0,
 			"SKILL_RUNECRAFTING": 0,
+			"SKILL_HUNTING":      0,
 		}
 
 		for skillId, level := range experienceMap {
