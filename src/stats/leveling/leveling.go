@@ -19,6 +19,7 @@ var skillTables = map[string]map[int]int{
 	"social":         constants.SOCIAL_XP,
 	"dungeoneering":  constants.DUNGEONEERING_XP,
 	"hotm":           constants.HOTM_XP,
+	"hotf":           constants.HOTF_XP,
 	"skyblock_level": constants.SKYBLOCK_XP,
 }
 
@@ -62,6 +63,7 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 	if extra.Cap != nil && *extra.Cap != 0 {
 		levelCap = *extra.Cap
 	}
+
 	if levelCap == 0 {
 		maxKey := 0
 		for key := range xpTable {
@@ -81,9 +83,14 @@ func GetLevelByXp(xp int, extra *ExtraSkillData) models.Skill {
 	// like xpCurrent but ignores cap
 	xpRemaining := xp
 
-	for xpTable[uncappedLevel+1] <= xpRemaining && xpTable[uncappedLevel+1] > 0 {
+	for {
+		nextXp, exists := xpTable[uncappedLevel+1]
+		if !exists || nextXp > xpRemaining {
+			break
+		}
+
 		uncappedLevel++
-		xpRemaining -= xpTable[uncappedLevel]
+		xpRemaining -= nextXp
 		if uncappedLevel <= levelCap {
 			xpCurrent = xpRemaining
 		}

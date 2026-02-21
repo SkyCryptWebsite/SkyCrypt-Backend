@@ -72,6 +72,11 @@ var HOTM_XP = map[int]int{
 	6: 100000, 7: 150000, 8: 210000, 9: 290000, 10: 400000,
 }
 
+var HOTF_XP = map[int]int{
+	1: 0, 2: 3000, 3: 9000, 4: 25000, 5: 60000,
+	6: 100000, 7: 150000,
+}
+
 var SKYBLOCK_XP = map[int]int{
 	1: 100,
 }
@@ -87,7 +92,7 @@ var SKILL_ICONS = map[string]string{
 	"fishing":        "/api/item/FISHING_ROD",
 	"alchemy":        "/api/item/BREWING_STAND",
 	"runecrafting":   "/api/item/MAGMA_CREAM",
-	"taming":         "/api/item/SPAWN_EGG",
+	"taming":         "/api/item/GHAST_SPAWN_EGG",
 	"mining":         "/api/item/STONE_PICKAXE",
 	"foraging":       "/api/item/SAPLING:3",
 	"enchanting":     "/api/item/ENCHANTING_TABLE",

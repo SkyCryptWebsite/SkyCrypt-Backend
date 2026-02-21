@@ -2,6 +2,7 @@ package models
 
 type MiningOutput struct {
 	Level                  Skill             `json:"level"`
+	MiningLevel            Skill             `json:"miningLevel"`
 	PeakOfTheMountain      PeakOfTheMountain `json:"peakOfTheMountain"`
 	SelectedPickaxeAbility string            `json:"selectedPickaxeAbility"`
 	Tokens                 HotmTokens        `json:"tokens"`
