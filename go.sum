@@ -1,9 +1,5 @@
 dario.cat/mergo v1.0.2 h1:85+piFYR1tMbRrLcDwR18y4UKJ3aH1Tbzi24VRW1TK8=
 dario.cat/mergo v1.0.2/go.mod h1:E/hbnu0NxMFBjpMIE34DRGLWqDy0g5FuKDhCb31ngxA=
-github.com/DuckySoLucky/SkyCrypt-Types v0.1.5 h1:OFt/+C8LrVOs4gORzWeZxRxzmHrdPqxNwjcm9TShEmU=
-github.com/DuckySoLucky/SkyCrypt-Types v0.1.5/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
-github.com/DuckySoLucky/SkyCrypt-Types v0.1.14 h1:PB3a9KXdv0bMUSEIxGnEqITrQ7lUM3WgmDoh3BpS558=
-github.com/DuckySoLucky/SkyCrypt-Types v0.1.14/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.15 h1:FIq+HPvTbWjZxUwkrzwu45gmhHan8ZGLws+5k/+PZeI=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.15/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
@@ -13,12 +9,6 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/ProtonMail/go-crypto v1.3.0 h1:ILq8+Sf5If5DCpHQp4PbZdS1J7HDFRXz/+xKBiRGFrw=
 github.com/ProtonMail/go-crypto v1.3.0/go.mod h1:9whxjD8Rbs29b4XWbB8irEcE8KHMqaR2e7GWU1R+/PE=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.1.3 h1:zJN+JUSZreiVcAfVclQVN3pjpFUojzhBHOXKGrM4ePA=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.1.3/go.mod h1:do3XxCvFlSkffwN1m+wNh+wI0xJI8GLuVXVDLeAQsBY=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.11 h1:HLjp/X6o1dnPkgX8SsGf7yfo858WWDyIbknG5eg4j08=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.11/go.mod h1:xb/tNrfudwX+sXQeGbIG/2Okrb0tpXxRPRnbldQ9TCc=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.12 h1:60SHdcTDyJS4XK3hVyKRcj10yXu8AHOnLvouw5x6fwU=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.12/go.mod h1:I63QIf5qYaezlIbWAKCmYN2yhQ9NosGtylU9hqu4Oq8=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.13 h1:glivXtSABf46AD6FHjtDr11c7OvZV3PKGufXfJMbDT8=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.13/go.mod h1:jE4t2C5OOqQcfbxa3Q0KLILr9QTZ2YB/cvPjT7FHjw0=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
