@@ -90,6 +90,36 @@ func ParseNEURepository() error {
 			}
 
 			NEUConstants.Garden = neustats.FormatGardenConstants(gardenConstants)
+		} else if constant.Name() == "hotmlayout.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var hotmConstants neu.HOTMConstants
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &hotmConstants)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.HeartOfTheMountain = hotmConstants
+		} else if constant.Name() == "hotflayout.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var hotfConstants neu.HOTFConstants
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &hotfConstants)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.HeartOfTheForest = hotfConstants
 		}
 	}
 

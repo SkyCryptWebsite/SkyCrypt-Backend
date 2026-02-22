@@ -160,6 +160,14 @@ func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
 	return output
 }
 
+func getGardenUpgradeLevels(gardenData *skycrypttypes.Garden) map[string]int {
+	return map[string]int{
+		"growth_speed":        gardenData.GardenUpgrades["GROWTH_SPEED"],
+		"commission_cooldown": gardenData.GardenUpgrades["COMMISSION_COOLDOWN"],
+		"commission_capacity": gardenData.GardenUpgrades["COMMISSION_CAPACITY"],
+	}
+}
+
 func GetGarden(gardenData *skycrypttypes.Garden) *models.Garden {
 	return &models.Garden{
 		Level:          stats.GetLevelByXp(int(gardenData.Experience), &stats.ExtraSkillData{Type: "garden"}),
@@ -168,5 +176,6 @@ func GetGarden(gardenData *skycrypttypes.Garden) *models.Garden {
 		CropUpgrades:   getCropUpgrades(gardenData),
 		Composter:      getComposter(gardenData),
 		Plot:           getPlotLayout(gardenData),
+		GardenUpgrades: getGardenUpgradeLevels(gardenData),
 	}
 }

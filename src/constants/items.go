@@ -60,7 +60,8 @@ var TYPE_TO_CATEGORIES = map[string][]string{
 }
 
 var ENCHANTMENTS_TO_CATEGORIES = map[string][]string{
-	"farming_tool": {"cultivating", "dedication", "delicate", "harvesting", "replenish", "sunder", "turbo_cacti", "turbo_cane", "turbo_carrot", "turbo_coco", "turbo_mushrooms", "turbo_potato", "turbo_warts", "turbo_wheat"},
+	"farming_tool":  {"cultivating", "dedication", "delicate", "harvesting", "replenish", "sunder", "turbo_cacti", "turbo_cane", "turbo_carrot", "turbo_coco", "turbo_mushrooms", "turbo_potato", "turbo_warts", "turbo_wheat"},
+	"foraging_tool": {"absorb", "arcane"},
 }
 
 var RARITIES = []string{

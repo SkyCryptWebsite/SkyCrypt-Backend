@@ -135,6 +135,7 @@ func SkillsHandler(c *fiber.Ctx) error {
 
 	output := models.SkillsOutput{
 		Mining:     stats.GetMining(userProfile, player, allItems),
+		Foraging:   stats.GetForaging(userProfile, player, allItems),
 		Farming:    stats.GetFarming(userProfile, allItems),
 		Fishing:    stats.GetFishing(userProfile, allItems),
 		Enchanting: stats.GetEnchanting(userProfile),

@@ -2,46 +2,34 @@ package constants
 
 const MAX_PEAK_OF_THE_MOUNTAIN_LEVEL = 10
 
-type Reward struct {
-	TokenOfTheMountain                int
-	SkyblockExperience                int
-	AccessToForge                     int
-	NewForgeableItems                 int
-	ForgeSlot                         int
-	AccessCrystalHollows              int
-	EmissaryBraumCrystalHollows       int
-	PickaxeAbilityLevel               int
-	CommissionSlot                    int
-	MithrilPowderWhenMiningMithril    int
-	GemstonePowderWhenMiningGemstones int
-	GlacitePowderWhenMiningGlacite    int
-	ChanceForGlaciteMineshaftToSpawn  string
+type HOTMReward struct {
+	TokenOfTheMountain int
 }
 
-var HOTM_REWARDS = map[int]Reward{
-	1:  {TokenOfTheMountain: 1, SkyblockExperience: 35},
-	2:  {TokenOfTheMountain: 2, SkyblockExperience: 45, AccessToForge: 0, NewForgeableItems: 0},
-	3:  {TokenOfTheMountain: 2, SkyblockExperience: 60, ForgeSlot: 1, NewForgeableItems: 0, AccessCrystalHollows: 0, EmissaryBraumCrystalHollows: 0},
-	4:  {TokenOfTheMountain: 2, SkyblockExperience: 75, ForgeSlot: 1, NewForgeableItems: 0},
-	5:  {TokenOfTheMountain: 2, SkyblockExperience: 90, NewForgeableItems: 0},
-	6:  {TokenOfTheMountain: 2, SkyblockExperience: 100, NewForgeableItems: 0},
-	7:  {TokenOfTheMountain: 3, SkyblockExperience: 130, NewForgeableItems: 0},
-	8:  {TokenOfTheMountain: 2, SkyblockExperience: 180, NewForgeableItems: 0},
-	9:  {TokenOfTheMountain: 2, SkyblockExperience: 210, NewForgeableItems: 0},
-	10: {TokenOfTheMountain: 2, SkyblockExperience: 240, NewForgeableItems: 0},
+var HOTM_REWARDS = map[int]HOTMReward{
+	1:  {TokenOfTheMountain: 1},
+	2:  {TokenOfTheMountain: 2},
+	3:  {TokenOfTheMountain: 2},
+	4:  {TokenOfTheMountain: 2},
+	5:  {TokenOfTheMountain: 2},
+	6:  {TokenOfTheMountain: 2},
+	7:  {TokenOfTheMountain: 3},
+	8:  {TokenOfTheMountain: 2},
+	9:  {TokenOfTheMountain: 2},
+	10: {TokenOfTheMountain: 2},
 }
 
-var POTM_REWARDS = map[int]Reward{
-	1:  {TokenOfTheMountain: 1, SkyblockExperience: 25},
-	2:  {PickaxeAbilityLevel: 1, SkyblockExperience: 35},
-	3:  {CommissionSlot: 1, SkyblockExperience: 50},
-	4:  {MithrilPowderWhenMiningMithril: 1, SkyblockExperience: 65},
-	5:  {TokenOfTheMountain: 1, SkyblockExperience: 75},
-	6:  {GemstonePowderWhenMiningGemstones: 2, SkyblockExperience: 100},
-	7:  {TokenOfTheMountain: 1, SkyblockExperience: 125},
-	8:  {GlacitePowderWhenMiningGlacite: 3, SkyblockExperience: 150},
-	9:  {ChanceForGlaciteMineshaftToSpawn: "10%", SkyblockExperience: 175},
-	10: {TokenOfTheMountain: 2, SkyblockExperience: 200},
+var POTM_REWARDS = map[int]HOTMReward{
+	1:  {TokenOfTheMountain: 1},
+	2:  {},
+	3:  {},
+	4:  {},
+	5:  {TokenOfTheMountain: 1},
+	6:  {},
+	7:  {TokenOfTheMountain: 1},
+	8:  {},
+	9:  {},
+	10: {TokenOfTheMountain: 2},
 }
 
 var PRECURSOR_PARTS = map[string]string{

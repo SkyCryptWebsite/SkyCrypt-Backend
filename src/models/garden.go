@@ -17,6 +17,7 @@ type Garden struct {
 	CropUpgrades   []CropUpgrade   `json:"cropUpgrades"`
 	Composter      map[string]int  `json:"composter"`
 	Plot           PlotLayout      `json:"plot"`
+	GardenUpgrades map[string]int  `json:"gardenUpgrades"`
 }
 
 type Visitors struct {
