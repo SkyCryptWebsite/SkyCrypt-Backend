@@ -6,13 +6,10 @@ on:
 
 jobs:
   checks:
-    if: github.event.pull_request.head.repo.fork == true
     uses: ./.github/workflows/checks.yml
 
   tests:
-    if: github.event.pull_request.head.repo.fork == true
     uses: ./.github/workflows/test.yml
 
   build:
-    if: github.event.pull_request.head.repo.fork == true
     uses: ./.github/workflows/build.yml
