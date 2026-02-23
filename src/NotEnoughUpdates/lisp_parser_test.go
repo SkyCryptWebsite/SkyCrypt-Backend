@@ -10,8 +10,8 @@ var prelude = []string{
 	"(defun max (l r) (if (lt l r) r l))",
 	"(defun round-decimals (number places) (/ (round (* number (pow 10 places))) (pow 10 places)))",
 	"(defun id (x) (if true x x))",
-	"(defun npi (level0 maxLevel) (if (= level0 0) :PALE_OAK_BUTTON (if (= level0 maxLevel) :OAK_LOG :STRIPPED_OAK_LOG)))",
-	"(defun api (level0) (if (= level0 0) :PALE_OAK_SAPLING :OAK_SAPLING))",
+	"(defun npi (level0 maxLevel) (if (= level0 0) :COAL (if (= level0 maxLevel) :DIAMOND :EMERALD)))",
+	"(defun api (level0) (if (= level0 0) :COAL_BLOCK :EMERALD_BLOCK))",
 }
 
 func mustParse(t *testing.T, input string) LispValue {
