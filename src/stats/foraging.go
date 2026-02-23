@@ -70,6 +70,13 @@ func getFishFamilyAmount(userProfile *skycrypttypes.Member) models.FishFamily {
 }
 
 func getHinaChapter(userProfile *skycrypttypes.Member) models.HinaChapter {
+	if userProfile.Foraging.Hina == nil {
+		return models.HinaChapter{
+			Tier:    0,
+			MaxTier: constants.MAX_HINA_CHAPTER,
+		}
+	}
+
 	return models.HinaChapter{
 		Tier:    userProfile.Foraging.Hina.Tasks.TierClaimed,
 		MaxTier: constants.MAX_HINA_CHAPTER,
@@ -77,6 +84,19 @@ func getHinaChapter(userProfile *skycrypttypes.Member) models.HinaChapter {
 }
 
 func getTreeGifts(userProfile *skycrypttypes.Member) map[string]models.TreeGift {
+	if userProfile.Foraging.TreeGifts == nil {
+		return map[string]models.TreeGift{
+			"FIG": {
+				Milestone:    0,
+				MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
+			},
+			"MANGROVE": {
+				Milestone:    0,
+				MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
+			},
+		}
+	}
+
 	return map[string]models.TreeGift{
 		"FIG": {
 			Milestone:    userProfile.Foraging.TreeGifts.MilestoneTierClaimed["FIG"],
