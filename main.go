@@ -75,8 +75,6 @@ func main() {
 
 			utility.SendWebhook(c.OriginalURL(), err, stack)
 
-			// TODO: Figure out why this doesn't work
-			// Return JSON error to the client
 			_ = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":  "Internal Server Error",
 				"type":   fmt.Sprintf("%T", err),
