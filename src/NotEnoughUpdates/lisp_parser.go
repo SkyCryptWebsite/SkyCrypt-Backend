@@ -80,6 +80,7 @@ func newBaseEnv() LispEnv {
 		":STRIPPED_OAK_LOG": "STRIPPED_OAK_LOG",
 		":PALE_OAK_SAPLING": "PALE_OAK_SAPLING",
 		":OAK_LOG":          "OAK_LOG",
+		":OAK_SAPLING":      "OAK_SAPLING",
 		"list.new": LispFunc(func(args ...LispValue) LispValue {
 			return args
 		}),

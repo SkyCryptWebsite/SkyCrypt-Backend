@@ -204,8 +204,10 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		caps["runecrafting"] = 25
 	}
 
-	if slices.Contains(userProfile.Foraging.Hina.Tasks.ClaimedRewards, "REACH_AGATHA_4") {
-		caps["foraging"] += 2
+	if userProfile.Foraging.Hina != nil && userProfile.Foraging.Hina.Tasks.ClaimedRewards != nil {
+		if slices.Contains(userProfile.Foraging.Hina.Tasks.ClaimedRewards, "REACH_AGATHA_4") {
+			caps["foraging"] += 2
+		}
 	}
 
 	return caps
