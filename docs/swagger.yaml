@@ -1663,6 +1663,8 @@ components:
           type: integer
         milestone:
           type: integer
+        texture:
+          type: string
       type: object
     models.TrophyFish:
       properties:
