@@ -236,10 +236,6 @@ func init() {
 			continue
 		}
 
-		if packDir.Name() != "Vanilla" {
-			continue
-		}
-
 		packAssetsPath := filepath.Join(assetsRoot, packDir.Name(), "assets")
 		if _, err := os.Stat(packAssetsPath); os.IsNotExist(err) {
 			continue

@@ -25,6 +25,10 @@ func NewLispParser(stdlibDefuns []string) *LispParser {
 	return &LispParser{env: env}
 }
 
+func (p *LispParser) SetEnv(key string, value LispValue) {
+	p.env[key] = value
+}
+
 func (p *LispParser) Parse(input string) (LispValue, error) {
 	tokens := tokenize(input)
 	expr, err := parse(&tokens)

@@ -327,6 +327,13 @@ components:
             type: string
           type: object
       type: object
+    models.DNAAnalysisMilestone:
+      properties:
+        level:
+          type: integer
+        maxLevel:
+          type: integer
+      type: object
     models.DungeonFloorStats:
       properties:
         best_score:
@@ -545,7 +552,7 @@ components:
       properties:
         itemsFished:
           type: integer
-        kills:
+        lavaSeaCreatures:
           items:
             $ref: '#/components/schemas/models.Kill'
           type: array
@@ -564,6 +571,11 @@ components:
           type: integer
         trophyFish:
           $ref: '#/components/schemas/models.TrophyFishOutput'
+        waterSeaCreatures:
+          items:
+            $ref: '#/components/schemas/models.Kill'
+          type: array
+          uniqueItems: false
       type: object
     models.ForagingOutput:
       properties:
@@ -658,16 +670,46 @@ components:
             $ref: '#/components/schemas/models.CropUpgrade'
           type: array
           uniqueItems: false
+        dnaAnalysisMilestone:
+          $ref: '#/components/schemas/models.DNAAnalysisMilestone'
+        gardenChips:
+          items:
+            $ref: '#/components/schemas/models.GardenChip'
+          type: array
+          uniqueItems: false
         gardenUpgrades:
-          additionalProperties:
-            type: integer
-          type: object
+          items:
+            $ref: '#/components/schemas/models.GardenUpgrade'
+          type: array
+          uniqueItems: false
         level:
           $ref: '#/components/schemas/models.Skill'
         plot:
           $ref: '#/components/schemas/models.PlotLayout'
         visitors:
           $ref: '#/components/schemas/models.Visitors'
+      type: object
+    models.GardenChip:
+      properties:
+        amount:
+          type: integer
+        max:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
+      type: object
+    models.GardenUpgrade:
+      properties:
+        level:
+          type: integer
+        maxLevel:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
       type: object
     models.Gear:
       properties:
@@ -1050,10 +1092,6 @@ components:
             $ref: '#/components/schemas/models.MiscEssence'
           type: array
           uniqueItems: false
-        garden_chips:
-          additionalProperties:
-            type: integer
-          type: object
         gifts:
           $ref: '#/components/schemas/models.MiscGifts'
         kills:
@@ -2215,6 +2253,12 @@ paths:
     get:
       description: Returns garden data for the given profile ID
       parameters:
+      - description: Profile ID
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
       - description: Profile ID
         in: path
         name: profileId

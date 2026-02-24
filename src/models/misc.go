@@ -19,7 +19,6 @@ type MiscOutput struct {
 	Auctions          MiscAuctions                `json:"auctions"`
 	ClaimedItems      map[string]int64            `json:"claimed_items"`
 	Uncategorized     map[string]any              `json:"uncategorized"`
-	GardenChips       map[string]int              `json:"garden_chips"`
 }
 
 type MiscAuctions struct {

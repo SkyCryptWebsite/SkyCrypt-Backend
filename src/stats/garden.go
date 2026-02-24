@@ -8,6 +8,7 @@ import (
 	stats "skycrypt/src/stats/leveling"
 	"skycrypt/src/utility"
 	"slices"
+	"strconv"
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -50,7 +51,7 @@ func getVisitors(gardenData *skycrypttypes.Garden) models.Visitors {
 func getCropMilestones(gardenData *skycrypttypes.Garden) []models.CropMilestone {
 	milestones := make([]models.CropMilestone, 0, len(gardenData.ResourcesCollected))
 	for cropId, cropName := range constants.CROPS {
-		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId)
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.CROP_TEXTURES[cropId])
 
 		milestones = append(milestones, models.CropMilestone{
 			Name:    cropName,
@@ -68,7 +69,7 @@ func getCropUpgrades(gardenData *skycrypttypes.Garden) []models.CropUpgrade {
 	upgrades := make([]models.CropUpgrade, 0, len(gardenData.CropUpgradeLevels))
 	for cropId, cropName := range constants.CROPS {
 		experience := stats.GetSkillExperience("crop_upgrade", int(gardenData.CropUpgradeLevels[cropId]))
-		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId)
+		texture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.CROP_TEXTURES[cropId])
 
 		upgrades = append(upgrades, models.CropUpgrade{
 			Name:    cropName,
@@ -160,22 +161,84 @@ func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
 	return output
 }
 
-func getGardenUpgradeLevels(gardenData *skycrypttypes.Garden) map[string]int {
-	return map[string]int{
-		"growth_speed":        gardenData.GardenUpgrades["GROWTH_SPEED"],
-		"commission_cooldown": gardenData.GardenUpgrades["COMMISSION_COOLDOWN"],
-		"commission_capacity": gardenData.GardenUpgrades["COMMISSION_CAPACITY"],
+func getGardenUpgradeLevels(gardenData *skycrypttypes.Garden) []models.GardenUpgrade {
+	return []models.GardenUpgrade{
+		{
+			Name:     constants.GARDEN_UPGRADES["growth_speed"].Name,
+			Texture:  fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.GARDEN_UPGRADES["growth_speed"].Texture),
+			Level:    gardenData.GardenUpgrades["GROWTH_SPEED"],
+			MaxLevel: constants.GARDEN_UPGRADES["growth_speed"].MaxLevel,
+		},
+		{
+			Name:     constants.GARDEN_UPGRADES["plot_limit"].Name,
+			Texture:  fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.GARDEN_UPGRADES["plot_limit"].Texture),
+			Level:    gardenData.GardenUpgrades["PLOT_LIMIT"],
+			MaxLevel: constants.GARDEN_UPGRADES["plot_limit"].MaxLevel,
+		},
+		{
+			Name:     constants.GARDEN_UPGRADES["yield"].Name,
+			Texture:  fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.GARDEN_UPGRADES["yield"].Texture),
+			Level:    gardenData.GardenUpgrades["YIELD"],
+			MaxLevel: constants.GARDEN_UPGRADES["yield"].MaxLevel,
+		},
 	}
 }
 
-func GetGarden(gardenData *skycrypttypes.Garden) *models.Garden {
+func getGardenChips(userProfile *skycrypttypes.Member) []models.GardenChip {
+	output := []models.GardenChip{}
+	if userProfile.PlayerData == nil {
+		userProfile.PlayerData = &skycrypttypes.PlayerData{}
+	}
+
+	for _, chipId := range constants.GARDEN_CHIPS {
+		output = append(output, models.GardenChip{
+			Name:    utility.TitleCase(chipId),
+			Texture: fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), fmt.Sprintf("%s_GARDEN_CHIP", chipId)),
+			Amount:  userProfile.PlayerData.GardenChips[chipId],
+			Max:     constants.MAX_GARDEN_CHIPS,
+		})
+	}
+
+	return output
+}
+
+func getDNAAnalysisMilestone(userProfile *skycrypttypes.Member) models.DNAAnalysisMilestone {
+	if userProfile.Objectives == nil {
+		return models.DNAAnalysisMilestone{
+			Level:    0,
+			MaxLevel: constants.MAX_DNA_ANALYSIS_MILESTONE,
+		}
+	}
+
+	// t goes up to level 6. And you get it from objectives.tutorial by looking for the highest number on strings like dna_analysis_rewardskyblock_xp_1 - dna_analysis_rewardskyblock_xp_6
+	milestone := 0
+	for _, objectiveId := range userProfile.Objectives.Tutorial {
+		if strings.HasPrefix(objectiveId, "dna_analysis_rewardskyblock_xp_") {
+			parts := strings.Split(objectiveId, "_")
+			levelStr := parts[len(parts)-1]
+			level, err := strconv.Atoi(levelStr)
+			if err == nil && level > milestone {
+				milestone = level
+			}
+		}
+	}
+
+	return models.DNAAnalysisMilestone{
+		Level:    milestone,
+		MaxLevel: constants.MAX_DNA_ANALYSIS_MILESTONE,
+	}
+}
+
+func GetGarden(userProfile *skycrypttypes.Member, gardenData *skycrypttypes.Garden) *models.Garden {
 	return &models.Garden{
-		Level:          stats.GetLevelByXp(int(gardenData.Experience), &stats.ExtraSkillData{Type: "garden"}),
-		Visitors:       getVisitors(gardenData),
-		CropMilestones: getCropMilestones(gardenData),
-		CropUpgrades:   getCropUpgrades(gardenData),
-		Composter:      getComposter(gardenData),
-		Plot:           getPlotLayout(gardenData),
-		GardenUpgrades: getGardenUpgradeLevels(gardenData),
+		Level:                stats.GetLevelByXp(int(gardenData.Experience), &stats.ExtraSkillData{Type: "garden"}),
+		Visitors:             getVisitors(gardenData),
+		CropMilestones:       getCropMilestones(gardenData),
+		CropUpgrades:         getCropUpgrades(gardenData),
+		Composter:            getComposter(gardenData),
+		Plot:                 getPlotLayout(gardenData),
+		GardenUpgrades:       getGardenUpgradeLevels(gardenData),
+		GardenChips:          getGardenChips(userProfile),
+		DNAAnalysisMilestone: getDNAAnalysisMilestone(userProfile),
 	}
 }

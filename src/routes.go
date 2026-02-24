@@ -169,7 +169,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/profiles/:uuid", routes.ProfilesHandler)
 	api.Get("/player/:uuid", routes.PlayerHandler)
 	api.Get("/museum/:profileId", routes.MuseumHandler)
-	api.Get("/garden/:profileId", routes.GardenHandler)
+	api.Get("/garden/:uuid/:profileId", routes.GardenHandler)
 
 	// STATS ENDPOINTS
 	api.Get("/stats/:uuid/:profileId", routes.StatsHandler)

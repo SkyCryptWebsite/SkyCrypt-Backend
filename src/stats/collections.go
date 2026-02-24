@@ -158,7 +158,7 @@ func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 
 			tier := 0
 			for _, tierData := range itemData.Tiers {
-				if amount >= tierData.AmountRequired {
+				if totalAmount >= tierData.AmountRequired {
 					tier = tierData.Tier
 				}
 			}

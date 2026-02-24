@@ -280,21 +280,6 @@ func getClaimedItems(player *skycrypttypes.Player) map[string]int64 {
 	}
 }
 
-func getGardenChips(userProfile *skycrypttypes.Member) map[string]int {
-	return map[string]int{
-		"cropshot":         userProfile.PlayerData.GardenChips["cropshot"],
-		"sowledge":         userProfile.PlayerData.GardenChips["sowledge"],
-		"mechamind":        userProfile.PlayerData.GardenChips["mechamind"],
-		"overdrive":        userProfile.PlayerData.GardenChips["overdrive"],
-		"vermin_vaporizer": userProfile.PlayerData.GardenChips["vermin_vaporizer"],
-		"quickdraw":        userProfile.PlayerData.GardenChips["quickdraw"],
-		"hypercharge":      userProfile.PlayerData.GardenChips["hypercharge"],
-		"evergreen":        userProfile.PlayerData.GardenChips["evergreen"],
-		"rarefinder":       userProfile.PlayerData.GardenChips["rarefinder"],
-		"synthesis":        userProfile.PlayerData.GardenChips["synthesis"],
-	}
-}
-
 func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, player *skycrypttypes.Player) *models.MiscOutput {
 	return &models.MiscOutput{
 		Essence:           getEssence(userProfile),
@@ -310,6 +295,5 @@ func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, 
 		Auctions:          getAuctions(userProfile),
 		Uncategorized:     getUncategorized(userProfile),
 		ClaimedItems:      getClaimedItems(player),
-		GardenChips:       getGardenChips(userProfile),
 	}
 }
