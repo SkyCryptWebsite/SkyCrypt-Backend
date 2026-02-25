@@ -1,3 +1,10 @@
+/*
+Minecraft Head Rendering in Rust provided by @mat-1: https://github.com/mat-1/msdsmchr
+Rewritten and converted into Go by @DuckySolucky
+Original TS version by @DuckySolucky: https://github.com/SkyCryptWebsite/SkyCryptv2/blob/dev/src/lib/server/helper/renderer.ts
+Originally Inspired by Crafatar: https://github.com/crafatar/crafatar
+*/
+
 package lib
 
 import (
@@ -292,6 +299,81 @@ func To3DHead(img image.Image) *image.RGBA {
 	size := uint32(128)
 
 	out := image.NewRGBA(image.Rect(0, 0, int(size), int(size)))
+
+	// Bottom overlay
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          6,
+		Y:          0,
+		Matrix:     TRANSFORM_TOP_BOTTOM_MATRIX,
+		TranslateX: float32(size) * (-145.0 / 256.0),
+		TranslateY: float32(size) * (177.0 / 256.0),
+		Flip:       false,
+		Scale:      float32(size / 20),
+		IsOverlay:  true,
+	})
+
+	// Back overlay
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          7,
+		Y:          1,
+		Matrix:     TRANSFORM_FRONT_BACK_MATRIX,
+		TranslateX: float32(size) * (26.0 / 256.0),
+		TranslateY: float32(size) * (70.0 / 256.0),
+		Flip:       false,
+		Scale:      float32(size/20) * (9.0 / 8.0),
+		IsOverlay:  true,
+	})
+
+	// Left overlay
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          6,
+		Y:          1,
+		Matrix:     TRANSFORM_RIGHT_LEFT_MATRIX,
+		TranslateX: float32(size) * (231.0 / 256.0) * (8.0 / 8.1),
+		TranslateY: float32(size) * (-56.0 / 256.0),
+		Flip:       true,
+		Scale:      float32(size/20) * (9.0 / 8.0),
+		IsOverlay:  true,
+	})
+
+	// Bottom (base)
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          2,
+		Y:          0,
+		Matrix:     TRANSFORM_TOP_BOTTOM_MATRIX,
+		TranslateX: float32(size)*(-145.0/256.0)/(8.0/8.1) + float32(size)*(10.0/256.0),
+		TranslateY: float32(size) * (177.0 / 256.0),
+		Flip:       false,
+		Scale:      float32(size / 20),
+	})
+
+	// Back (base)
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          3,
+		Y:          1,
+		Matrix:     TRANSFORM_FRONT_BACK_MATRIX,
+		TranslateX: float32(size)*(26.0/256.0)*(8.0/9.0) + 10,
+		TranslateY: float32(size)*(70.0/256.0)*(8.0/9.0) + 12,
+		Flip:       false,
+		Scale:      float32(size / 20),
+	})
+
+	// Left (base)
+	overlay3DSection(out, img, &OverlaySectionOptions{
+		Size:       size,
+		X:          0,
+		Y:          1,
+		Matrix:     TRANSFORM_RIGHT_LEFT_MATRIX,
+		TranslateX: float32(size)*(231.0/256.0)/(8.0/8.1) - float32(size)*(10.0/256.0) - 45,
+		TranslateY: float32(size)*(-56.0/256.0) + 6,
+		Flip:       false,
+		Scale:      float32(size / 20),
+	})
 
 	// Top (base)
 	overlay3DSection(out, img, &OverlaySectionOptions{
