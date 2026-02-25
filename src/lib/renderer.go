@@ -1,10 +1,3 @@
-/*
-Minecraft Head Rendering in Rust provided by @mat-1: https://github.com/mat-1/msdsmchr
-Rewritten and converted into Go by @DuckySolucky
-Original TS version by @DuckySolucky: https://github.com/SkyCryptWebsite/SkyCryptv2/blob/dev/src/lib/server/helper/renderer.ts
-Originally Inspired by Crafatar: https://github.com/crafatar/crafatar
-*/
-
 package lib
 
 import (
@@ -286,6 +279,7 @@ type OverlaySectionOptions struct {
 	TranslateX float32
 	TranslateY float32
 	Flip       bool
+	IsOverlay  bool
 }
 
 type Matrix [9]float32
@@ -298,78 +292,6 @@ func To3DHead(img image.Image) *image.RGBA {
 	size := uint32(128)
 
 	out := image.NewRGBA(image.Rect(0, 0, int(size), int(size)))
-
-	// Bottom (base)
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          2,
-		Y:          0,
-		Matrix:     TRANSFORM_TOP_BOTTOM_MATRIX,
-		TranslateX: float32(size)*(-145.0/256.0)/(8.0/8.1) + float32(size)*(10.0/256.0),
-		TranslateY: float32(size) * (177.0 / 256.0),
-		Flip:       false,
-		Scale:      float32(size / 20),
-	})
-
-	// Back (base)
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          3,
-		Y:          1,
-		Matrix:     TRANSFORM_FRONT_BACK_MATRIX,
-		TranslateX: float32(size)*(26.0/256.0)*(8.0/9.0) + 10,
-		TranslateY: float32(size)*(70.0/256.0)*(8.0/9.0) + 12,
-		Flip:       false,
-		Scale:      float32(size / 20),
-	})
-
-	// Left (base)
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          0,
-		Y:          1,
-		Matrix:     TRANSFORM_RIGHT_LEFT_MATRIX,
-		TranslateX: float32(size)*(231.0/256.0)/(8.0/8.1) - float32(size)*(10.0/256.0) - 6,
-		TranslateY: float32(size)*(-56.0/256.0) + 9,
-		Flip:       true,
-		Scale:      float32(size / 20),
-	})
-
-	// Bottom overlay
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          6,
-		Y:          0,
-		Matrix:     TRANSFORM_TOP_BOTTOM_MATRIX,
-		TranslateX: float32(size) * (-145.0 / 256.0),
-		TranslateY: float32(size) * (177.0 / 256.0),
-		Flip:       false,
-		Scale:      float32(size / 20),
-	})
-
-	// Back overlay
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          7,
-		Y:          1,
-		Matrix:     TRANSFORM_FRONT_BACK_MATRIX,
-		TranslateX: float32(size) * (26.0 / 256.0),
-		TranslateY: float32(size) * (70.0 / 256.0),
-		Flip:       false,
-		Scale:      float32(size/20) * (9.0 / 8.0),
-	})
-
-	// Left overlay
-	overlay3DSection(out, img, &OverlaySectionOptions{
-		Size:       size,
-		X:          6,
-		Y:          1,
-		Matrix:     TRANSFORM_RIGHT_LEFT_MATRIX,
-		TranslateX: float32(size) * (231.0 / 256.0) * (8.0 / 8.1),
-		TranslateY: float32(size) * (-56.0 / 256.0),
-		Flip:       true,
-		Scale:      float32(size/20) * (9.0 / 8.0),
-	})
 
 	// Top (base)
 	overlay3DSection(out, img, &OverlaySectionOptions{
@@ -417,6 +339,7 @@ func To3DHead(img image.Image) *image.RGBA {
 		TranslateY: float32(size) * (177.5 / 256.0),
 		Flip:       false,
 		Scale:      float32(size/20) * (9.0 / 8.0),
+		IsOverlay:  true,
 	})
 
 	// Right overlay
@@ -429,6 +352,7 @@ func To3DHead(img image.Image) *image.RGBA {
 		TranslateY: float32(size) * (52.0 / 256.0),
 		Flip:       false,
 		Scale:      float32(size/20) * (9.0 / 8.0),
+		IsOverlay:  true,
 	})
 
 	// Top overlay
@@ -441,6 +365,7 @@ func To3DHead(img image.Image) *image.RGBA {
 		TranslateY: float32(size) * (83.0 / 256.0) * (8.0 / 9.0),
 		Flip:       false,
 		Scale:      float32(size/20) * (9.0 / 8.0),
+		IsOverlay:  true,
 	})
 
 	return out
@@ -698,6 +623,18 @@ func warpImage(src *image.RGBA, matrix Matrix, outputSize uint32) *image.RGBA {
 	return dst
 }
 
+func isSectionFullyOpaque(img *image.RGBA) bool {
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			if img.RGBAAt(x, y).A != 255 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func overlay3DSection(out *image.RGBA, skin image.Image, opts *OverlaySectionOptions) {
 	section := cropSection(skin, opts.X, opts.Y)
 
@@ -706,6 +643,12 @@ func overlay3DSection(out *image.RGBA, skin image.Image, opts *OverlaySectionOpt
 		bounds := section.Bounds()
 		sectionRGBA = image.NewRGBA(bounds)
 		draw.Draw(sectionRGBA, bounds, section, bounds.Min, draw.Src)
+	}
+
+	// Skip overlay sections that are fully opaque — this happens with old 64x32 skins
+	// where the hat area is filled with opaque white junk data
+	if opts.IsOverlay && isSectionFullyOpaque(sectionRGBA) {
+		return
 	}
 
 	baseMatrix := Matrix(opts.Matrix)
