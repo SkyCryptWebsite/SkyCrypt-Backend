@@ -22,7 +22,7 @@ import (
 //
 // @Success		200			{object}	models.Garden
 // @Failure		400			{object}	models.ProcessingError
-// @Router			/api/garden/{profileId} [get]
+// @Router			/api/garden/{uuid}/{profileId} [get]
 func GardenHandler(c *fiber.Ctx) error {
 	defer forensics.TrackSpan("handler.Garden")()
 	timeNow := time.Now()
