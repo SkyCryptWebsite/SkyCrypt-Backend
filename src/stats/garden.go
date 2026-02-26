@@ -192,10 +192,10 @@ func getGardenChips(userProfile *skycrypttypes.Member) []models.GardenChip {
 
 	for _, chipId := range constants.GARDEN_CHIPS {
 		output = append(output, models.GardenChip{
-			Name:    utility.TitleCase(chipId),
-			Texture: fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), fmt.Sprintf("%s_GARDEN_CHIP", chipId)),
-			Amount:  userProfile.PlayerData.GardenChips[chipId],
-			Max:     constants.MAX_GARDEN_CHIPS,
+			Name:     utility.TitleCase(chipId),
+			Texture:  fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), fmt.Sprintf("%s_GARDEN_CHIP", chipId)),
+			Amount:   userProfile.PlayerData.GardenChips[chipId],
+			MaxLevel: constants.MAX_GARDEN_CHIPS,
 		})
 	}
 
@@ -210,7 +210,7 @@ func getDNAAnalysisMilestone(userProfile *skycrypttypes.Member) models.DNAAnalys
 		}
 	}
 
-	// t goes up to level 6. And you get it from objectives.tutorial by looking for the highest number on strings like dna_analysis_rewardskyblock_xp_1 - dna_analysis_rewardskyblock_xp_6
+	// It goes up to level 6. And you get it from objectives.tutorial by looking for the highest number on strings like dna_analysis_rewardskyblock_xp_1 - dna_analysis_rewardskyblock_xp_6 - Kaeso (ptlthg)
 	milestone := 0
 	for _, objectiveId := range userProfile.Objectives.Tutorial {
 		if strings.HasPrefix(objectiveId, "dna_analysis_rewardskyblock_xp_") {
@@ -219,6 +219,10 @@ func getDNAAnalysisMilestone(userProfile *skycrypttypes.Member) models.DNAAnalys
 			level, err := strconv.Atoi(levelStr)
 			if err == nil && level > milestone {
 				milestone = level
+			}
+
+			if milestone >= constants.MAX_DNA_ANALYSIS_MILESTONE {
+				break
 			}
 		}
 	}

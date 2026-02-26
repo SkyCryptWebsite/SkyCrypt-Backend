@@ -257,14 +257,8 @@ func getUncategorized(userProfile *skycrypttypes.Member) map[string]any {
 	}
 
 	return map[string]any{
-		"soulflow":                 userProfile.ItemData.Soulflow,
-		"teleporter_pill_consumed": userProfile.ItemData.TeleporterPillConsumed,
-		"personal_bank":            personalBank,
-		"metaphysical_serum":       userProfile.Experimentation.SerumsDrank,
-		"reaper_peppers_eaten":     userProfile.PlayerData.ReaperPeppersEaten,
-		"mcgrubber_burger":         userProfile.Rift.Castle.GrubberStacks,
-		"wriggling_larva":          userProfile.Garden.LarvaConsumed,
-		"refined_bottle_of_jyrre":  userProfile.WinterPlayerData.RefinedJyrreUses,
+		"soulflow":      userProfile.ItemData.Soulflow,
+		"personal_bank": personalBank,
 	}
 }
 
@@ -278,6 +272,20 @@ func getClaimedItems(player *skycrypttypes.Player) map[string]int64 {
 		"century_cake":            player.ClaimedCenturyCake,
 		"century_cake_(year_200)": player.ClaimedCenturyCake200,
 	}
+}
+
+func getConsumables(userProfile *skycrypttypes.Member) []models.Consumable {
+	consumables := []models.Consumable{}
+	for _, consumableData := range constants.CONSUMABLES {
+		consumables = append(consumables, models.Consumable{
+			Name:      consumableData.Name,
+			Texture:   consumableData.Texture,
+			Amount:    consumableData.Amount(userProfile),
+			MaxAmount: consumableData.MaxAmount,
+		})
+	}
+
+	return consumables
 }
 
 func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, player *skycrypttypes.Player) *models.MiscOutput {
@@ -295,5 +303,6 @@ func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, 
 		Auctions:          getAuctions(userProfile),
 		Uncategorized:     getUncategorized(userProfile),
 		ClaimedItems:      getClaimedItems(player),
+		Consumables:       getConsumables(userProfile),
 	}
 }

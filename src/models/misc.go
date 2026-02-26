@@ -19,6 +19,14 @@ type MiscOutput struct {
 	Auctions          MiscAuctions                `json:"auctions"`
 	ClaimedItems      map[string]int64            `json:"claimed_items"`
 	Uncategorized     map[string]any              `json:"uncategorized"`
+	Consumables       []Consumable                `json:"consumables"`
+}
+
+type Consumable struct {
+	Name      string `json:"name"`
+	Texture   string `json:"texture"`
+	Amount    int    `json:"amount"`
+	MaxAmount int    `json:"maxAmount"`
 }
 
 type MiscAuctions struct {

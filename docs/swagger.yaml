@@ -187,6 +187,17 @@ components:
         milestone:
           type: integer
       type: object
+    models.Consumable:
+      properties:
+        amount:
+          type: integer
+        maxAmount:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
+      type: object
     models.Contest:
       properties:
         amount:
@@ -693,7 +704,7 @@ components:
       properties:
         amount:
           type: integer
-        max:
+        maxLevel:
           type: integer
         name:
           type: string
@@ -1081,6 +1092,11 @@ components:
           additionalProperties:
             type: integer
           type: object
+        consumables:
+          items:
+            $ref: '#/components/schemas/models.Consumable'
+          type: array
+          uniqueItems: false
         damage:
           $ref: '#/components/schemas/models.MiscDamage'
         dragons:

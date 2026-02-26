@@ -35,10 +35,10 @@ type GardenUpgrade struct {
 }
 
 type GardenChip struct {
-	Name    string `json:"name"`
-	Texture string `json:"texture"`
-	Amount  int    `json:"amount"`
-	Max     int    `json:"max"`
+	Name     string `json:"name"`
+	Texture  string `json:"texture"`
+	Amount   int    `json:"amount"`
+	MaxLevel int    `json:"maxLevel"`
 }
 
 type Visitors struct {

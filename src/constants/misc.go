@@ -1,5 +1,9 @@
 package constants
 
+import (
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+)
+
 type essence struct {
 	Name    string
 	Texture string
@@ -79,4 +83,160 @@ var BANK_COOLDOWN = map[int]string{
 	1: "20 minutes",
 	2: "5 minutes",
 	3: "None",
+}
+
+type consumableData struct {
+	Name      string
+	Texture   string
+	Amount    func(userProfile *skycrypttypes.Member) int
+	MaxAmount int
+}
+
+var CONSUMABLES = []consumableData{
+	{
+		Name:    "Teleporter Pill",
+		Texture: "/api/item/TELEPORTER_PILL",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			if userProfile.ItemData.TeleporterPillConsumed {
+				return 1
+			}
+			return 0
+		},
+		MaxAmount: 1,
+	},
+	{
+		Name:    "Metaphysical Serums Drank",
+		Texture: "/api/item/METAPHYSICAL_SERUM",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.Experimentation.SerumsDrank
+		},
+		MaxAmount: 3,
+	},
+	{
+		Name:    "Reaper Peppers Eaten",
+		Texture: "/api/item/REAPER_PEPPER",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.PlayerData.ReaperPeppersEaten
+		},
+		MaxAmount: 5,
+	},
+	{
+		Name:    "McGrubber's Burgers Eaten",
+		Texture: "/api/item/MCGRUBBER_BURGER",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.Rift.Castle.GrubberStacks
+		},
+		MaxAmount: 5,
+	},
+	{
+		Name:    "Wriggling Larvae Eaten",
+		Texture: "/api/item/WRIGGLING_LARVA",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.Garden.LarvaConsumed
+		},
+		MaxAmount: 5,
+	},
+	{
+		Name:    "Refined Bottles of Jyrre Drank",
+		Texture: "/api/item/REFINED_BOTTLE_OF_JYRRE",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.WinterPlayerData.RefinedJyrreUses
+		},
+		MaxAmount: 5,
+	},
+	/*{
+		Name:    "Vial of Venom",
+		Texture: "/api/item/VIAL_OF_VENOM",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Festering Maggot",
+		Texture: "/api/item/FESTERING_MAGGOT",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+		},
+		MaxAmount: 5,
+	},*/
+	{
+		Name:    "Refined Dark Cacao Truffles Consumed",
+		Texture: "/api/item/REFINED_DARK_CACAO_TRUFFLE",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			return userProfile.Events.Easter.RefinedDarkCacaoTruffles
+		},
+		MaxAmount: 5,
+	},
+	/*{
+		Name:    "Spotlite",
+		Texture: "/api/item/SPOTLITE",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Dwarven O's Ore Oats",
+		Texture: "/api/item/DWARVEN_OS_ORE_OATS",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Dwarven O's Block Bran",
+		Texture: "/api/item/DWARVEN_OS_BLOCK_BRAN",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Dwarven O's Gemstone Grahams",
+		Texture: "/api/item/DWARVEN_OS_GEMSTONE_GRAHAMS",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Dwarven O's Metallic Minis",
+		Texture: "/api/item/DWARVEN_OS_METALLIC_MINIS",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Moby-Duck: Collector's Edition",
+		Texture: "/api/item/MOBY_DUCK",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 1,
+	},*/
+	/*{
+		Name:    "Brain Food",
+		Texture: "/api/item/BRAIN_FOOD",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 5,
+	},*/
+	/*{
+		Name:    "Filled Rosewater Flask",
+		Texture: "/api/item/FILLED_ROSEWATER_FLASK",
+		Amount: func(userProfile *skycrypttypes.Member) int {
+			// INFO: Missing from the API
+			return 0
+		},
+		MaxAmount: 10,
+	},*/
 }
