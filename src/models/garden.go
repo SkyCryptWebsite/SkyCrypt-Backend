@@ -20,6 +20,7 @@ type Garden struct {
 	GardenUpgrades       []GardenUpgrade      `json:"gardenUpgrades"`
 	GardenChips          []GardenChip         `json:"gardenChips"`
 	DNAAnalysisMilestone DNAAnalysisMilestone `json:"dnaAnalysisMilestone"`
+	Mutations            []Mutation           `json:"mutations"`
 }
 
 type DNAAnalysisMilestone struct {
@@ -72,4 +73,11 @@ type PlotLayout struct {
 	Total    int             `json:"total"`
 	BarnSkin string          `json:"barnSkin"`
 	Layout   []ProcessedItem `json:"layout"`
+}
+
+type Mutation struct {
+	Name     string `json:"name"`
+	Texture  string `json:"texture"`
+	Unlocked bool   `json:"unlocked"`
+	Max      bool   `json:"max"`
 }

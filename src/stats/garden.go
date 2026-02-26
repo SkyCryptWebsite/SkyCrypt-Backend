@@ -233,6 +233,20 @@ func getDNAAnalysisMilestone(userProfile *skycrypttypes.Member) models.DNAAnalys
 	}
 }
 
+func getMutations(userProfile *skycrypttypes.Member) []models.Mutation {
+	output := []models.Mutation{}
+	for _, mutationId := range constants.GREENHOUSE_MUTATIONS {
+		output = append(output, models.Mutation{
+			Name:     utility.TitleCase(mutationId),
+			Texture:  fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), mutationId),
+			Unlocked: slices.Contains(userProfile.Garden.DiscoveredGreenhouseCrops, mutationId),
+			Max:      slices.Contains(userProfile.Garden.AnalyzedGreenhouseCrops, mutationId),
+		})
+	}
+
+	return output
+}
+
 func GetGarden(userProfile *skycrypttypes.Member, gardenData *skycrypttypes.Garden) *models.Garden {
 	return &models.Garden{
 		Level:                stats.GetLevelByXp(int(gardenData.Experience), &stats.ExtraSkillData{Type: "garden"}),
@@ -244,5 +258,6 @@ func GetGarden(userProfile *skycrypttypes.Member, gardenData *skycrypttypes.Gard
 		GardenUpgrades:       getGardenUpgradeLevels(gardenData),
 		GardenChips:          getGardenChips(userProfile),
 		DNAAnalysisMilestone: getDNAAnalysisMilestone(userProfile),
+		Mutations:            getMutations(userProfile),
 	}
 }
