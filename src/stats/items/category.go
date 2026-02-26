@@ -28,12 +28,8 @@ func (s itemSorter) Less(i, j int) bool {
 		return bIndex < aIndex
 	}
 
-	if a.Source == "inventory" && b.Source != "inventory" {
-		return true
-	}
-
-	if a.Source != "inventory" && b.Source == "inventory" {
-		return false
+	if a.ItemIndex != b.ItemIndex {
+		return a.ItemIndex < b.ItemIndex
 	}
 
 	return strings.Compare(a.DisplayName, b.DisplayName) < 0

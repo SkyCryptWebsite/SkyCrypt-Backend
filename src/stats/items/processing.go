@@ -19,6 +19,8 @@ func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[
 	var processedItems []models.ProcessedItem
 	for _, item := range items {
 		processedItem := ProcessItem(item, source, disabledPacks...)
+		processedItem.ItemIndex = len(processedItems)
+
 		processedItems = append(processedItems, processedItem)
 	}
 
