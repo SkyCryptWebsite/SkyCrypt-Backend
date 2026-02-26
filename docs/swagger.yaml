@@ -2255,9 +2255,9 @@ paths:
     get:
       description: Returns garden data for the given profile ID
       parameters:
-      - description: Profile ID
+      - description: User UUID
         in: path
-        name: profileId
+        name: uuid
         required: true
         schema:
           type: string
