@@ -2251,7 +2251,7 @@ paths:
       summary: Get all emojis
       tags:
       - emojis
-  /api/garden/{profileId}:
+  /api/garden/{uuid}/{profileId}:
     get:
       description: Returns garden data for the given profile ID
       parameters:
