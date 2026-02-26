@@ -122,7 +122,22 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 			for j, acc := range accessories {
 				for _, dup := range duplicates {
 					if acc.Id == dup.Id && acc.Rarity == dup.Rarity {
-						accessories[j] = dup
+						accessories[j].IsInactive = dup.IsInactive
+
+						// NOTE: This could be done better but it works for now (cba to refactor)
+						for _, lore := range dup.Lore {
+							if strings.HasPrefix(lore, "§7Obtained:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Obtained:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							} else if strings.HasPrefix(lore, "§7Item Value:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Item Value:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							} else if strings.HasPrefix(lore, "§7Inactive:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Inactive:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							}
+						}
+
 						break
 					}
 				}
