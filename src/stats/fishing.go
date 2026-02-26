@@ -115,7 +115,7 @@ func GetFishing(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 			output.WaterSeaCreatures = append(output.WaterSeaCreatures, models.Kill{
 				Id:      id,
 				Name:    name,
-				Texture: fmt.Sprintf("/img/sea_creatures/%s.avif", id),
+				Texture: fmt.Sprintf("%s/assets/static/sea_creatures/%s.webp", utility.GetDomain(), id),
 				Amount:  int(count),
 			})
 		}
@@ -131,7 +131,7 @@ func GetFishing(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 			output.LavaSeaCreatures = append(output.LavaSeaCreatures, models.Kill{
 				Id:      id,
 				Name:    name,
-				Texture: fmt.Sprintf("/img/sea_creatures/%s.avif", id),
+				Texture: fmt.Sprintf("%s/assets/static/sea_creatures/%s.webp", utility.GetDomain(), id),
 				Amount:  int(count),
 			})
 		}

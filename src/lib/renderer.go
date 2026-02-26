@@ -48,13 +48,13 @@ func RenderPotion(potionType, hexColor string) ([]byte, error) {
 		log.Println("Error reading cached potion texture:", err)
 	}
 
-	liquidPath := filepath.Join(textureDir, "potion_overlay.png")
+	liquidPath := filepath.Join(textureDir, "potions", "potion_overlay.png")
 
 	var bottlePath string
 	if potionType == "splash" {
-		bottlePath = filepath.Join(textureDir, "splash_potion.png")
+		bottlePath = filepath.Join(textureDir, "potions", "splash_potion.png")
 	} else {
-		bottlePath = filepath.Join(textureDir, "potion.png")
+		bottlePath = filepath.Join(textureDir, "potions", "potion.png")
 	}
 
 	liquidChan := make(chan imageResult)
@@ -107,8 +107,8 @@ func RenderArmor(armorType, hexColor string) ([]byte, error) {
 		log.Println("Error reading cached armor texture:", err)
 	}
 
-	basePath := filepath.Join(textureDir, fmt.Sprintf("leather_%s.png", armorType))
-	overlayPath := filepath.Join(textureDir, fmt.Sprintf("leather_%s_overlay.png", armorType))
+	basePath := filepath.Join(textureDir, "armor", fmt.Sprintf("leather_%s.png", armorType))
+	overlayPath := filepath.Join(textureDir, "armor", fmt.Sprintf("leather_%s_overlay.png", armorType))
 
 	baseChan := make(chan imageResult)
 	overlayChan := make(chan imageResult)
