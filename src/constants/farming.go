@@ -31,7 +31,7 @@ var CROP_TO_ID = map[string]string{
 	"INK_SACK:3":          "COCOA_BEANS",
 	"MOONFLOWER":          "MOONFLOWER",
 	"WILD_ROSE":           "WILD_ROSE",
-	"SUNFLOWER":           "SUNFLOWER",
+	"DOUBLE_PLANT":        "SUNFLOWER",
 }
 
 var CROP_TEXTURES = map[string]string{
