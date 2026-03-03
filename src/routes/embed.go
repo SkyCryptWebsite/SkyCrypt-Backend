@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -31,6 +32,8 @@ func EmbedHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
+	isBot := utility.IsKnownBot(c)
+
 	mowojang, err := api.ResolvePlayer(uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -44,6 +47,25 @@ func EmbedHandler(c *fiber.Ctx) error {
 	}
 
 	if profileId == "" {
+		return c.JSON(models.EmbedData{})
+	}
+
+	if utility.IsUUID(profileId) {
+		embed, err := redis.Get(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profileId))
+		if err == nil && embed != "" {
+			var embedData models.EmbedData
+			if err := json.Unmarshal([]byte(embed), &embedData); err == nil {
+				fmt.Printf("Returning /api/embed/%s (cache hit) in %s\n", profileId, time.Since(timeNow))
+				return c.JSON(embedData)
+			}
+		}
+
+		if isBot {
+			fmt.Printf("Returning /api/embed/%s (bot, no cache) in %s\n", profileId, time.Since(timeNow))
+			return c.JSON(models.EmbedData{})
+		}
+	} else if isBot {
+		fmt.Printf("Returning /api/embed/%s (bot, unresolvable) in %s\n", profileId, time.Since(timeNow))
 		return c.JSON(models.EmbedData{})
 	}
 
