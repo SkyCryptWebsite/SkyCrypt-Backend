@@ -189,6 +189,8 @@ func SetupRoutes(app *fiber.App) {
 
 	api.Get("/skills/:uuid/:profileId", routes.SkillsHandler)
 
+	api.Get("/attribute_shards/:uuid/:profileId", routes.AttributeShardsHandler)
+
 	api.Get("/dungeons/:uuid/:profileId", routes.DungeonsHandler)
 
 	api.Get("/slayer/:uuid/:profileId", routes.SlayersHandler)

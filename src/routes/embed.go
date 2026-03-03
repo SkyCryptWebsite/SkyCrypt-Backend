@@ -43,6 +43,10 @@ func EmbedHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
+	if profileId == "" {
+		return c.JSON(models.EmbedData{})
+	}
+
 	profiles, err := api.GetProfiles(mowojang.UUID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

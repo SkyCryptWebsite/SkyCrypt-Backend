@@ -120,6 +120,21 @@ func ParseNEURepository() error {
 			}
 
 			NEUConstants.HeartOfTheForest = hotfConstants
+		} else if constant.Name() == "attribute_shards.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var attributeShards neu.AttributeShardsRaw
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &attributeShards)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards.Attributes, GetItem)
 		}
 	}
 

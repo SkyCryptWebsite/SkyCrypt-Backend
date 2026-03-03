@@ -3,7 +3,7 @@ module skycrypt
 go 1.25.1
 
 require (
-	github.com/DuckySoLucky/SkyCrypt-Types v0.1.17
+	github.com/DuckySoLucky/SkyCrypt-Types v0.1.18
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.13
 	github.com/go-git/go-git/v5 v5.16.4
 	github.com/gofiber/fiber/v2 v2.52.10
@@ -80,7 +80,6 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
-	github.com/kettek/apng v0.0.0-20250827064933-2bb5f5fcf253
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
