@@ -181,7 +181,16 @@ func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse,
 func resolvePlayerByUUID(uuid string) (*models.MowojangReponse, error) {
 	var post models.MowojangReponse
 
-	cache, err := redis.Get(fmt.Sprintf("mowojang:%s", uuid))
+	cache, err := redis.Get(fmt.Sprintf("mowojangUUID:%s", uuid))
+	if err == nil && cache != "" {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		err = json.Unmarshal([]byte(cache), &post)
+		if err == nil {
+			return &post, nil
+		}
+	}
+
+	cache, err = redis.Get(fmt.Sprintf("mowojangUsername:%s", uuid))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &post)
@@ -220,9 +229,10 @@ func resolvePlayerByUUID(uuid string) (*models.MowojangReponse, error) {
 		return &post, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.Set(fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60)                // Cache for 24 hours
-	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cross-cache for GetUUID
-	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cross-cache for GetUsername
+	_ = redis.Set(fmt.Sprintf("mowojangUUID:%s", uuid), string(body), 24*60*60)                           // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("mowojangUsername:%s", strings.ToLower(post.Name)), string(body), 24*60*60) // Cache for 24 hours
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60)                // Cross-cache for GetUUID
+	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)                             // Cross-cache for GetUsername
 
 	return &post, nil
 }
