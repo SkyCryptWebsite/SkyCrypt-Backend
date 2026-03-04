@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"slices"
 
@@ -61,8 +60,8 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 		// Hex color
 		if item.Tag.Display.Color != 0 {
 			color := fmt.Sprintf("%06X", item.Tag.Display.Color)
-			if os.Getenv("ENABLE_ARMOR_HEX") != "true" {
-				if item.Tag.ExtraAttributes.DyeItem == "" {
+			if item.Tag.ExtraAttributes.DyeItem == "" {
+				if !utility.IsArmorHexColorsEnabled() {
 					defaultHexColor := constants.ITEMS[item.Tag.ExtraAttributes.Id].Color
 					if defaultHexColor != "" {
 						color = defaultHexColor

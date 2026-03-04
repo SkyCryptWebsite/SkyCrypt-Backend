@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
+	"skycrypt/src/db"
 	"skycrypt/src/utility"
 	"time"
 
@@ -35,10 +35,10 @@ func UsernameHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidUserError)
 	}
 
-	fmt.Printf("Returning /api/username/%s in %s\n", username, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/username/%s in %s", username, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
-		"displayName": utility.GetDisplayName(username, uuid),
+		"displayName": db.GetDisplayName(username, uuid),
 		"username":    username,
 		"uuid":        uuid,
 	})

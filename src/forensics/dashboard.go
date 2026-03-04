@@ -31,15 +31,15 @@ func DashboardHTMLHandler() fiber.Handler {
 }
 
 type dashboardReport struct {
-	GeneratedAt     string              `json:"generated_at"`
-	Uptime          string              `json:"uptime"`
-	Runtime         runtimeReport       `json:"runtime"`
-	CacheStats      cacheReport         `json:"cache_stats"`
-	TopSpans        []spanReportEntry   `json:"top_operations"`
-	ErrorSummary    []errorReportEntry  `json:"error_summary"`
-	NPlus1          []nplus1Entry       `json:"nplus1_patterns"`
-	SlowestRequests []slowRequestEntry  `json:"slowest_requests"`
-	LogStats        logStatsReport      `json:"log_stats"`
+	GeneratedAt     string             `json:"generated_at"`
+	Uptime          string             `json:"uptime"`
+	Runtime         runtimeReport      `json:"runtime"`
+	CacheStats      cacheReport        `json:"cache_stats"`
+	TopSpans        []spanReportEntry  `json:"top_operations"`
+	ErrorSummary    []errorReportEntry `json:"error_summary"`
+	NPlus1          []nplus1Entry      `json:"nplus1_patterns"`
+	SlowestRequests []slowRequestEntry `json:"slowest_requests"`
+	LogStats        logStatsReport     `json:"log_stats"`
 }
 
 type slowRequestEntry struct {
@@ -117,11 +117,11 @@ type logLine struct {
 	StatusCode   int     `json:"status_code,omitempty"`
 	ResponseSize int     `json:"response_size,omitempty"`
 	ErrorType    string  `json:"error_type,omitempty"`
-	ErrorMsg   string `json:"error,omitempty"`
-	Key        string `json:"key,omitempty"`
-	RequestID  string `json:"request_id,omitempty"`
-	Query      string `json:"query,omitempty"`
-	ExecCount  uint64 `json:"execution_count,omitempty"`
+	ErrorMsg     string  `json:"error,omitempty"`
+	Key          string  `json:"key,omitempty"`
+	RequestID    string  `json:"request_id,omitempty"`
+	Query        string  `json:"query,omitempty"`
+	ExecCount    uint64  `json:"execution_count,omitempty"`
 }
 
 type spanAgg struct {
@@ -273,7 +273,6 @@ func parseLogFile(report *dashboardReport) {
 			if durMs == 0 && entry.Duration > 0 {
 				durMs = int64(entry.Duration * 1000)
 			}
-			// Skip dashboard's own requests
 			if entry.Path == "/api/forensics/dashboard" || entry.Path == "/api/forensics" {
 				continue
 			}

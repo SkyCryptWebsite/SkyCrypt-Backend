@@ -7,13 +7,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// InstrumentedHTTPClient wraps an http.Client with forensic logging.
 type InstrumentedHTTPClient struct {
 	client *http.Client
 	logger *zap.Logger
 }
 
-// NewInstrumentedHTTPClient creates an instrumented HTTP client wrapper.
 func NewInstrumentedHTTPClient(client *http.Client) *InstrumentedHTTPClient {
 	return &InstrumentedHTTPClient{
 		client: client,
@@ -117,9 +115,6 @@ func (ihc *InstrumentedHTTPClient) Do(req *http.Request) (*http.Response, error)
 	return resp, nil
 }
 
-// RoundTripper returns an http.RoundTripper that instruments all requests going
-// through the underlying transport. This can be injected into an http.Client
-// to instrument all traffic without changing call sites.
 func InstrumentedRoundTripper(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport

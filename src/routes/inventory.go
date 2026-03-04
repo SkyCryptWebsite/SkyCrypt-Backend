@@ -56,7 +56,10 @@ func getIcon(source string, uuid string) string {
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/inventory/{uuid}/{profileId}/{inventoryId} [get]
 func InventoryHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Inventory")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Inventory")()
+	}
+
 	timeNow := time.Now()
 
 	disabledPacks := []string{""}
@@ -94,7 +97,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 		output := statsItems.StripItems(&museumItems)
 
-		fmt.Printf("Returning /api/inventory/%s/%s in %s\n", uuid, inventoryId, time.Since(timeNow))
+		utility.LogVerbose("Returning /api/inventory/%s/%s in %s", uuid, inventoryId, time.Since(timeNow))
 
 		return c.JSON(output)
 	}
@@ -180,7 +183,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			searchResults[i] = item
 		}
 
-		fmt.Printf("Returning /api/inventory/%s/%s/%s in %s\n", uuid, inventoryId, searchString, time.Since(timeNow))
+		utility.LogVerbose("Returning /api/inventory/%s/%s/%s in %s", uuid, inventoryId, searchString, time.Since(timeNow))
 
 		return c.JSON(searchResults)
 	}
@@ -195,7 +198,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	fmt.Printf("Returning /api/inventory/%s/%s in %s\n", uuid, inventoryId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/inventory/%s/%s in %s", uuid, inventoryId, time.Since(timeNow))
 
 	return c.JSON(strippedItems)
 }

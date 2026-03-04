@@ -6,7 +6,6 @@ import (
 	"os"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -22,7 +21,7 @@ var RESOURCE_PACKS = []models.ResourcePackConfig{}
 //	@Success		200	{object}	[]models.ResourcePackConfig
 //	@Router			/api/resourcepacks [get]
 func ResourcePackHandler(c *fiber.Ctx) error {
-	timeNow := time.Now()
+	// timeNow := time.Now()
 
 	if len(RESOURCE_PACKS) == 0 {
 		filePath := "assets/resourcepacks/"
@@ -64,7 +63,7 @@ func ResourcePackHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	fmt.Printf("Returning /api/resourcepacks in %s\n", time.Since(timeNow))
+	// utility.LogVerbose("Returning /api/resourcepacks in %s", time.Since(timeNow))
 
 	return c.JSON(RESOURCE_PACKS)
 }

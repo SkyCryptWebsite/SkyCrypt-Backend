@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -40,7 +41,7 @@ func AttributeShardsHandler(c *fiber.Ctx) error {
 
 	output := stats.GetAttributeShards(userProfile)
 
-	fmt.Printf("Returning /api/attribute_shards/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/attribute_shards/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

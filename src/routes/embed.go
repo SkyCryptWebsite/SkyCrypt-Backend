@@ -28,7 +28,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/embed/{uuid} [get]
 func EmbedHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Embed")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Embed")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -55,17 +58,17 @@ func EmbedHandler(c *fiber.Ctx) error {
 		if err == nil && embed != "" {
 			var embedData models.EmbedData
 			if err := json.Unmarshal([]byte(embed), &embedData); err == nil {
-				fmt.Printf("Returning /api/embed/%s (cache hit) in %s\n", profileId, time.Since(timeNow))
+				utility.LogVerbose("Returning /api/embed/%s (cache hit) in %s", profileId, time.Since(timeNow))
 				return c.JSON(embedData)
 			}
 		}
 
 		if isBot {
-			fmt.Printf("Returning /api/embed/%s (bot, no cache) in %s\n", profileId, time.Since(timeNow))
+			utility.LogVerbose("Returning /api/embed/%s (bot, no cache) in %s", profileId, time.Since(timeNow))
 			return c.JSON(models.EmbedData{})
 		}
 	} else if isBot {
-		fmt.Printf("Returning /api/embed/%s (bot, unresolvable) in %s\n", profileId, time.Since(timeNow))
+		utility.LogVerbose("Returning /api/embed/%s (bot, unresolvable) in %s", profileId, time.Since(timeNow))
 		return c.JSON(models.EmbedData{})
 	}
 
@@ -94,7 +97,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 		return c.JSON(embedData)
 	}
 
-	fmt.Printf("Returning /api/embed/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/embed/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(embedData)
 }

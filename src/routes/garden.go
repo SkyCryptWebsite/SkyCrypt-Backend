@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -24,7 +25,10 @@ import (
 // @Failure		400			{object}	models.ProcessingError
 // @Router			/api/garden/{uuid}/{profileId} [get]
 func GardenHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Garden")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Garden")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -48,7 +52,7 @@ func GardenHandler(c *fiber.Ctx) error {
 
 	output := stats.GetGarden(userProfile, garden)
 
-	fmt.Printf("Returning /api/garden/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/garden/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

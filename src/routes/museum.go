@@ -5,13 +5,17 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/forensics"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 func MuseumHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Museum")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Museum")()
+	}
+
 	timeNow := time.Now()
 
 	profileId := c.Params("profileId")
@@ -22,7 +26,7 @@ func MuseumHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidUserError)
 	}
 
-	fmt.Printf("Returning /api/museum/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/museum/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
 		"museum": museum,

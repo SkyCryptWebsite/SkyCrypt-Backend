@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	statsItems "skycrypt/src/stats/items"
+	"skycrypt/src/utility"
 	"strings"
 
 	"time"
@@ -32,7 +33,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/skills/{uuid}/{profileId} [get]
 func SkillsHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Skills")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Skills")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -131,8 +135,6 @@ func SkillsHandler(c *fiber.Ctx) error {
 		allItems = append(allItems, processedItems[inventoryId]...)
 	}
 
-	fmt.Printf("Returning /api/skills/%s in %s\n", profileId, time.Since(timeNow))
-
 	output := models.SkillsOutput{
 		Mining:     stats.GetMining(userProfile, player, allItems),
 		Foraging:   stats.GetForaging(userProfile, player, allItems),
@@ -140,6 +142,8 @@ func SkillsHandler(c *fiber.Ctx) error {
 		Fishing:    stats.GetFishing(userProfile, allItems),
 		Enchanting: stats.GetEnchanting(userProfile),
 	}
+
+	utility.LogVerbose("Returning /api/skills/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

@@ -8,8 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// InstrumentedRedisDB wraps the existing db.Get/db.Set package-level functions
-// with forensic logging. This avoids changing the db package's API.
 type InstrumentedRedisDB struct {
 	logger    *zap.Logger
 	getFunc   func(string) (string, error)
@@ -17,7 +15,6 @@ type InstrumentedRedisDB struct {
 	closeFunc func() error
 }
 
-// NewInstrumentedRedisDB creates a wrapper around existing db.Get/db.Set functions.
 func NewInstrumentedRedisDB(getFunc func(string) (string, error), setFunc func(string, interface{}, int) error) *InstrumentedRedisDB {
 	return &InstrumentedRedisDB{
 		logger:    Logger,
@@ -27,7 +24,6 @@ func NewInstrumentedRedisDB(getFunc func(string) (string, error), setFunc func(s
 	}
 }
 
-// Get wraps db.Get with timing and cache-hit/miss logging.
 func (ir *InstrumentedRedisDB) Get(key string) (string, error) {
 	start := time.Now()
 
@@ -68,7 +64,6 @@ func (ir *InstrumentedRedisDB) Get(key string) (string, error) {
 	return val, err
 }
 
-// Set wraps db.Set with timing logging.
 func (ir *InstrumentedRedisDB) Set(key string, value interface{}, expirationSeconds int) error {
 	start := time.Now()
 
@@ -99,24 +94,18 @@ func (ir *InstrumentedRedisDB) Set(key string, value interface{}, expirationSeco
 	return err
 }
 
-// RecordCacheHit increments the global cache hit counter.
 func RecordCacheHit() {
 	if globalCacheStats != nil {
 		globalCacheStats.hits++
 	}
 }
 
-// RecordCacheMiss increments the global cache miss counter.
 func RecordCacheMiss() {
 	if globalCacheStats != nil {
 		globalCacheStats.misses++
 	}
 }
 
-// InstrumentedHTTPTransport wraps http.RoundTripper - already defined in http.go.
-// This file provides additional convenience functions for the api package integration.
-
-// TrackAPICall logs an external API call with its duration and result status.
 func TrackAPICall(apiName string, url string, statusCode int, duration time.Duration, err error) {
 	fields := []zap.Field{
 		zap.String("api", apiName),
@@ -156,8 +145,6 @@ func TrackAPICall(apiName string, url string, statusCode int, duration time.Dura
 	}
 }
 
-// TrackHandler logs a handler invocation with its duration. Returns a stop function.
-// Usage: defer forensics.TrackHandler(c, "StatsHandler")()
 func TrackHandler(ctx context.Context, handlerName string) func() {
 	start := time.Now()
 

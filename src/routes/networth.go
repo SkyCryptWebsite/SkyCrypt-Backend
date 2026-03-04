@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
@@ -24,7 +25,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Networth")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Networth")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -87,7 +91,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 
 	go stats.StoreEmbedData(mowojang, userProfile, profile, formattedNetworth)
 
-	fmt.Printf("Returning /api/networth/%s in %s\n", uuid, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
 		"normal":      networth,

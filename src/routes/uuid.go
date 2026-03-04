@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -33,7 +33,7 @@ func UUIDHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidUserError)
 	}
 
-	fmt.Printf("Returning /api/username/%s in %s\n", username, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/username/%s in %s\n", username, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
 		"username": username,

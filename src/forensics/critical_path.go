@@ -8,15 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// CriticalPathAnalyzer records operation span durations and identifies
-// which operations consume the most total time (bottleneck ranking).
 type CriticalPathAnalyzer struct {
 	logger *zap.Logger
 	spans  map[string]*SpanStats
 	mu     sync.RWMutex
 }
-
-// SpanStats accumulates timing data for a named operation.
 type SpanStats struct {
 	Count     uint64
 	TotalTime time.Duration
@@ -33,7 +29,6 @@ func InitCriticalPathAnalyzer() {
 	}
 }
 
-// RecordSpan records a single span measurement.
 func (cpa *CriticalPathAnalyzer) RecordSpan(name string, duration time.Duration) {
 	cpa.mu.Lock()
 	defer cpa.mu.Unlock()
@@ -57,14 +52,12 @@ func (cpa *CriticalPathAnalyzer) RecordSpan(name string, duration time.Duration)
 	}
 }
 
-// TrackSpan returns a stop function. Usage: defer GlobalCPAnalyzer.TrackSpan("name")()
 func (cpa *CriticalPathAnalyzer) TrackSpan(name string) func() {
 	start := time.Now()
 	return func() {
 		duration := time.Since(start)
 		cpa.RecordSpan(name, duration)
 
-		// Log to file so all prefork children's data ends up in the shared log
 		cpa.logger.Info("span_completed",
 			zap.String("span", name),
 			zap.Int64("duration_us", duration.Microseconds()),
@@ -79,7 +72,6 @@ type spanReport struct {
 	Percent float64
 }
 
-// GenerateReport logs the top 20 slowest operations by total time.
 func (cpa *CriticalPathAnalyzer) GenerateReport() {
 	cpa.mu.RLock()
 	defer cpa.mu.RUnlock()
@@ -151,7 +143,6 @@ func (cpa *CriticalPathAnalyzer) GenerateReport() {
 	}
 }
 
-// StartPeriodicReport generates reports every 10 minutes. Run in a goroutine.
 func (cpa *CriticalPathAnalyzer) StartPeriodicReport() {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
@@ -161,14 +152,12 @@ func (cpa *CriticalPathAnalyzer) StartPeriodicReport() {
 	}
 }
 
-// RecordSpan is a package-level convenience.
 func RecordSpan(name string, duration time.Duration) {
 	if GlobalCPAnalyzer != nil {
 		GlobalCPAnalyzer.RecordSpan(name, duration)
 	}
 }
 
-// TrackSpan is a package-level convenience. Usage: defer forensics.TrackSpan("op")()
 func TrackSpan(name string) func() {
 	if GlobalCPAnalyzer != nil {
 		return GlobalCPAnalyzer.TrackSpan(name)

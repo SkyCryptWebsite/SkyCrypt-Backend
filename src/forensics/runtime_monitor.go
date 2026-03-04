@@ -7,8 +7,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// RuntimeMonitor periodically logs goroutine count, memory stats, and GC metrics.
-// It detects goroutine leaks, memory leaks, and high GC pressure.
 type RuntimeMonitor struct {
 	logger *zap.Logger
 }
@@ -17,7 +15,6 @@ func NewRuntimeMonitor() *RuntimeMonitor {
 	return &RuntimeMonitor{logger: Logger}
 }
 
-// Start begins periodic runtime monitoring. Run in a goroutine.
 func (rm *RuntimeMonitor) Start() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -48,7 +45,6 @@ func (rm *RuntimeMonitor) Start() {
 			zap.Uint64("frees", m.Frees),
 		)
 
-		// Detect goroutine leaks: rapid increase
 		if lastNumGoroutine > 0 && numGoroutine > lastNumGoroutine+100 {
 			rm.logger.Error("goroutine_leak_detected",
 				zap.Int("current_goroutines", numGoroutine),
@@ -58,7 +54,6 @@ func (rm *RuntimeMonitor) Start() {
 			)
 		}
 
-		// High goroutine count absolute warning
 		if numGoroutine > 10000 {
 			rm.logger.Error("goroutine_count_critical",
 				zap.Int("num_goroutines", numGoroutine),
@@ -70,7 +65,6 @@ func (rm *RuntimeMonitor) Start() {
 			)
 		}
 
-		// Detect memory leaks: rapid increase
 		if lastAlloc > 0 && m.Alloc > lastAlloc+100*1024*1024 {
 			rm.logger.Error("memory_leak_suspected",
 				zap.Uint64("current_alloc_mb", m.Alloc/1024/1024),
@@ -80,7 +74,6 @@ func (rm *RuntimeMonitor) Start() {
 			)
 		}
 
-		// High memory usage warning
 		if m.Alloc > 1*1024*1024*1024 { // 1GB
 			rm.logger.Warn("high_memory_usage",
 				zap.Uint64("alloc_mb", m.Alloc/1024/1024),
@@ -88,7 +81,6 @@ func (rm *RuntimeMonitor) Start() {
 			)
 		}
 
-		// GC pressure: last pause time
 		if m.NumGC > 0 {
 			lastPauseNs := m.PauseNs[(m.NumGC+255)%256]
 			lastPauseMs := lastPauseNs / 1_000_000
@@ -114,7 +106,6 @@ func (rm *RuntimeMonitor) Start() {
 	}
 }
 
-// DumpGoroutines captures all goroutine stack traces. Call when leak is suspected.
 func (rm *RuntimeMonitor) DumpGoroutines() {
 	buf := make([]byte, 1<<20) // 1MB buffer
 	stackSize := runtime.Stack(buf, true)

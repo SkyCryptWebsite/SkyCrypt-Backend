@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/forensics"
@@ -12,7 +11,10 @@ import (
 )
 
 func PlayerHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Player")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Player")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -31,7 +33,7 @@ func PlayerHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.FoundNoPlayerError)
 	}
 
-	fmt.Printf("Returning /api/player/%s in %s\n", uuid, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/player/%s in %s", uuid, time.Since(timeNow))
 
 	return c.JSON(fiber.Map{
 		"player": player,

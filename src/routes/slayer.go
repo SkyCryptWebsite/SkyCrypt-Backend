@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,7 +23,10 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/slayer/{uuid}/{profileId} [get]
 func SlayersHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Slayers")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Slayers")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -40,7 +44,7 @@ func SlayersHandler(c *fiber.Ctx) error {
 
 	output := stats.GetSlayers(userProfile)
 
-	fmt.Printf("Returning /api/slayer/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/slayer/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

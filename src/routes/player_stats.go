@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -23,7 +24,10 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/playerStats/{uuid}/{profileId} [get]
 func PlayerStatsHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.PlayerStats")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.PlayerStats")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -41,7 +45,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 
 	output := stats.GetPlayerStats(userProfile, profile, profileId)
 
-	fmt.Printf("Returning /api/playerStats/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/playerStats/%s in %s", profileId, time.Since(timeNow))
 
 	formattedStats := models.Stats{
 		Stats: output,

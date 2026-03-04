@@ -18,7 +18,10 @@ import (
 var resolvePlayerGroup singleflight.Group
 
 func GetUUID(username string, throwAnError ...bool) (string, error) {
-	defer forensics.TrackSpan("api.GetUUID")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetUUID")()
+	}
+
 	shouldThrowError := true
 	if len(throwAnError) > 0 {
 		shouldThrowError = throwAnError[0]
@@ -82,7 +85,9 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 }
 
 func GetUsername(uuid string, throwAnError ...bool) (string, error) {
-	defer forensics.TrackSpan("api.GetUsername")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetUsername")()
+	}
 
 	shouldThrowError := true
 	if len(throwAnError) > 0 {
@@ -143,7 +148,9 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 }
 
 func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse, error) {
-	defer forensics.TrackSpan("api.ResolvePlayer")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.ResolvePlayer")()
+	}
 
 	shouldThrowError := true
 	if len(throwAnError) > 0 {

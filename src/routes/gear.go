@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats"
 	statsItems "skycrypt/src/stats/items"
+	"skycrypt/src/utility"
 	"strings"
 
 	"time"
@@ -31,7 +32,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/gear/{uuid}/{profileId} [get]
 func GearHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Gear")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Gear")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -122,7 +126,7 @@ func GearHandler(c *fiber.Ctx) error {
 
 	output := stats.GetGear(processedItems, allItems)
 
-	fmt.Printf("Returning /api/gear/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/gear/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

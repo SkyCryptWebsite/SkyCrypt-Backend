@@ -370,8 +370,8 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 		armorType := constants.ARMOR_TYPES[*item.ID-298]
 
 		armorColor := fmt.Sprintf("%06X", item.Tag.Display.Color)
-		if os.Getenv("ENABLE_ARMOR_HEX") != "true" {
-			if item.Tag.ExtraAttributes["dye_item"] != "" {
+		if item.Tag.ExtraAttributes["dye_item"] != "" {
+			if !utility.IsArmorHexColorsEnabled() {
 				idStr, ok := item.Tag.ExtraAttributes["id"].(string)
 				if ok {
 					defaultHexColor := constants.ITEMS[idStr].Color
