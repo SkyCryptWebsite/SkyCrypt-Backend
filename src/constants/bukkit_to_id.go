@@ -1801,13 +1801,13 @@ func getItemIdFromNumericId(numericID int, damage int) (string, bool) {
 	case 401:
 		itemID = "firework_rocket"
 	case 402:
-		itemID = "firework_charge"
+		itemID = "firework_star"
 	case 403:
 		itemID = "enchanted_book"
 	case 404:
 		itemID = "comparator"
 	case 405:
-		itemID = "nether_brick_item"
+		itemID = "nether_brick"
 	case 406:
 		itemID = "quartz"
 	case 407:
