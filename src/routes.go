@@ -109,6 +109,10 @@ func SetupApplication() error {
 		if err := api.LoadSkyBlockItems(true); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
+
+		if err := notenoughupdates.ParseNEURepository(); err != nil {
+			return fmt.Errorf("failed to parse NEU repository: %v", err)
+		}
 	}
 
 	return nil
