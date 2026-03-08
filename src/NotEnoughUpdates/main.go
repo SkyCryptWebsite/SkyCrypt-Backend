@@ -2,6 +2,7 @@ package notenoughupdates
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -34,14 +35,17 @@ func InitializeNEURepository() error {
 
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository cloned successfully")
 	} else {
-		_ = 0
-		// fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
+		fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
 	}
 
 	return nil
 }
 
 func UpdateNEURepository() error {
+	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+		return nil // Prefork children should not update the repository
+	}
+
 	repo, err := git.PlainOpen("NotEnoughUpdates-REPO")
 	if err != nil {
 		return fmt.Errorf("failed to open repository: %w", err)
@@ -90,6 +94,13 @@ func UpdateNEURepository() error {
 	}
 
 	fmt.Printf("[NOT-ENOUGH-UPDATES] Updated to commit: %s\n", commit.Hash.String()[:8])
+
+	go func() {
+		err = ParseNEURepository()
+		if err != nil {
+			log.Printf("Error parsing NEU repository after update: %v\n", err)
+		}
+	}()
 
 	return nil
 }

@@ -64,47 +64,45 @@ func SetupApplication() error {
 	// Main process: fetch all remote data, init/update repos, then parse
 	// Prefork children: only parse local data and read from Redis cache
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		if err := notenoughupdates.InitializeNEURepository(); err != nil {
-			return fmt.Errorf("error initializing repository: %v", err)
+		err := notenoughupdates.InitializeNEURepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize NEU repository: %v", err)
 		}
 
-		if err := notenoughupdates.UpdateNEURepository(); err != nil {
-			return fmt.Errorf("error updating repository: %v", err)
-		}
-
-		if err := api.LoadSkyBlockItems(); err != nil {
+		if err := api.LoadSkyBlockItems(false); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
 
-		_, err = skyhelpernetworthgo.GetPrices(true, 0, 0)
-		if err != nil {
-			return fmt.Errorf("error fetching SkyHelper prices: %v", err)
-		}
+		go func() {
+			_, err := skyhelpernetworthgo.GetPrices(true, 0, 0)
+			if err != nil {
+				log.Printf("error fetching SkyHelper prices: %v", err)
+			}
+		}()
 
-		_, err = skyhelpernetworthgo.GetItems(true, 0, 0)
-		if err != nil {
-			return fmt.Errorf("error fetching SkyHelper items: %v", err)
-		}
+		go func() {
+			_, err := skyhelpernetworthgo.GetItems(true, 0, 0)
+			if err != nil {
+				log.Printf("error fetching SkyHelper items: %v", err)
+			}
+		}()
 
-		fmt.Print("[SKYCRYPT] SkyCrypt initialized successfully\n")
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Info("setup_application_completed",
 				zap.Duration("startup_time", time.Since(timeNow)),
 			)
 		}
 
-		utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
+		fmt.Printf("[SKYCRYPT] SkyCrypt initialized successfully in %s\n", time.Since(timeNow))
+
+		if os.Getenv("DEV") != "true" {
+			go utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
+		}
 	} else {
 		// Prefork children: load items from Redis cache
-		if err := api.LoadSkyBlockItems(); err != nil {
+		if err := api.LoadSkyBlockItems(true); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
-	}
-
-	// All processes need the parsed NEU data in memory
-	err = notenoughupdates.ParseNEURepository()
-	if err != nil {
-		return fmt.Errorf("error parsing NEU repository: %v", err)
 	}
 
 	return nil

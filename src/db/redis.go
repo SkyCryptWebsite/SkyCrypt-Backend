@@ -59,7 +59,7 @@ func InitRedis(addr string, password string, db int) error {
 	}
 
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		fmt.Print("Redis connected successfully\n")
+		fmt.Print("[REDIS] Redis connected successfully\n")
 	}
 
 	return nil

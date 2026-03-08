@@ -5,6 +5,7 @@ import (
 	"os"
 	neu "skycrypt/src/models/NEU"
 	neustats "skycrypt/src/stats/neu"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -138,7 +139,25 @@ func ParseNEURepository() error {
 		}
 	}
 
-	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s\n", time.Since(timeNow))
+	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s on %v\n", time.Since(timeNow), os.Getpid())
 
 	return nil
+}
+
+func init() {
+	go func() {
+		for {
+			err := UpdateNEURepository()
+			if err != nil {
+				fmt.Printf("Error updating NEU repository: %v\n", err)
+			} else {
+				err = ParseNEURepository()
+				if err != nil {
+					fmt.Printf("Error parsing NEU repository: %v\n", err)
+				}
+			}
+
+			time.Sleep(12 * time.Hour)
+		}
+	}()
 }

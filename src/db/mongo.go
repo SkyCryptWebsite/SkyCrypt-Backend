@@ -46,7 +46,7 @@ func InitMongo(uri string, dbName string) error {
 	}
 
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		fmt.Print("MongoDB connected successfully\n")
+		fmt.Print("[MONGO] MongoDB connected successfully\n")
 	}
 
 	return nil
