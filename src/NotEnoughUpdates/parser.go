@@ -144,9 +144,11 @@ func ParseNEURepository() error {
 	return nil
 }
 
-func init() {
+func StartUpdateLoop() {
 	go func() {
 		for {
+			time.Sleep(12 * time.Hour)
+
 			err := UpdateNEURepository()
 			if err != nil {
 				fmt.Printf("Error updating NEU repository: %v\n", err)
@@ -156,8 +158,6 @@ func init() {
 					fmt.Printf("Error parsing NEU repository: %v\n", err)
 				}
 			}
-
-			time.Sleep(12 * time.Hour)
 		}
 	}()
 }
