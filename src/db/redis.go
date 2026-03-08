@@ -48,14 +48,24 @@ func InitRedis(addr string, password string, db int) error {
 		PoolFIFO:     false,
 	})
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-
-	_, err := redisClient.Ping(ctxTimeout).Result()
-	if err != nil {
-		_ = redisClient.Close()
-		redisClient = nil
-		return fmt.Errorf("could not connect to Redis: %v", err)
+	// Retry ping in case Redis is still loading its dataset
+	maxRetries := 30
+	for i := 0; i < maxRetries; i++ {
+		ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
+		_, err := redisClient.Ping(ctxTimeout).Result()
+		cancel()
+		if err == nil {
+			break
+		}
+		if i == maxRetries-1 {
+			_ = redisClient.Close()
+			redisClient = nil
+			return fmt.Errorf("could not connect to Redis: %v", err)
+		}
+		if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+			fmt.Printf("[REDIS] Waiting for Redis to be ready (attempt %d/%d): %v\n", i+1, maxRetries, err)
+		}
+		time.Sleep(time.Second * 2)
 	}
 
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
