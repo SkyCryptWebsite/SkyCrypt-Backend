@@ -1568,7 +1568,7 @@ func getItemIdFromNumericId(numericID int, damage int) (string, bool) {
 		case 1:
 			itemID = "red_dye"
 		case 2:
-			itemID = "cactus_green"
+			itemID = "green_dye"
 		case 3:
 			itemID = "cocoa_beans"
 		case 4:
