@@ -4,16 +4,17 @@ import (
 	"fmt"
 	"os"
 	"skycrypt/src/models"
+	"sync"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
 var NEUConstants = models.NEUConstant{}
-var CACHED_NEU_ITEMS = make(map[string]models.NEUItem)
+var CACHED_NEU_ITEMS sync.Map
 
 func GetItem(name string) (models.NEUItem, error) {
-	if item, exists := CACHED_NEU_ITEMS[name]; exists {
-		return item, nil
+	if item, ok := CACHED_NEU_ITEMS.Load(name); ok {
+		return item.(models.NEUItem), nil
 	}
 
 	itemsPath := "NotEnoughUpdates-REPO/items"
@@ -47,7 +48,7 @@ func GetItem(name string) (models.NEUItem, error) {
 		Wiki:        item.Wiki,
 	}
 
-	CACHED_NEU_ITEMS[name] = NEUItem
+	CACHED_NEU_ITEMS.Store(name, NEUItem)
 
 	return NEUItem, nil
 }
