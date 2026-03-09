@@ -34,4 +34,5 @@ type NEUConstant struct {
 	HeartOfTheMountain neu.HOTMConstants     `json:"hotm,omitempty"`
 	HeartOfTheForest   neu.HOTFConstants     `json:"hotf,omitempty"`
 	AttributeShards    []neu.FormattedShard  `json:"attribute_shards,omitempty"`
+	Sacks              neu.FormattedSack     `json:"sacks,omitempty"`
 }

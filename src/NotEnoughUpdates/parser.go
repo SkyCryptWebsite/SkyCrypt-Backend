@@ -136,6 +136,21 @@ func ParseNEURepository() error {
 			}
 
 			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards.Attributes, GetItem)
+		} else if constant.Name() == "sacks.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var sacks neu.SacksRaw
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &sacks)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.Sacks = neustats.FormatSacks(sacks)
 		}
 	}
 

@@ -112,16 +112,16 @@ func InventoryHandler(c *fiber.Ctx) error {
 	userProfileValue := profile.Members[uuid]
 	userProfile := &userProfileValue
 
-	// TODO: Implement sacks
 	if inventoryId == "sacks" {
-		/*
-			userProfile.SackCounts
-			userProfile.Inventory.BagContents.SacksBag.Data
-		*/
 		itemSlice := stats.GetInventory(userProfile, inventoryId)
-		output := statsItems.ProcessItems(itemSlice, inventoryId, disabledPacks)
+		parsedSacks := statsItems.ProcessItems(itemSlice, inventoryId, disabledPacks)
 
-		return c.JSON(output)
+		sackItems := userProfile.Inventory.Sacks
+		processedSacks := statsItems.ProcessSacks(parsedSacks, sackItems)
+
+		strippedItems := statsItems.StripItems(&processedSacks)
+
+		return c.JSON(strippedItems)
 	}
 
 	if inventoryId == "search" {

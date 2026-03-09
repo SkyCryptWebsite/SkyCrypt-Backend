@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 )
 
 func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[]string) []models.ProcessedItem {
@@ -169,6 +170,10 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 		processedItem.Texture = fmt.Sprintf("%s/api/potion/%s/%s", utility.GetDomain(), potionType, color)
 	}
 
+	if *item.Count > 1 {
+		processedItem.Count = item.Count
+	}
+
 	if processedItem.Texture == "" {
 		TextureItem := models.TextureItem{
 			Count:  item.Count,
@@ -210,4 +215,63 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 	// TODO: add cake bag & legacy backpack support
 
 	return processedItem
+}
+
+func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []models.ProcessedItem {
+	prices, _ := skyhelpernetworthgo.GetPrices(true, 0, 0)
+	sacksConstants := notenoughupdates.NEUConstants.Sacks
+
+	for i := range items {
+		sackData := sacksConstants[GetId(items[i])]
+		if sackData == nil {
+			continue
+		}
+
+		totalValue := 0.0
+		for _, rawItemId := range sackData {
+			NEUItem, err := notenoughupdates.GetItem(rawItemId)
+			if err != nil {
+				continue
+			}
+
+			itemId := rawItemId
+			if NEUItem.NBT.ItemModel != "" {
+				itemId = strings.Replace(NEUItem.NBT.ItemModel, "minecraft:", "", 1)
+			}
+
+			itemTexture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), itemId)
+			if NEUItem.NBT.SkullOwner != nil {
+				itemTexture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), utility.GetSkinHash(NEUItem.NBT.SkullOwner.Properties.Textures[0].Value))
+			}
+
+			itemAmount := sackContents[rawItemId]
+			lore := NEUItem.Lore
+			if itemAmount > 1 {
+				lore = append(lore, "", fmt.Sprintf("§7Amount: §c%s", utility.AddCommas(itemAmount)))
+
+				itemPrice := prices[rawItemId]
+				if itemPrice > 0 {
+					totalPrice := float64(itemAmount) * itemPrice
+					totalValue += totalPrice
+
+					lore = append(lore, "", fmt.Sprintf("§7Unit Price: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(itemPrice)), utility.FormatNumber(itemPrice)))
+					lore = append(lore, "", fmt.Sprintf("§7Total Value: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(totalPrice)), utility.FormatNumber(totalPrice)))
+				}
+			}
+
+			items[i].ContainsItems = append(items[i].ContainsItems, models.ProcessedItem{
+				DisplayName: NEUItem.Name,
+				Rarity:      constants.ITEMS[rawItemId].Rarity,
+				Texture:     itemTexture,
+				Lore:        lore,
+				Count:       &itemAmount,
+			})
+		}
+
+		if totalValue > 0 {
+			items[i].Lore = append(items[i].Lore, "", fmt.Sprintf("§7Sack Contents Value: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(totalValue)), utility.FormatNumber(totalValue)))
+		}
+	}
+
+	return items
 }
