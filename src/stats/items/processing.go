@@ -170,7 +170,7 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 		processedItem.Texture = fmt.Sprintf("%s/api/potion/%s/%s", utility.GetDomain(), potionType, color)
 	}
 
-	if *item.Count > 1 {
+	if item.Count != nil && *item.Count > 1 {
 		processedItem.Count = item.Count
 	}
 
