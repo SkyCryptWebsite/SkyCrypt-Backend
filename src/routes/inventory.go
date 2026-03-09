@@ -121,6 +121,8 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 		strippedItems := statsItems.StripItems(&processedSacks)
 
+		utility.LogVerbose("Returning /api/inventory/%s/%s in %s", uuid, inventoryId, time.Since(timeNow))
+
 		return c.JSON(strippedItems)
 	}
 
