@@ -76,8 +76,8 @@ func getTrophyFish(userProfile *skycrypttypes.Member) models.TrophyFishOutput {
 
 	totalCaught := userProfile.TrophyFish.TotalCaught
 	stageName := "Bronze Hunter"
-	stageIdx := len(userProfile.TrophyFish.Rewards)
-	if stageIdx > 0 && stageIdx < len(constants.TROPHY_FISH_STAGES) {
+	stageIdx := min(len(userProfile.TrophyFish.Rewards), len(constants.TROPHY_FISH_STAGES))
+	if stageIdx > 0 && stageIdx <= len(constants.TROPHY_FISH_STAGES) {
 		stageName = constants.TROPHY_FISH_STAGES[stageIdx-1]
 	}
 
