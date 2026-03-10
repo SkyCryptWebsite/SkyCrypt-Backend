@@ -279,7 +279,7 @@ func getConsumables(userProfile *skycrypttypes.Member) []models.Consumable {
 	for _, consumableData := range constants.CONSUMABLES {
 		consumables = append(consumables, models.Consumable{
 			Name:      consumableData.Name,
-			Texture:   consumableData.Texture,
+			Texture:   fmt.Sprintf("%s%s", utility.GetDomain(), consumableData.Texture),
 			Amount:    consumableData.Amount(userProfile),
 			MaxAmount: consumableData.MaxAmount,
 		})
