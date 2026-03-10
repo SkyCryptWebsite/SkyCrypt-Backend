@@ -2,7 +2,7 @@ package models
 
 type AttributeShardsOutput struct {
 	Unlocked    int              `json:"unlocked"`
-	MaxUnlocked int              `json:"max_unlocked"`
+	MaxUnlocked int              `json:"maxUnlocked"`
 	Syphoned    int              `json:"syphoned"`
 	MaxSyphoned int              `json:"maxSyphoned"`
 	Shards      []AttributeShard `json:"shards"`

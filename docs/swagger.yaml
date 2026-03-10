@@ -19,6 +19,42 @@ components:
             type: number
           type: object
       type: object
+    models.AttributeShard:
+      properties:
+        captured:
+          type: integer
+        lore:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
+        maxSyphon:
+          type: integer
+        name:
+          type: string
+        owned:
+          type: integer
+        syphoned:
+          type: integer
+        texture:
+          type: string
+      type: object
+    models.AttributeShardsOutput:
+      properties:
+        maxSyphoned:
+          type: integer
+        maxUnlocked:
+          type: integer
+        shards:
+          items:
+            $ref: '#/components/schemas/models.AttributeShard'
+          type: array
+          uniqueItems: false
+        syphoned:
+          type: integer
+        unlocked:
+          type: integer
+      type: object
     models.BestRunOutput:
       properties:
         damage_dealt:
@@ -695,6 +731,11 @@ components:
           uniqueItems: false
         level:
           $ref: '#/components/schemas/models.Skill'
+        mutations:
+          items:
+            $ref: '#/components/schemas/models.Mutation'
+          type: array
+          uniqueItems: false
         plot:
           $ref: '#/components/schemas/models.PlotLayout'
         visitors:
@@ -1159,6 +1200,17 @@ components:
         type:
           type: string
       type: object
+    models.Mutation:
+      properties:
+        max:
+          type: boolean
+        name:
+          type: string
+        texture:
+          type: string
+        unlocked:
+          type: boolean
+      type: object
     models.Networth:
       properties:
         nonCosmetic:
@@ -1284,6 +1336,8 @@ components:
           type: string
         isInactive:
           type: boolean
+        itemIndex:
+          type: integer
         lore:
           items:
             type: string
@@ -2022,6 +2076,8 @@ components:
       properties:
         ExtraAttributes:
           $ref: '#/components/schemas/skycrypttypes.ExtraAttributes'
+        ItemModel:
+          type: string
         SkullOwner:
           $ref: '#/components/schemas/skycrypttypes.SkullOwner'
         display:
@@ -2081,6 +2137,38 @@ paths:
       summary: Get accessories stats of a specified player
       tags:
       - accessories
+  /api/attribute_shards/{uuid}/{profileId}:
+    get:
+      description: Returns attribute shards stats for the given user and profile ID
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Profile ID
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.AttributeShardsOutput'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Bad Request
+      summary: Get attribute shards stats of a specified player
+      tags:
+      - attribute_shards
   /api/bestiary/{uuid}/{profileId}:
     get:
       description: Returns bestiary for the given user and profile ID

@@ -33,7 +33,6 @@ func GetAttributeShards(userProfile *skycrypttypes.Member) models.AttributeShard
 	}
 
 	for _, shard := range notenoughupdates.NEUConstants.AttributeShards {
-
 		owned := 0
 		captureTimesamp := int64(0)
 		syphoned := userProfile.Attributes.Stacks[shard.ShardStackId]
