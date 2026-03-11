@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -24,7 +25,9 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/misc/{uuid}/{profileId} [get]
 func MiscHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Misc")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Misc")()
+	}
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -55,7 +58,7 @@ func MiscHandler(c *fiber.Ctx) error {
 
 	output := stats.GetMisc(userProfile, profile, player)
 
-	fmt.Printf("Returning /api/misc/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/misc/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

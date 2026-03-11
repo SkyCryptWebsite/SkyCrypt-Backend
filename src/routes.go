@@ -22,7 +22,6 @@ import (
 
 func SetupApplication() error {
 	timeNow := time.Now()
-	forensics.Logger.Info("setup_application_started")
 
 	err := godotenv.Load()
 	if err != nil && os.Getenv("FIBER_PREFORK_CHILD") == "" {
@@ -44,10 +43,8 @@ func SetupApplication() error {
 
 	err = db.InitRedis(redisAddr, redisPassword, 0)
 	if err != nil {
-		forensics.Logger.Error("redis_init_failed", zap.Error(err))
 		return fmt.Errorf("failed to connect to Redis: %v", err)
 	}
-	forensics.Logger.Info("redis_initialized", zap.String("addr", redisAddr))
 
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
@@ -61,53 +58,61 @@ func SetupApplication() error {
 
 	err = db.InitMongo(mongoURI, mongoDBName)
 	if err != nil {
-		forensics.Logger.Error("mongo_init_failed", zap.Error(err))
 		return fmt.Errorf("failed to connect to MongoDB: %v", err)
 	}
-	forensics.Logger.Info("mongo_initialized", zap.String("db", mongoDBName))
 
 	// Main process: fetch all remote data, init/update repos, then parse
 	// Prefork children: only parse local data and read from Redis cache
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		if err := notenoughupdates.InitializeNEURepository(); err != nil {
-			return fmt.Errorf("error initializing repository: %v", err)
+		err := notenoughupdates.InitializeNEURepository()
+		if err != nil {
+			return fmt.Errorf("failed to initialize NEU repository: %v", err)
 		}
 
-		if err := notenoughupdates.UpdateNEURepository(); err != nil {
-			return fmt.Errorf("error updating repository: %v", err)
+		if err := notenoughupdates.ParseNEURepository(); err != nil {
+			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
 
-		if err := api.LoadSkyBlockItems(); err != nil {
+		notenoughupdates.StartUpdateLoop()
+
+		if err := api.LoadSkyBlockItems(false); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
 
-		_, err = skyhelpernetworthgo.GetPrices(true, 0, 0)
-		if err != nil {
-			return fmt.Errorf("error fetching SkyHelper prices: %v", err)
+		go func() {
+			_, err := skyhelpernetworthgo.GetPrices(true, 0, 0)
+			if err != nil {
+				log.Printf("error fetching SkyHelper prices: %v", err)
+			}
+		}()
+
+		go func() {
+			_, err := skyhelpernetworthgo.GetItems(true, 0, 0)
+			if err != nil {
+				log.Printf("error fetching SkyHelper items: %v", err)
+			}
+		}()
+
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Info("setup_application_completed",
+				zap.Duration("startup_time", time.Since(timeNow)),
+			)
 		}
 
-		_, err = skyhelpernetworthgo.GetItems(true, 0, 0)
-		if err != nil {
-			return fmt.Errorf("error fetching SkyHelper items: %v", err)
+		fmt.Printf("[SKYCRYPT] SkyCrypt initialized successfully in %s\n", time.Since(timeNow))
+
+		if os.Getenv("DEV") != "true" {
+			go utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
 		}
-
-		fmt.Print("[SKYCRYPT] SkyCrypt initialized successfully\n")
-		forensics.Logger.Info("setup_application_completed",
-			zap.Duration("startup_time", time.Since(timeNow)),
-		)
-
-		utility.SendWebhook("BACKEND", "SkyCrypt Backend has started successfully!", fmt.Appendf(nil, "Startup Time: %s", time.Since(timeNow).String()))
 	} else {
 		// Prefork children: load items from Redis cache
-		if err := api.LoadSkyBlockItems(); err != nil {
+		if err := api.LoadSkyBlockItems(true); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
-	}
 
-	// All processes need the parsed NEU data in memory
-	err = notenoughupdates.ParseNEURepository()
-	if err != nil {
-		return fmt.Errorf("error parsing NEU repository: %v", err)
+		if err := notenoughupdates.ParseNEURepository(); err != nil {
+			return fmt.Errorf("failed to parse NEU repository: %v", err)
+		}
 	}
 
 	return nil
@@ -138,8 +143,10 @@ func SetupRoutes(app *fiber.App) {
 	api := app.Group("/api")
 
 	// Forensic dashboard (live in-memory report)
-	api.Get("/forensics", forensics.DashboardHandler())
-	api.Get("/forensics/dashboard", forensics.DashboardHTMLHandler())
+	if utility.IsForensicsEnabled() {
+		api.Get("/forensics", forensics.DashboardHandler())
+		api.Get("/forensics/dashboard", forensics.DashboardHTMLHandler())
+	}
 
 	// Documentation - serve openapi files directly
 	api.Static("/openapi/doc.json", "./docs/swagger.json")
@@ -169,7 +176,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/profiles/:uuid", routes.ProfilesHandler)
 	api.Get("/player/:uuid", routes.PlayerHandler)
 	api.Get("/museum/:profileId", routes.MuseumHandler)
-	api.Get("/garden/:profileId", routes.GardenHandler)
+	api.Get("/garden/:uuid/:profileId", routes.GardenHandler)
 
 	// STATS ENDPOINTS
 	api.Get("/stats/:uuid/:profileId", routes.StatsHandler)
@@ -188,6 +195,8 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/inventory/:uuid/:profileId/:inventoryId", routes.InventoryHandler)
 
 	api.Get("/skills/:uuid/:profileId", routes.SkillsHandler)
+
+	api.Get("/attribute_shards/:uuid/:profileId", routes.AttributeShardsHandler)
 
 	api.Get("/dungeons/:uuid/:profileId", routes.DungeonsHandler)
 

@@ -132,6 +132,11 @@ func getSkillTree(userProfile *skycrypttypes.Member, SKILL_TREE_CONSTANTS map[st
 
 	LispParser := notenoughupdates.NewLispParser(prelude)
 
+	if skillName == "mining" {
+		potmLevel := userProfile.SkillTree.Nodes[skillName].Levels["core_of_the_mountain"]
+		LispParser.SetEnv("potm", float64(potmLevel))
+	}
+
 	skillTreePerks := userProfile.SkillTree.Nodes[skillName].Levels
 	for y := range skillLevel.MaxLevel {
 		for x := range 9 {

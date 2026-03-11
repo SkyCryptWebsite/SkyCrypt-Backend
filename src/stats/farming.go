@@ -71,7 +71,7 @@ func GetFarming(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		if output.Contests[cropId] == nil {
 			output.Contests[cropId] = &models.Contest{
 				Name:      constants.CROPS[cropId],
-				Texture:   fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), cropId),
+				Texture:   fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), constants.CROP_TEXTURES[cropId]),
 				Collected: contestData.Collected,
 				Amount:    1,
 				Medals: map[string]int{

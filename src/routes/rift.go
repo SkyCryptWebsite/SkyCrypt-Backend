@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	statsItems "skycrypt/src/stats/items"
+	"skycrypt/src/utility"
 	"strings"
 	"time"
 
@@ -30,7 +31,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/rift/{uuid}/{profileId} [get]
 func RiftHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Rift")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Rift")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -102,7 +106,7 @@ func RiftHandler(c *fiber.Ctx) error {
 
 	output := stats.GetRift(userProfile, processedItems)
 
-	fmt.Printf("Returning /api/rift/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/rift/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

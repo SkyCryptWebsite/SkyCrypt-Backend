@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,7 +23,10 @@ import (
 //	@Failure		400			{object}	models.ProcessingError
 //	@Router			/api/minions/{uuid}/{profileId} [get]
 func MinionsHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Minions")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Minions")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -37,7 +41,7 @@ func MinionsHandler(c *fiber.Ctx) error {
 
 	output := stats.GetMinions(profile)
 
-	fmt.Printf("Returning /api/minions/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/minions/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

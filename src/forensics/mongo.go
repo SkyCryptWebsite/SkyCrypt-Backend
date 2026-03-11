@@ -9,14 +9,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// InstrumentedCollection wraps a mongo.Collection with forensic logging.
 type InstrumentedCollection struct {
 	*mongo.Collection
 	logger *zap.Logger
 	name   string
 }
 
-// NewInstrumentedCollection wraps an existing collection with instrumentation.
 func NewInstrumentedCollection(coll *mongo.Collection) *InstrumentedCollection {
 	return &InstrumentedCollection{
 		Collection: coll,

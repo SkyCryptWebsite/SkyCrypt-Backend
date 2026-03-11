@@ -12,14 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// InstrumentedRedis wraps Redis operations with forensic logging.
 type InstrumentedRedis struct {
 	client *redis.Client
 	logger *zap.Logger
 	stats  *CacheStats
 }
 
-// CacheStats tracks cache hit/miss rates.
 type CacheStats struct {
 	hits   uint64
 	misses uint64
@@ -27,7 +25,6 @@ type CacheStats struct {
 
 var globalCacheStats = &CacheStats{}
 
-// NewInstrumentedRedis wraps an existing redis.Client.
 func NewInstrumentedRedis(client *redis.Client) *InstrumentedRedis {
 	return &InstrumentedRedis{
 		client: client,
@@ -157,7 +154,6 @@ func (ir *InstrumentedRedis) flagSlowRedis(operation, key string, duration time.
 	}
 }
 
-// GetCacheStats returns current hit/miss statistics.
 func GetCacheStats() (hits, misses uint64, hitRate float64) {
 	hits = atomic.LoadUint64(&globalCacheStats.hits)
 	misses = atomic.LoadUint64(&globalCacheStats.misses)
@@ -168,7 +164,6 @@ func GetCacheStats() (hits, misses uint64, hitRate float64) {
 	return
 }
 
-// LogCacheStatsPeriodically logs cache hit rates every interval.
 func LogCacheStatsPeriodically(wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
@@ -195,8 +190,6 @@ func LogCacheStatsPeriodically(wg *sync.WaitGroup) {
 	}
 }
 
-// WrapRedisGet is a drop-in replacement for the db.Get pattern used throughout the codebase.
-// It logs cache hits/misses and timing without changing the calling API.
 func WrapRedisGet(key string, originalGetFunc func(string) (string, error)) (string, error) {
 	start := time.Now()
 
@@ -238,7 +231,6 @@ func WrapRedisGet(key string, originalGetFunc func(string) (string, error)) (str
 	return val, err
 }
 
-// WrapRedisSet is a drop-in wrapper for the db.Set pattern.
 func WrapRedisSet(key string, value interface{}, expirationSeconds int, originalSetFunc func(string, interface{}, int) error) error {
 	start := time.Now()
 

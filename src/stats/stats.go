@@ -1,8 +1,8 @@
 package stats
 
 import (
+	"skycrypt/src/db"
 	"skycrypt/src/models"
-	"skycrypt/src/utility"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -14,7 +14,7 @@ func GetStats(mowojang *models.MowojangReponse, profiles *models.HypixelProfiles
 
 	return &models.StatsOutput{
 		Username:        mowojang.Name,
-		DisplayName:     utility.GetDisplayName(mowojang.Name, mowojang.UUID),
+		DisplayName:     db.GetDisplayName(mowojang.Name, mowojang.UUID),
 		UUID:            mowojang.UUID,
 		ProfileID:       profile.ProfileID,
 		ProfileCuteName: profile.CuteName,

@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -22,7 +23,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/collections/{uuid}/{profileId} [get]
 func CollectionsHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Collections")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Collections")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -40,7 +44,7 @@ func CollectionsHandler(c *fiber.Ctx) error {
 
 	output := stats.GetCollections(userProfile, profile)
 
-	fmt.Printf("Returning /api/collections/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/collections/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }

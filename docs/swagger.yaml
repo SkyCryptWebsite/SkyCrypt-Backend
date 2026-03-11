@@ -19,6 +19,42 @@ components:
             type: number
           type: object
       type: object
+    models.AttributeShard:
+      properties:
+        captured:
+          type: integer
+        lore:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
+        maxSyphon:
+          type: integer
+        name:
+          type: string
+        owned:
+          type: integer
+        syphoned:
+          type: integer
+        texture:
+          type: string
+      type: object
+    models.AttributeShardsOutput:
+      properties:
+        maxSyphoned:
+          type: integer
+        maxUnlocked:
+          type: integer
+        shards:
+          items:
+            $ref: '#/components/schemas/models.AttributeShard'
+          type: array
+          uniqueItems: false
+        syphoned:
+          type: integer
+        unlocked:
+          type: integer
+      type: object
     models.BestRunOutput:
       properties:
         damage_dealt:
@@ -187,6 +223,17 @@ components:
         milestone:
           type: integer
       type: object
+    models.Consumable:
+      properties:
+        amount:
+          type: integer
+        maxAmount:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
+      type: object
     models.Contest:
       properties:
         amount:
@@ -326,6 +373,13 @@ components:
           additionalProperties:
             type: string
           type: object
+      type: object
+    models.DNAAnalysisMilestone:
+      properties:
+        level:
+          type: integer
+        maxLevel:
+          type: integer
       type: object
     models.DungeonFloorStats:
       properties:
@@ -545,7 +599,7 @@ components:
       properties:
         itemsFished:
           type: integer
-        kills:
+        lavaSeaCreatures:
           items:
             $ref: '#/components/schemas/models.Kill'
           type: array
@@ -564,6 +618,11 @@ components:
           type: integer
         trophyFish:
           $ref: '#/components/schemas/models.TrophyFishOutput'
+        waterSeaCreatures:
+          items:
+            $ref: '#/components/schemas/models.Kill'
+          type: array
+          uniqueItems: false
       type: object
     models.ForagingOutput:
       properties:
@@ -658,16 +717,51 @@ components:
             $ref: '#/components/schemas/models.CropUpgrade'
           type: array
           uniqueItems: false
+        dnaAnalysisMilestone:
+          $ref: '#/components/schemas/models.DNAAnalysisMilestone'
+        gardenChips:
+          items:
+            $ref: '#/components/schemas/models.GardenChip'
+          type: array
+          uniqueItems: false
         gardenUpgrades:
-          additionalProperties:
-            type: integer
-          type: object
+          items:
+            $ref: '#/components/schemas/models.GardenUpgrade'
+          type: array
+          uniqueItems: false
         level:
           $ref: '#/components/schemas/models.Skill'
+        mutations:
+          items:
+            $ref: '#/components/schemas/models.Mutation'
+          type: array
+          uniqueItems: false
         plot:
           $ref: '#/components/schemas/models.PlotLayout'
         visitors:
           $ref: '#/components/schemas/models.Visitors'
+      type: object
+    models.GardenChip:
+      properties:
+        amount:
+          type: integer
+        maxLevel:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
+      type: object
+    models.GardenUpgrade:
+      properties:
+        level:
+          type: integer
+        maxLevel:
+          type: integer
+        name:
+          type: string
+        texture:
+          type: string
       type: object
     models.Gear:
       properties:
@@ -1039,6 +1133,11 @@ components:
           additionalProperties:
             type: integer
           type: object
+        consumables:
+          items:
+            $ref: '#/components/schemas/models.Consumable'
+          type: array
+          uniqueItems: false
         damage:
           $ref: '#/components/schemas/models.MiscDamage'
         dragons:
@@ -1050,10 +1149,6 @@ components:
             $ref: '#/components/schemas/models.MiscEssence'
           type: array
           uniqueItems: false
-        garden_chips:
-          additionalProperties:
-            type: integer
-          type: object
         gifts:
           $ref: '#/components/schemas/models.MiscGifts'
         kills:
@@ -1104,6 +1199,17 @@ components:
           type: number
         type:
           type: string
+      type: object
+    models.Mutation:
+      properties:
+        max:
+          type: boolean
+        name:
+          type: string
+        texture:
+          type: string
+        unlocked:
+          type: boolean
       type: object
     models.Networth:
       properties:
@@ -1230,6 +1336,8 @@ components:
           type: string
         isInactive:
           type: boolean
+        itemIndex:
+          type: integer
         lore:
           items:
             type: string
@@ -1625,6 +1733,8 @@ components:
           type: integer
         milestone:
           type: integer
+        texture:
+          type: string
       type: object
     models.TrophyFish:
       properties:
@@ -1966,6 +2076,8 @@ components:
       properties:
         ExtraAttributes:
           $ref: '#/components/schemas/skycrypttypes.ExtraAttributes'
+        ItemModel:
+          type: string
         SkullOwner:
           $ref: '#/components/schemas/skycrypttypes.SkullOwner'
         display:
@@ -2025,6 +2137,38 @@ paths:
       summary: Get accessories stats of a specified player
       tags:
       - accessories
+  /api/attribute_shards/{uuid}/{profileId}:
+    get:
+      description: Returns attribute shards stats for the given user and profile ID
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Profile ID
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.AttributeShardsOutput'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Bad Request
+      summary: Get attribute shards stats of a specified player
+      tags:
+      - attribute_shards
   /api/bestiary/{uuid}/{profileId}:
     get:
       description: Returns bestiary for the given user and profile ID
@@ -2211,10 +2355,16 @@ paths:
       summary: Get all emojis
       tags:
       - emojis
-  /api/garden/{profileId}:
+  /api/garden/{uuid}/{profileId}:
     get:
       description: Returns garden data for the given profile ID
       parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
       - description: Profile ID
         in: path
         name: profileId

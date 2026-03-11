@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"fmt"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -88,10 +89,12 @@ func getTreeGifts(userProfile *skycrypttypes.Member) map[string]models.TreeGift 
 		return map[string]models.TreeGift{
 			"FIG": {
 				Milestone:    0,
+				Texture:      fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), "FIG_LOG"),
 				MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
 			},
 			"MANGROVE": {
 				Milestone:    0,
+				Texture:      fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), "MANGROVE_LOG"),
 				MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
 			},
 		}
@@ -100,10 +103,12 @@ func getTreeGifts(userProfile *skycrypttypes.Member) map[string]models.TreeGift 
 	return map[string]models.TreeGift{
 		"FIG": {
 			Milestone:    userProfile.Foraging.TreeGifts.MilestoneTierClaimed["FIG"],
+			Texture:      fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), "FIG_LOG"),
 			MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
 		},
 		"MANGROVE": {
 			Milestone:    userProfile.Foraging.TreeGifts.MilestoneTierClaimed["MANGROVE"],
+			Texture:      fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), "MANGROVE_LOG"),
 			MaxMilestone: constants.MAX_TREE_GIFT_MILESTONE,
 		},
 	}

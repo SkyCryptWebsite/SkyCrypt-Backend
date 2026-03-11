@@ -18,7 +18,9 @@ import (
 var HYPIXEL_API_KEY = os.Getenv("HYPIXEL_API_KEY")
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
-	defer forensics.TrackSpan("api.GetPlayer")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetPlayer")()
+	}
 
 	var rawReponse models.HypixelPlayerResponse
 	var response skycrypttypes.Player
@@ -70,16 +72,21 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 	}
 
 	_ = redis.Set(fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
-	forensics.Logger.Info("api_response_parsed",
-		zap.String("api", "GetPlayer"),
-		zap.String("uuid", uuid),
-		zap.Int("response_size_bytes", len(body)),
-	)
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Info("api_response_parsed",
+			zap.String("api", "GetPlayer"),
+			zap.String("uuid", uuid),
+			zap.Int("response_size_bytes", len(body)),
+		)
+	}
+
 	return &rawReponse.Player, nil
 }
 
 func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
-	defer forensics.TrackSpan("api.GetProfiles")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetProfiles")()
+	}
 
 	var response models.HypixelProfilesResponse
 	if !utility.IsUUID(uuid) {
@@ -132,16 +139,21 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 	}
 
 	_ = redis.Set(fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
-	forensics.Logger.Info("api_response_parsed",
-		zap.String("api", "GetProfiles"),
-		zap.String("uuid", uuid),
-		zap.Int("response_size_bytes", len(body)),
-	)
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Info("api_response_parsed",
+			zap.String("api", "GetProfiles"),
+			zap.String("uuid", uuid),
+			zap.Int("response_size_bytes", len(body)),
+		)
+	}
+
 	return &response, nil
 }
 
 func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error) {
-	defer forensics.TrackSpan("api.GetProfile")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetProfile")()
+	}
 
 	profiles, err := GetProfiles(uuid)
 	if err != nil {
@@ -175,7 +187,9 @@ func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error
 }
 
 func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
-	defer forensics.TrackSpan("api.GetMuseum")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetMuseum")()
+	}
 
 	var rawReponse models.HypixelMuseumResponse
 
@@ -220,7 +234,9 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 }
 
 func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
-	defer forensics.TrackSpan("api.GetGarden")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("api.GetGarden")()
+	}
 
 	var rawReponse models.HypixelGardenResponse
 

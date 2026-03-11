@@ -8,16 +8,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// NPlusOneDetector identifies N+1 query patterns within single requests.
-// If the same query pattern is executed many times during one request,
-// it's likely an N+1 anti-pattern.
 type NPlusOneDetector struct {
 	logger        *zap.Logger
 	queryPatterns map[string]*QueryPattern
 	mu            sync.RWMutex
 }
 
-// QueryPattern tracks repeated query execution.
 type QueryPattern struct {
 	Query     string
 	Count     uint64
@@ -34,7 +30,6 @@ func InitNPlus1Detector() {
 	}
 }
 
-// RecordQuery records a query execution. Call from instrumented DB layer.
 func (npd *NPlusOneDetector) RecordQuery(requestID, collection, operation string) {
 	npd.mu.Lock()
 	defer npd.mu.Unlock()
@@ -52,8 +47,7 @@ func (npd *NPlusOneDetector) RecordQuery(requestID, collection, operation string
 
 	npd.queryPatterns[key].Count++
 
-	// If same query pattern executed >5 times in a single request, flag N+1
-	if npd.queryPatterns[key].Count == 6 { // Log only on first detection
+	if npd.queryPatterns[key].Count == 6 {
 		npd.logger.Error("nplus1_query_detected",
 			zap.String("request_id", requestID),
 			zap.String("query", queryKey),
@@ -63,7 +57,6 @@ func (npd *NPlusOneDetector) RecordQuery(requestID, collection, operation string
 	}
 }
 
-// CleanupOldPatterns removes stale entries. Run in a goroutine.
 func (npd *NPlusOneDetector) CleanupOldPatterns() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -89,7 +82,6 @@ func (npd *NPlusOneDetector) CleanupOldPatterns() {
 	}
 }
 
-// RecordQuery is a package-level convenience.
 func RecordQuery(requestID, collection, operation string) {
 	if GlobalNPlus1Detector != nil {
 		GlobalNPlus1Detector.RecordQuery(requestID, collection, operation)

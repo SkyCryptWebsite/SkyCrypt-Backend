@@ -53,9 +53,7 @@ type MuseumResult struct {
 	Value        int64                          `json:"value"`
 	Appraisal    bool                           `json:"appraisal"`
 	Total        MuseumStats                    `json:"total"`
-	Weapons      MuseumStats                    `json:"weapons"`
-	Armor        MuseumStats                    `json:"armor"`
-	Rarities     MuseumStats                    `json:"rarities"`
+	Categories   map[string]MuseumStats         `json:"categories"`
 	Special      MuseumSpecialStats             `json:"special"`
 	Items        map[string]ProcessedMuseumItem `json:"items"`
 	SpecialItems []ProcessedMuseumItem          `json:"specialItems"`

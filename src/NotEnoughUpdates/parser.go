@@ -5,6 +5,7 @@ import (
 	"os"
 	neu "skycrypt/src/models/NEU"
 	neustats "skycrypt/src/stats/neu"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -120,10 +121,58 @@ func ParseNEURepository() error {
 			}
 
 			NEUConstants.HeartOfTheForest = hotfConstants
+		} else if constant.Name() == "attribute_shards.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var attributeShards neu.AttributeShardsRaw
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &attributeShards)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards.Attributes, GetItem)
+		} else if constant.Name() == "sacks.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var sacks neu.SacksRaw
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &sacks)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			NEUConstants.Sacks = neustats.FormatSacks(sacks)
 		}
 	}
 
-	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s\n", time.Since(timeNow))
+	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s on %v\n", time.Since(timeNow), os.Getpid())
 
 	return nil
+}
+
+func StartUpdateLoop() {
+	go func() {
+		for {
+			time.Sleep(12 * time.Hour)
+
+			err := UpdateNEURepository()
+			if err != nil {
+				fmt.Printf("Error updating NEU repository: %v\n", err)
+			} else {
+				err = ParseNEURepository()
+				if err != nil {
+					fmt.Printf("Error parsing NEU repository: %v\n", err)
+				}
+			}
+		}
+	}()
 }

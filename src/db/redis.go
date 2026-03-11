@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"skycrypt/src/forensics"
+	"skycrypt/src/utility"
 	"sync"
 	"time"
 
@@ -47,18 +48,28 @@ func InitRedis(addr string, password string, db int) error {
 		PoolFIFO:     false,
 	})
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-
-	_, err := redisClient.Ping(ctxTimeout).Result()
-	if err != nil {
-		_ = redisClient.Close()
-		redisClient = nil
-		return fmt.Errorf("could not connect to Redis: %v", err)
+	// Retry ping in case Redis is still loading its dataset
+	maxRetries := 30
+	for i := 0; i < maxRetries; i++ {
+		ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
+		_, err := redisClient.Ping(ctxTimeout).Result()
+		cancel()
+		if err == nil {
+			break
+		}
+		if i == maxRetries-1 {
+			_ = redisClient.Close()
+			redisClient = nil
+			return fmt.Errorf("could not connect to Redis: %v", err)
+		}
+		if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+			fmt.Printf("[REDIS] Waiting for Redis to be ready (attempt %d/%d): %v\n", i+1, maxRetries, err)
+		}
+		time.Sleep(time.Second * 2)
 	}
 
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		fmt.Print("Redis connected successfully\n")
+		fmt.Print("[REDIS] Redis connected successfully\n")
 	}
 
 	return nil
@@ -87,10 +98,6 @@ func Get(key string) (string, error) {
 				err := InitRedis(redisAddr, redisPassword, redisDB)
 				if err != nil {
 					clientMutex.Unlock()
-					forensics.Logger.Error("redis_get_reinit_failed",
-						zap.String("key", key),
-						zap.Error(err),
-					)
 					return "", fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
 				}
 			} else {
@@ -107,31 +114,39 @@ func Get(key string) (string, error) {
 
 	if err != nil {
 		if err == redis.Nil {
-			forensics.Logger.Debug("redis_cache_miss",
-				zap.String("key", key),
-				zap.Duration("duration", duration),
-			)
+			if utility.IsForensicsEnabled() {
+				forensics.Logger.Debug("redis_cache_miss",
+					zap.String("key", key),
+					zap.Duration("duration", duration),
+				)
+			}
 			return "", nil
 		}
-		forensics.Logger.Error("redis_get_error",
-			zap.String("key", key),
-			zap.Error(err),
-			zap.Duration("duration", duration),
-		)
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Error("redis_get_error",
+				zap.String("key", key),
+				zap.Error(err),
+				zap.Duration("duration", duration),
+			)
+		}
 		return "", fmt.Errorf("could not get value from Redis: %v", err)
 	}
 
-	forensics.Logger.Debug("redis_cache_hit",
-		zap.String("key", key),
-		zap.Duration("duration", duration),
-		zap.Int("value_size", len(val)),
-	)
-
-	if duration > 5*time.Millisecond {
-		forensics.Logger.Warn("slow_redis_get",
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Debug("redis_cache_hit",
 			zap.String("key", key),
 			zap.Duration("duration", duration),
+			zap.Int("value_size", len(val)),
 		)
+	}
+
+	if duration > 5*time.Millisecond {
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Warn("slow_redis_get",
+				zap.String("key", key),
+				zap.Duration("duration", duration),
+			)
+		}
 	}
 
 	return val, nil
@@ -178,10 +193,6 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 				err := InitRedis(redisAddr, redisPassword, redisDB)
 				if err != nil {
 					clientMutex.Unlock()
-					forensics.Logger.Error("redis_set_reinit_failed",
-						zap.String("key", key),
-						zap.Error(err),
-					)
 					return fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
 				}
 			} else {
@@ -198,25 +209,31 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 	duration := time.Since(start)
 
 	if err != nil {
-		forensics.Logger.Error("redis_set_error",
-			zap.String("key", key),
-			zap.Error(err),
-			zap.Duration("duration", duration),
-		)
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Error("redis_set_error",
+				zap.String("key", key),
+				zap.Error(err),
+				zap.Duration("duration", duration),
+			)
+		}
 		return fmt.Errorf("could not set value in Redis: %v", err)
 	}
 
-	forensics.Logger.Debug("redis_set_completed",
-		zap.String("key", key),
-		zap.Duration("duration", duration),
-		zap.Int("ttl_seconds", expirationSeconds),
-	)
-
-	if duration > 5*time.Millisecond {
-		forensics.Logger.Warn("slow_redis_set",
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Debug("redis_set_completed",
 			zap.String("key", key),
 			zap.Duration("duration", duration),
+			zap.Int("ttl_seconds", expirationSeconds),
 		)
+	}
+
+	if duration > 5*time.Millisecond {
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Warn("slow_redis_set",
+				zap.String("key", key),
+				zap.Duration("duration", duration),
+			)
+		}
 	}
 
 	return nil

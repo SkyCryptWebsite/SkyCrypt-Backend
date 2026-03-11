@@ -3,9 +3,8 @@ package notenoughupdates
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
-
-	"github.com/go-git/go-git/v5"
 )
 
 func InitializeNEURepository() error {
@@ -20,53 +19,35 @@ func InitializeNEURepository() error {
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		fmt.Println("[NOT-ENOUGH-UPDATES] Cloning NEU repository...")
 
-		_, err := git.PlainClone("NotEnoughUpdates-REPO", false, &git.CloneOptions{
-			URL:           "https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO",
-			Progress:      os.Stdout,
-			Depth:         1,
-			ReferenceName: "master",
-			SingleBranch:  true,
-		})
+		cmd := exec.Command("git", "clone", "--depth", "1", "--single-branch", "--branch", "master",
+			"https://github.com/NotEnoughUpdates/NotEnoughUpdates-REPO", "NotEnoughUpdates-REPO")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-		if err != nil {
+		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("failed to clone repository: %w", err)
 		}
 
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository cloned successfully")
 	} else {
-		_ = 0
-		// fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
+		fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
 	}
 
 	return nil
 }
 
 func UpdateNEURepository() error {
-	repo, err := git.PlainOpen("NotEnoughUpdates-REPO")
-	if err != nil {
-		return fmt.Errorf("failed to open repository: %w", err)
+	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+		return nil // Prefork children should not update the repository
 	}
 
-	workTree, err := repo.Worktree()
-	if err != nil {
-		return fmt.Errorf("failed to get worktree: %w", err)
-	}
-
-	// fmt.Println("[NOT-ENOUGH-UPDATES] Pulling latest changes...")
-
-	err = workTree.Pull(&git.PullOptions{
-		RemoteName: "origin",
-		Progress:   os.Stdout,
-		Depth:      1,
-	})
+	cmd := exec.Command("git", "pull", "--depth", "1", "origin", "master")
+	cmd.Dir = "NotEnoughUpdates-REPO"
+	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		if err == git.NoErrAlreadyUpToDate {
-			// fmt.Println("[NOT-ENOUGH-UPDATES] Already up to date")
-			return nil
-		}
-
-		fmt.Printf("[NOT-ENOUGH-UPDATES] Pull failed (%v), removing and re-cloning repository...\n", err)
+		outputStr := string(output)
+		fmt.Printf("[NOT-ENOUGH-UPDATES] Pull failed (%v: %s), removing and re-cloning repository...\n", err, outputStr)
 		if removeErr := os.RemoveAll("NotEnoughUpdates-REPO"); removeErr != nil {
 			return fmt.Errorf("failed to remove corrupted repository: %w", removeErr)
 		}
@@ -79,17 +60,20 @@ func UpdateNEURepository() error {
 		return nil
 	}
 
-	ref, err := repo.Head()
+	outputStr := string(output)
+	if outputStr == "Already up to date.\n" {
+		return nil
+	}
+
+	// Get current HEAD commit hash
+	hashCmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	hashCmd.Dir = "NotEnoughUpdates-REPO"
+	hashOutput, err := hashCmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to get HEAD: %w", err)
 	}
 
-	commit, err := repo.CommitObject(ref.Hash())
-	if err != nil {
-		return fmt.Errorf("failed to get commit: %w", err)
-	}
-
-	fmt.Printf("[NOT-ENOUGH-UPDATES] Updated to commit: %s\n", commit.Hash.String()[:8])
+	fmt.Printf("[NOT-ENOUGH-UPDATES] Updated to commit: %s", string(hashOutput))
 
 	return nil
 }

@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"runtime"
 	"skycrypt/src/constants"
-	"skycrypt/src/db"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,16 +48,41 @@ var (
 )
 
 var domain string
+var verboseLogging bool
+var forensicsEnabled bool
+var armorHexColorsEnabled bool
 
 func init() {
 	domain = os.Getenv("DOMAIN")
 	if domain == "" {
 		domain = "https://sky.shiiyu.moe"
 	}
+
+	verboseLogging = os.Getenv("VERBOSE_LOGGING") == "true"
+	forensicsEnabled = os.Getenv("FORENSICS_ENABLED") == "true"
+	armorHexColorsEnabled = os.Getenv("ENABLE_ARMOR_HEX") == "true"
 }
 
 func GetDomain() string {
 	return domain
+}
+
+func IsVerboseLogging() bool {
+	return verboseLogging
+}
+
+func IsForensicsEnabled() bool {
+	return forensicsEnabled
+}
+
+func IsArmorHexColorsEnabled() bool {
+	return armorHexColorsEnabled
+}
+
+func LogVerbose(format string, args ...interface{}) {
+	if verboseLogging {
+		fmt.Printf(format+"\n", args...)
+	}
 }
 
 func GetRawLore(text string) string {
@@ -556,10 +580,4 @@ func GetHexColor(color string) string {
 	return "FFFFFF"
 }
 
-func GetDisplayName(username string, uuid string) string {
-	if db.EMOJIS[uuid] != "" {
-		return username + " " + db.EMOJIS[uuid]
-	}
 
-	return username
-}

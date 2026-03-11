@@ -36,7 +36,8 @@ type FishingOuput struct {
 	SeaCreaturesFished int              `json:"seaCreaturesFished"`
 	ShredderFished     int              `json:"shredderFished"`
 	ShredderBait       int              `json:"shredderBait"`
-	Kills              []Kill           `json:"kills"`
 	TrophyFish         TrophyFishOutput `json:"trophyFish"`
 	Tools              SkillToolsResult `json:"tools"`
+	LavaSeaCreatures   []Kill           `json:"lavaSeaCreatures"`
+	WaterSeaCreatures  []Kill           `json:"waterSeaCreatures"`
 }

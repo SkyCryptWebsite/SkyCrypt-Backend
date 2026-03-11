@@ -8,23 +8,28 @@ import (
 	"time"
 )
 
+var MUSEUM_CATEGORIES = []string{"combat", "farming", "mining", "fishing", "foraging", "dungeoneering", "hunting"}
+
 type MuseumConstants struct {
 	ArmorSetToId map[string]string
 	ArmorSets    map[string][]string
 	Children     map[string]string
-	Weapons      []string
-	Armor        []string
-	Rarities     []string
+	Categories   map[string][]string
 }
 
 var MUSEUM = MuseumConstants{}
 
 func (m *MuseumConstants) GetAllItems() []string {
-	items := make([]string, 0, len(m.Weapons)+len(m.Armor)+len(m.Rarities))
-	items = append(items, m.Weapons...)
-	items = append(items, m.Armor...)
-	items = append(items, m.Rarities...)
-	return items
+	total := 0
+	for _, items := range m.Categories {
+		total += len(items)
+	}
+
+	result := make([]string, 0, total)
+	for _, category := range MUSEUM_CATEGORIES {
+		result = append(result, m.Categories[category]...)
+	}
+	return result
 }
 
 var priorityOrder = []string{"HAT", "HOOD", "HELMET", "CHESTPLATE", "TUNIC", "LEGGINGS", "TROUSERS", "SLIPPERS", "BOOTS", "NECKLACE", "CLOAK", "BELT", "GAUNTLET", "GLOVES"}
@@ -66,6 +71,11 @@ func getMuseumItems() {
 		Children:     make(map[string]string),
 		ArmorSets:    make(map[string][]string),
 		ArmorSetToId: make(map[string]string),
+		Categories:   make(map[string][]string),
+	}
+
+	for _, cat := range MUSEUM_CATEGORIES {
+		output.Categories[cat] = []string{}
 	}
 
 	for _, item := range ITEMS {
@@ -73,13 +83,7 @@ func getMuseumItems() {
 			continue
 		}
 
-		category := strings.ToLower(item.MuseumData.Type)
-		switch category {
-		case "weapons":
-			output.Weapons = append(output.Weapons, item.SkyblockID)
-		case "rarities":
-			output.Rarities = append(output.Rarities, item.SkyblockID)
-		}
+		category := strings.ToLower(item.MuseumData.Category)
 
 		if item.MuseumData.Parent != nil {
 			for parentKey, parentValue := range item.MuseumData.Parent {
@@ -95,13 +99,15 @@ func getMuseumItems() {
 
 			output.ArmorSets[armorSetId] = append(output.ArmorSets[armorSetId], item.SkyblockID)
 
-			sortMuseumItems(MUSEUM.ArmorSets[armorSetId])
+			sortMuseumItems(output.ArmorSets[armorSetId])
 
 			output.ArmorSetToId[armorSetId] = output.ArmorSets[armorSetId][0]
 
-			if !slices.Contains(output.Armor, armorSetId) {
-				output.Armor = append(output.Armor, armorSetId)
+			if !slices.Contains(output.Categories[category], armorSetId) {
+				output.Categories[category] = append(output.Categories[category], armorSetId)
 			}
+		} else {
+			output.Categories[category] = append(output.Categories[category], item.SkyblockID)
 		}
 	}
 
@@ -111,7 +117,7 @@ func getMuseumItems() {
 func init() {
 	go func() {
 		getMuseumItems()
-		for len(MUSEUM.Weapons) == 0 {
+		for len(MUSEUM.Categories["combat"]) == 0 {
 			time.Sleep(1 * time.Second)
 			getMuseumItems()
 		}
@@ -147,64 +153,131 @@ var MUSEUM_INVENTORY = []models.MuseumInventoryItem{
 	},
 	{
 		ProcessedItem: models.ProcessedItem{
-			DisplayName: "Weapons",
-			Rarity:      "uncommon",
-			Texture:     "/api/item/DIAMOND_SWORD",
+			DisplayName: "Combat",
+			Rarity:      "special",
+			Texture:     "/api/item/STONE_SWORD",
 			Lore: []string{
-				"§7View all of the §6Weapons §7that",
-				"§7you have donated to the",
-				"§7§9Museum§7!",
+				"§7View all of items related to the",
+				"§cCombat Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
 				"",
 			},
 		},
-		InventoryType: "weapons",
-		Position:      19,
-		ProgressType:  "weapons",
+		InventoryType: "combat",
+		Position:      20,
+		ProgressType:  "combat",
 		ContainsItems: []models.MuseumInventoryItem{},
 	},
 	{
 		ProcessedItem: models.ProcessedItem{
-			DisplayName: "Armor Sets",
+			DisplayName: "Farming",
 			Rarity:      "uncommon",
-			Texture:     "/api/item/DIAMOND_CHESTPLATE",
+			Texture:     "/api/item/GOLD_HOE",
 			Lore: []string{
-				"§7View all of the §9Armor Sets",
-				"§9§7that you have donated to the",
-				"§7§9Museum§7!",
+				"§7View all of items related to the",
+				"§aFarming Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
 				"",
 			},
 		},
-		InventoryType: "armor",
+		InventoryType: "farming",
 		Position:      21,
-		ProgressType:  "armor",
+		ProgressType:  "farming",
 		ContainsItems: []models.MuseumInventoryItem{},
 	},
 	{
 		ProcessedItem: models.ProcessedItem{
-			DisplayName: "Rarities",
-			Rarity:      "uncommon",
-			Texture:     "/api/head/86addbd5dedad40999473be4a7f48f6236a79a0dce971b5dbd7372014ae394d",
+			DisplayName: "Mining",
+			Rarity:      "legendary",
+			Texture:     "/api/item/STONE_PICKAXE",
 			Lore: []string{
-				"§7View all of the §5Rarities",
-				"§5§7that you have donated to the",
-				"§7§9Museum§7!",
+				"§7View all of items related to the",
+				"§6Mining Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
 				"",
 			},
 		},
-		InventoryType: "rarities",
+		InventoryType: "mining",
+		Position:      22,
+		ProgressType:  "mining",
+		ContainsItems: []models.MuseumInventoryItem{},
+	},
+	{
+		ProcessedItem: models.ProcessedItem{
+			DisplayName: "Fishing",
+			Rarity:      "divine",
+			Texture:     "/api/item/FISHING_ROD",
+			Lore: []string{
+				"§7View all of items related to the",
+				"§bFishing Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
+				"",
+			},
+		},
+		InventoryType: "fishing",
 		Position:      23,
-		ProgressType:  "rarities",
+		ProgressType:  "fishing",
+		ContainsItems: []models.MuseumInventoryItem{},
+	},
+	{
+		ProcessedItem: models.ProcessedItem{
+			DisplayName: "Foraging",
+			Rarity:      "uncommon",
+			Texture:     "/api/item/JUNGLE_SAPLING",
+			Lore: []string{
+				"§7View all of items related to the",
+				"§2Foraging Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
+				"",
+			},
+		},
+		InventoryType: "foraging",
+		Position:      24,
+		ProgressType:  "foraging",
+		ContainsItems: []models.MuseumInventoryItem{},
+	},
+	{
+		ProcessedItem: models.ProcessedItem{
+			DisplayName: "Dungeoneering",
+			Rarity:      "very_special",
+			Texture:     "/api/head/9b56895b9659896ad647f58599238af532d46db9c1b0389b8bbeb70999dab33d",
+			Lore: []string{
+				"§7View all of items related to the",
+				"§4Dungeoneering Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
+				"",
+			},
+		},
+		InventoryType: "dungeoneering",
+		Position:      30,
+		ProgressType:  "dungeoneering",
+		ContainsItems: []models.MuseumInventoryItem{},
+	},
+	{
+		ProcessedItem: models.ProcessedItem{
+			DisplayName: "Hunting",
+			Rarity:      "legendary",
+			Texture:     "/api/item/LEAD",
+			Lore: []string{
+				"§7View all of items related to the",
+				"§dHunting Skill §7that you have donated to the",
+				"§7to the §9Museum§7!",
+				"",
+			},
+		},
+		InventoryType: "hunting",
+		Position:      31,
+		ProgressType:  "hunting",
 		ContainsItems: []models.MuseumInventoryItem{},
 	},
 	{
 		ProcessedItem: models.ProcessedItem{
 			DisplayName: "Special Items",
-			Rarity:      "uncommon",
+			Rarity:      "mythic",
 			Texture:     "/api/item/CAKE",
 			Lore: []string{
-				"§7View all of the §dSpecial Items",
-				"§d§7that you have donated to the",
-				"§7§9Museum§7!",
+				"§7View all of the §dSpecial Items §7that you",
+				"§7have donated to the §9Museum§7",
 				"",
 				"§7These items don't count towards",
 				"§7Museum progress and rewards, but",
@@ -217,7 +290,7 @@ var MUSEUM_INVENTORY = []models.MuseumInventoryItem{
 			},
 		},
 		InventoryType: "special",
-		Position:      25,
+		Position:      32,
 		ProgressType:  "special",
 		ContainsItems: []models.MuseumInventoryItem{},
 	},
@@ -240,7 +313,7 @@ var MUSEUM_INVENTORY = []models.MuseumInventoryItem{
 				"",
 			},
 		},
-		Position:     40,
+		Position:     51,
 		ProgressType: "appraisal",
 	},
 	{
@@ -290,37 +363,26 @@ var MUSEUM_INVENTORY = []models.MuseumInventoryItem{
 
 var MUSEUM_INVENTORY_ITEM_SLOTS = []int{10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43}
 
-var MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE = map[string]models.ProcessedItem{
-	"weapons": {
-		DisplayName: "Missing Weapon",
-		Rarity:      "special",
-		Texture:     "/api/item/INK_SACK:8",
-		Lore: []string{
-			"§7Click on this item in your",
-			"§7inventory to add it to your",
-			"§7§9Museum§7!",
-		},
+var MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE = models.ProcessedItem{
+	DisplayName: "Missing Item",
+	Rarity:      "special",
+	Texture:     "/api/item/INK_SACK:8",
+	Lore: []string{
+		"§7Click on this item in your",
+		"§7inventory to add it to your",
+		"§7§9Museum§7!",
 	},
-	"armor": {
-		DisplayName: "Missing Armor Set",
-		Rarity:      "special",
-		Texture:     "/api/item/INK_SACK:8",
-		Lore: []string{
-			"§7Click on an armor piece in your",
-			"§7inventory that belongs to this",
-			"§7armor set to donate the full set",
-			"§7to your Museum.",
-		},
-	},
-	"rarities": {
-		DisplayName: "Missing Rarity",
-		Rarity:      "special",
-		Texture:     "/api/item/INK_SACK:8",
-		Lore: []string{
-			"§7Click on this item in your",
-			"§7inventory to add it to your",
-			"§7§9Museum§7!",
-		},
+}
+
+var MUSEUM_INVENTORY_MISSING_ARMOR_SET_TEMPLATE = models.ProcessedItem{
+	DisplayName: "Missing Armor Set",
+	Rarity:      "special",
+	Texture:     "/api/item/INK_SACK:8",
+	Lore: []string{
+		"§7Click on an armor piece in your",
+		"§7inventory that belongs to this",
+		"§7armor set to donate the full set",
+		"§7to your Museum.",
 	},
 }
 

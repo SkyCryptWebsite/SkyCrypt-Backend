@@ -76,8 +76,8 @@ func getTrophyFish(userProfile *skycrypttypes.Member) models.TrophyFishOutput {
 
 	totalCaught := userProfile.TrophyFish.TotalCaught
 	stageName := "Bronze Hunter"
-	stageIdx := len(userProfile.TrophyFish.Rewards)
-	if stageIdx > 0 && stageIdx < len(constants.TROPHY_FISH_STAGES) {
+	stageIdx := min(len(userProfile.TrophyFish.Rewards), len(constants.TROPHY_FISH_STAGES))
+	if stageIdx > 0 && stageIdx <= len(constants.TROPHY_FISH_STAGES) {
 		stageName = constants.TROPHY_FISH_STAGES[stageIdx-1]
 	}
 
@@ -99,22 +99,39 @@ func GetFishing(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		SeaCreaturesFished: int(userProfile.PlayerStats.Pets.Milestone.SeaCreaturesKilled),
 		ShredderFished:     int(userProfile.PlayerStats.ShredderRod.Fished),
 		ShredderBait:       int(userProfile.PlayerStats.ShredderRod.Bait),
-		Kills:              []models.Kill{},
 		Tools:              statsItems.GetSkillTools("fishing", items),
 		TrophyFish:         getTrophyFish(userProfile),
+		WaterSeaCreatures:  []models.Kill{},
+		LavaSeaCreatures:   []models.Kill{},
 	}
 
-	for _, id := range constants.SEA_CREATURES {
+	for _, id := range constants.WATER_SEA_CREATURES {
 		if count, exists := userProfile.PlayerStats.Kills[id]; exists {
 			name := constants.MOB_NAMES[id]
 			if name == "" {
 				name = utility.TitleCase(id)
 			}
 
-			output.Kills = append(output.Kills, models.Kill{
+			output.WaterSeaCreatures = append(output.WaterSeaCreatures, models.Kill{
 				Id:      id,
 				Name:    name,
-				Texture: fmt.Sprintf("/img/sea_creatures/%s.avif", id),
+				Texture: fmt.Sprintf("%s/assets/static/sea_creatures/%s.webp", utility.GetDomain(), id),
+				Amount:  int(count),
+			})
+		}
+	}
+
+	for _, id := range constants.LAVA_SEA_CREATURES {
+		if count, exists := userProfile.PlayerStats.Kills[id]; exists {
+			name := constants.MOB_NAMES[id]
+			if name == "" {
+				name = utility.TitleCase(id)
+			}
+
+			output.LavaSeaCreatures = append(output.LavaSeaCreatures, models.Kill{
+				Id:      id,
+				Name:    name,
+				Texture: fmt.Sprintf("%s/assets/static/sea_creatures/%s.webp", utility.GetDomain(), id),
 				Amount:  int(count),
 			})
 		}

@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -57,6 +58,27 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 	return data.Items, nil
 }
 
+func getSkyBlockItemsFromCache(cachedData string) ([]models.HypixelItem, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+	for i := 0; i < 60; i++ {
+		var err error
+		if cachedData == "" {
+			cachedData, err = redis.Get("skyblock_items")
+		}
+
+		if err == nil && cachedData != "" {
+			var data models.HypixelItemsResponse
+			err = json.Unmarshal([]byte(cachedData), &data)
+			if err == nil {
+				return data.Items, nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("timed out waiting for skyblock_items cache from main process")
+}
+
 func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 	cachedData, err := redis.Get("skyblock_collections")
 	if err == nil && cachedData != "" {
@@ -99,6 +121,26 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 	_ = redis.Set("skyblock_collections", string(body), 12*60*60) // Cache for 12 hours
 
 	return data.Collections, nil
+}
+
+func getSkyBlockCollectionsFromCache(cachedData string) (map[string]models.HypixelCollection, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	for i := 0; i < 60; i++ {
+		var err error
+		if cachedData == "" {
+			cachedData, err = redis.Get("skyblock_collections")
+		}
+
+		if err == nil && cachedData != "" {
+			var data models.HypixelCollectionsResponse
+			err = json.Unmarshal([]byte(cachedData), &data)
+			if err == nil {
+				return data.Collections, nil
+			}
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("timed out waiting for skyblock_collections cache from main process")
 }
 
 func processItems(items *[]models.HypixelItem) map[string]models.ProcessedHypixelItem {
@@ -157,9 +199,16 @@ func processCollections(collections map[string]models.HypixelCollection) models.
 	return output
 }
 
-func LoadSkyBlockItems() error {
-	// timeNow := time.Now()
-	items, err := getSkyBlockItems()
+func LoadSkyBlockItems(fromCache bool) error {
+	var items []models.HypixelItem
+	var err error
+
+	itemsCache, err := redis.Get("skyblock_items")
+	if fromCache || (itemsCache != "" && err == nil) {
+		items, err = getSkyBlockItemsFromCache(itemsCache)
+	} else {
+		items, err = getSkyBlockItems()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get SkyBlock items: %v", err)
 	}
@@ -168,15 +217,21 @@ func LoadSkyBlockItems() error {
 
 	// fmt.Printf("[ITEMS] Loaded %d items in %s\n", len(constants.ITEMS), time.Since(timeNow))
 
-	// timeNow = time.Now()
-	collections, err := GetSkyBlockCollections()
+	// timeNow := time.Now()
+	collectionsCache, err := redis.Get("skyblock_collections")
+	var collections map[string]models.HypixelCollection
+	if fromCache || (collectionsCache != "" && err == nil) {
+		collections, err = getSkyBlockCollectionsFromCache(collectionsCache)
+	} else {
+		collections, err = GetSkyBlockCollections()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to get SkyBlock collections: %v", err)
 	}
 
 	constants.COLLECTIONS = processCollections(collections)
 
-	// fmt.Printf("[COLLECTIONS] Loaded %d collections in %s\n", len(constants.COLLECTIONS), time.Since(timeNow))
+	// fmt.Printf("[COLLECTIONS] Loaded %d collections in %s on %v\n", len(constants.COLLECTIONS), time.Since(timeNow), os.Getpid())
 
 	return nil
 }

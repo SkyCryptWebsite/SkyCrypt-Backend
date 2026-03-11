@@ -68,15 +68,8 @@ func markChildrenAsDonated(children string, output *map[string]models.ProcessedM
 }
 
 func getCategoryItems(category string, output map[string]models.ProcessedMuseumItem) []string {
-	var categoryList []string
-	switch category {
-	case "weapons":
-		categoryList = constants.MUSEUM.Weapons
-	case "armor":
-		categoryList = constants.MUSEUM.Armor
-	case "rarities":
-		categoryList = constants.MUSEUM.Rarities
-	default:
+	categoryList := constants.MUSEUM.Categories[category]
+	if categoryList == nil {
 		return []string{}
 	}
 
@@ -88,39 +81,6 @@ func getCategoryItems(category string, output map[string]models.ProcessedMuseumI
 	}
 	return result
 }
-
-/*
-
-? NOTE: For Debug purposes only, not used in production code
-
-func getMissingItems(category string, output map[string]ProcessedMuseumItem) []string {
-	categoryItems := getCategoryItems(category, output)
-	var missing []string
-	for _, item := range categoryItems {
-		if output[item].Missing {
-			missing = append(missing, item)
-		}
-	}
-	return missing
-}
-
-func getMaxMissingItems(category string, output map[string]ProcessedMuseumItem) []string {
-	missingItems := getMissingItems(category, output)
-	var maxMissing []string
-
-	childrenValues := make(map[string]bool)
-	for _, child := range constants.MUSEUM.Children {
-		childrenValues[child] = true
-	}
-
-	for _, item := range missingItems {
-		if !childrenValues[item] {
-			maxMissing = append(maxMissing, item)
-		}
-	}
-	return maxMissing
-}
-*/
 
 func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]string) models.MuseumResult {
 	if museumData.Items == nil {
@@ -154,46 +114,27 @@ func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]str
 		}
 	}
 
-	weapons := getCategoryItems("weapons", output)
-	armor := getCategoryItems("armor", output)
-	rarities := getCategoryItems("rarities", output)
+	categories := make(map[string]models.MuseumStats)
+	for _, cat := range constants.MUSEUM_CATEGORIES {
+		items := getCategoryItems(cat, output)
+		nonMissing := 0
+		for _, item := range items {
+			if !output[item].Missing {
+				nonMissing++
+			}
+		}
+		categories[cat] = models.MuseumStats{
+			Amount: nonMissing,
+			Total:  len(items),
+		}
+	}
 
 	totalNonMissing := 0
-	weaponsNonMissing := 0
-	armorNonMissing := 0
-	raritiesNonMissing := 0
-	for _, item := range weapons {
-		if !output[item].Missing {
-			weaponsNonMissing++
-		}
-	}
-	for _, item := range armor {
-		if !output[item].Missing {
-			armorNonMissing++
-		}
-	}
-	for _, item := range rarities {
-		if !output[item].Missing {
-			raritiesNonMissing++
-		}
-	}
 	for _, item := range output {
 		if !item.Missing {
 			totalNonMissing++
 		}
 	}
-
-	/*
-		? NOTE: For Debug purposes only, not used in production code
-
-		var allMissing []string
-		var allMaxMissing []string
-		categories := []string{"weapons", "armor", "rarities"}
-		for _, category := range categories {
-			allMissing = append(allMissing, getMissingItems(category, output)...)
-			allMaxMissing = append(allMaxMissing, getMaxMissingItems(category, output)...)
-		}
-	*/
 
 	return models.MuseumResult{
 		Value:     museumData.Value,
@@ -202,31 +143,12 @@ func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]str
 			Amount: totalNonMissing,
 			Total:  len(output),
 		},
-		Weapons: models.MuseumStats{
-			Amount: weaponsNonMissing,
-			Total:  len(weapons),
-		},
-		Armor: models.MuseumStats{
-			Amount: armorNonMissing,
-			Total:  len(armor),
-		},
-		Rarities: models.MuseumStats{
-			Amount: raritiesNonMissing,
-			Total:  len(rarities),
-		},
+		Categories: categories,
 		Special: models.MuseumSpecialStats{
 			Amount: len(decodedMuseum.Special),
 		},
 		Items:        output,
 		SpecialItems: decodedMuseum.Special,
-		/*
-			? NOTE: For Debug purposes only, not used in production code
-
-			Missing: MuseumMissing{
-				Main: allMissing,
-				Max:  allMaxMissing,
-			},
-		*/
 	}
 }
 
@@ -268,27 +190,6 @@ func formatMuseumItemProgress(item *models.MuseumInventoryItem, museumData model
 		)
 	case "special":
 		item.Lore = append(item.Lore, fmt.Sprintf(`§7Items Donated: §b%d`, museumData.Special.Amount), "", "§eClick to view!")
-	case "weapons":
-		item.Lore = append(item.Lore,
-			fmt.Sprintf("§7Items Donated: §e%d§6%%", (museumData.Weapons.Amount*100)/max(museumData.Weapons.Total, 1)),
-			fmt.Sprintf("%s §b%d §9/ §b%d", formatProgressBar(museumData.Weapons.Amount, museumData.Weapons.Total, "9", "f"), museumData.Weapons.Amount, museumData.Weapons.Total),
-			"",
-			"§eClick to view!",
-		)
-	case "armor":
-		item.Lore = append(item.Lore,
-			fmt.Sprintf("§7Items Donated: §e%d§6%%", (museumData.Armor.Amount*100)/max(museumData.Armor.Total, 1)),
-			fmt.Sprintf("%s §b%d §9/ §b%d", formatProgressBar(museumData.Armor.Amount, museumData.Armor.Total, "9", "f"), museumData.Armor.Amount, museumData.Armor.Total),
-			"",
-			"§eClick to view!",
-		)
-	case "rarities":
-		item.Lore = append(item.Lore,
-			fmt.Sprintf("§7Items Donated: §e%d§6%%", (museumData.Rarities.Amount*100)/max(museumData.Rarities.Total, 1)),
-			fmt.Sprintf("%s §b%d §9/ §b%d", formatProgressBar(museumData.Rarities.Amount, museumData.Rarities.Total, "9", "f"), museumData.Rarities.Amount, museumData.Rarities.Total),
-			"",
-			"§eClick to view!",
-		)
 	case "total":
 		item.Lore = append(item.Lore,
 			fmt.Sprintf("§7Items Donated: §e%d§6%%", (museumData.Total.Amount*100)/max(museumData.Total.Total, 1)),
@@ -296,37 +197,34 @@ func formatMuseumItemProgress(item *models.MuseumInventoryItem, museumData model
 			"",
 			"§eClick to view!",
 		)
+	default:
+		if stats, exists := museumData.Categories[item.ProgressType]; exists {
+			item.Lore = append(item.Lore,
+				fmt.Sprintf("§7Items Donated: §e%d§6%%", (stats.Amount*100)/max(stats.Total, 1)),
+				fmt.Sprintf("%s §b%d §9/ §b%d", formatProgressBar(stats.Amount, stats.Total, "9", "f"), stats.Amount, stats.Total),
+				"",
+				"§eClick to view!",
+			)
+		}
 	}
 
 	return item
 }
 
 func getMuseumSectionAmount(museumData models.MuseumResult, section string) int {
-	switch section {
-	case "weapons":
-		return museumData.Weapons.Total
-	case "armor":
-		return museumData.Armor.Total
-	case "rarities":
-		return museumData.Rarities.Total
-	case "special":
+	if section == "special" {
 		return museumData.Special.Amount
-	default:
-		return 0
 	}
+
+	if stats, exists := museumData.Categories[section]; exists {
+		return stats.Total
+	}
+
+	return 0
 }
 
-func getMuseumItems(section string) []string {
-	switch section {
-	case "weapons":
-		return constants.MUSEUM.Weapons
-	case "armor":
-		return constants.MUSEUM.Armor
-	case "rarities":
-		return constants.MUSEUM.Rarities
-	default:
-		return []string{}
-	}
+func getMuseumCategoryItems(section string) []string {
+	return constants.MUSEUM.Categories[section]
 }
 
 func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models.ProcessedItem {
@@ -372,7 +270,11 @@ func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models
 					continue
 				}
 
-				categoryItems := getMuseumItems(itemSlot.InventoryType)
+				categoryItems := getMuseumCategoryItems(itemSlot.InventoryType)
+				if categoryItems == nil || slotIndex >= len(categoryItems) {
+					continue
+				}
+
 				itemId := categoryItems[slotIndex]
 				if itemId == "" {
 					continue
@@ -382,7 +284,12 @@ func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models
 
 				// MISSING ITEM
 				if museumItem.SkyblockID == "" || museumItem.Missing {
-					itemData := constants.MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE[itemSlot.InventoryType]
+					var itemData models.ProcessedItem
+					if _, isArmorSet := constants.MUSEUM.ArmorSets[itemId]; isArmorSet {
+						itemData = constants.MUSEUM_INVENTORY_MISSING_ARMOR_SET_TEMPLATE
+					} else {
+						itemData = constants.MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE
+					}
 					itemData.Texture = fmt.Sprintf("%s%s", utility.GetDomain(), itemData.Texture)
 
 					itemName := constants.MUSEUM.ArmorSetToId[itemId]

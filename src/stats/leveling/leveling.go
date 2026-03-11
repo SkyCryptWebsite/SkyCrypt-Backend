@@ -189,7 +189,7 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		"farming":      50,
 		"taming":       50,
 		"runecrafting": 3,
-		"foraging":     52,
+		"foraging":     54,
 	}
 
 	if userProfile.JacobsContest.Perks != nil {
@@ -202,12 +202,6 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 
 	if player.NewPackageRank != "NONE" && player.NewPackageRank != "" {
 		caps["runecrafting"] = 25
-	}
-
-	if userProfile.Foraging.Hina != nil && userProfile.Foraging.Hina.Tasks.ClaimedRewards != nil {
-		if slices.Contains(userProfile.Foraging.Hina.Tasks.ClaimedRewards, "REACH_AGATHA_4") {
-			caps["foraging"] += 2
-		}
 	}
 
 	return caps

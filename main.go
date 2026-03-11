@@ -22,26 +22,27 @@ import (
 // @host			localhost:8080
 // @BasePath		/
 func main() {
-	// ========== FORENSIC LOGGING INIT (MUST BE FIRST) ==========
-	forensics.InitLogger()
-	defer forensics.Sync()
+	if utility.IsForensicsEnabled() {
+		// ========== FORENSIC LOGGING INIT (MUST BE FIRST) ==========
+		forensics.InitLogger()
+		defer forensics.Sync()
 
-	forensics.InitErrorTracker()
-	forensics.InitCriticalPathAnalyzer()
-	forensics.InitNPlus1Detector()
+		forensics.InitErrorTracker()
+		forensics.InitCriticalPathAnalyzer()
+		forensics.InitNPlus1Detector()
 
-	forensics.Logger.Info("application_starting",
-		zap.String("phase", "init"),
-	)
+		forensics.Logger.Info("application_starting",
+			zap.String("phase", "init"),
+		)
 
-	// Start background monitors
-	runtimeMonitor := forensics.NewRuntimeMonitor()
-	go runtimeMonitor.Start()
-	go forensics.GlobalErrorTracker.StartPeriodicSummary()
-	go forensics.GlobalCPAnalyzer.StartPeriodicReport()
-	go forensics.GlobalNPlus1Detector.CleanupOldPatterns()
-	go forensics.LogCacheStatsPeriodically(nil)
-	// ========== END FORENSIC LOGGING INIT ==========
+		runtimeMonitor := forensics.NewRuntimeMonitor()
+		go runtimeMonitor.Start()
+		go forensics.GlobalErrorTracker.StartPeriodicSummary()
+		go forensics.GlobalCPAnalyzer.StartPeriodicReport()
+		go forensics.GlobalNPlus1Detector.CleanupOldPatterns()
+		go forensics.LogCacheStatsPeriodically(nil)
+		// ========== END FORENSIC LOGGING INIT ==========
+	}
 
 	app := fiber.New(fiber.Config{
 		Prefork:                   true,  // Enable prefork (requires --pid=host in Docker)
@@ -57,8 +58,10 @@ func main() {
 		IdleTimeout:               120 * time.Second,
 	})
 
-	// ========== FORENSIC REQUEST TRACING (BEFORE RECOVER) ==========
-	app.Use(forensics.RequestTracingMiddleware())
+	// ========== FORENSIC REQUEST TRACING (MUST BE BEFORE RECOVER) ==========
+	if utility.IsForensicsEnabled() {
+		app.Use(forensics.RequestTracingMiddleware())
+	}
 
 	app.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
@@ -66,12 +69,14 @@ func main() {
 			stack := debug.Stack()
 			fmt.Printf("\033[31m\n========== FATAL PANIC ==========\nPANIC: %v\n\nSTACK TRACE:\n%s\n==================================\033[0m\n", err, stack)
 
-			forensics.Logger.Error("panic_recovered",
-				zap.Any("error", err),
-				zap.String("url", c.OriginalURL()),
-				zap.String("method", c.Method()),
-				zap.String("stack_trace", string(stack)),
-			)
+			if utility.IsForensicsEnabled() {
+				forensics.Logger.Error("panic_recovered",
+					zap.Any("error", err),
+					zap.String("url", c.OriginalURL()),
+					zap.String("method", c.Method()),
+					zap.String("stack_trace", string(stack)),
+				)
+			}
 
 			utility.SendWebhook(c.OriginalURL(), err, stack)
 
@@ -86,18 +91,16 @@ func main() {
 
 	err := src.SetupApplication()
 	if err != nil {
-		forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
+		if utility.IsForensicsEnabled() {
+			forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
+		}
+
 		panic(err)
 	}
 
 	src.SetupRoutes(app)
 
-	forensics.Logger.Info("application_started",
-		zap.String("address", ":8080"),
-	)
-
 	if err := app.Listen(":8080"); err != nil {
-		forensics.PrintFatal(fmt.Sprintf("Listen failed: %v", err), zap.Error(err))
 		panic(err)
 	}
 }

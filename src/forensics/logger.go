@@ -14,11 +14,6 @@ import (
 var Logger *zap.Logger
 var SugaredLogger *zap.SugaredLogger
 
-// Log rotation config — keeps ~3000MB total max on disk:
-//   - MaxSize:    500 MB per file before rotating
-//   - MaxBackups: 5 old files kept (+ current = 6 files max)
-//   - MaxAge:     7 days, then auto-deleted
-//   - Compress:   old rotated files are gzipped
 func InitLogger() {
 	_ = os.MkdirAll("logs", 0755)
 
@@ -39,7 +34,6 @@ func InitLogger() {
 
 	jsonEncoder := zapcore.NewJSONEncoder(encoderCfg)
 
-	// Rotating file writer for all logs
 	appLogWriter := &lumberjack.Logger{
 		Filename:   "logs/app.log",
 		MaxSize:    500,  // megabytes per file
@@ -48,7 +42,6 @@ func InitLogger() {
 		Compress:   true, // gzip rotated files
 	}
 
-	// Rotating file writer for error-only logs
 	errorLogWriter := &lumberjack.Logger{
 		Filename:   "logs/error.log",
 		MaxSize:    500,
@@ -95,7 +88,6 @@ func Sync() {
 	}
 }
 
-// PrintError prints a message to stderr in red AND logs it as an error in zap.
 func PrintError(msg string, fields ...zap.Field) {
 	fmt.Fprintf(os.Stderr, "\033[31m[ERROR] %s\033[0m\n", msg)
 	if Logger != nil {
@@ -103,7 +95,6 @@ func PrintError(msg string, fields ...zap.Field) {
 	}
 }
 
-// PrintWarn prints a message to stderr in yellow AND logs it as a warning in zap.
 func PrintWarn(msg string, fields ...zap.Field) {
 	fmt.Fprintf(os.Stderr, "\033[33m[WARN] %s\033[0m\n", msg)
 	if Logger != nil {
@@ -111,7 +102,6 @@ func PrintWarn(msg string, fields ...zap.Field) {
 	}
 }
 
-// PrintFatal prints a message to stderr in red AND logs it as fatal in zap (which calls os.Exit).
 func PrintFatal(msg string, fields ...zap.Field) {
 	fmt.Fprintf(os.Stderr, "\033[31m[FATAL] %s\033[0m\n", msg)
 	if Logger != nil {
@@ -127,7 +117,6 @@ func getHostname() string {
 	return h
 }
 
-// PerfLogger tracks operation durations and flags slow operations.
 type PerfLogger struct {
 	logger *zap.Logger
 }
@@ -136,7 +125,6 @@ func NewPerfLogger() *PerfLogger {
 	return &PerfLogger{logger: Logger}
 }
 
-// TrackOperation returns a stop function that logs duration when called.
 func (p *PerfLogger) TrackOperation(operation string) func() {
 	start := time.Now()
 
@@ -168,12 +156,10 @@ func (p *PerfLogger) TrackOperation(operation string) func() {
 	}
 }
 
-// TrackFunc is a convenience for tracking a named function call.
 func TrackFunc(name string) func() {
 	return NewPerfLogger().TrackOperation(name)
 }
 
-// GetAllocBytes returns current heap allocation in bytes.
 func GetAllocBytes() uint64 {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)

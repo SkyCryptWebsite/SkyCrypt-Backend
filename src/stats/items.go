@@ -213,8 +213,8 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string) (map[string][]
 		"potion_bag":   &useProfile.Inventory.BagContents.PotionBag.Data,
 		"talisman_bag": &useProfile.Inventory.BagContents.TalismanBag.Data,
 		"fishing_bag":  &useProfile.Inventory.BagContents.FishingBag.Data,
-		// "sacks_bag": &useProfile.Inventory.BagContents.SacksBag.Data,
-		"quiver": &useProfile.Inventory.BagContents.Quiver.Data,
+		"sacks_bag":    &useProfile.Inventory.BagContents.SacksBag.Data,
+		"quiver":       &useProfile.Inventory.BagContents.Quiver.Data,
 	}
 
 	for backpackId, backpackData := range useProfile.Inventory.Backpack {

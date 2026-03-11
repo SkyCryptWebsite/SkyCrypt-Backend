@@ -42,6 +42,7 @@ type HinaChapter struct {
 }
 
 type TreeGift struct {
-	Milestone    int `json:"milestone"`
-	MaxMilestone int `json:"maxMilestone"`
+	Milestone    int    `json:"milestone"`
+	Texture      string `json:"texture"`
+	MaxMilestone int    `json:"maxMilestone"`
 }

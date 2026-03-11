@@ -50,7 +50,7 @@ type skin struct {
 
 type hypixelItemMuseumData struct {
 	Experience         int               `json:"donation_xp"`
-	Type               string            `json:"type"`
 	Parent             map[string]string `json:"parent"`
 	ArmorSetExperience map[string]int    `json:"armor_set_donation_xp"`
+	Category           string            `json:"category"`
 }

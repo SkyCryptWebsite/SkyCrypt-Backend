@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// PoolMonitor tracks connection pool health for Redis (and logs MongoDB pool notes).
 type PoolMonitor struct {
 	logger *zap.Logger
 }
@@ -16,7 +15,6 @@ func NewPoolMonitor() *PoolMonitor {
 	return &PoolMonitor{logger: Logger}
 }
 
-// MonitorRedisPool logs Redis connection pool stats periodically. Run in a goroutine.
 func (pm *PoolMonitor) MonitorRedisPool(client *redis.Client) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -62,8 +60,6 @@ func (pm *PoolMonitor) MonitorRedisPool(client *redis.Client) {
 	}
 }
 
-// MongoPoolCheck logs a periodic reminder that MongoDB Go driver pool stats
-// are not directly exposed. Check MongoDB server logs for pool saturation.
 func (pm *PoolMonitor) MongoPoolCheck() {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()

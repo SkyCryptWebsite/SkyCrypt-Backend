@@ -22,6 +22,8 @@ type ProcessedItem struct {
 	Shiny          bool            `json:"shiny,omitempty"`
 	Wiki           *WikipediaLinks `json:"wiki,omitempty"`
 	Price          float64         `json:"price,omitempty"`
+	ItemIndex      int             `json:"itemIndex,omitempty"`
+	Count          *int            `json:"Count,omitempty"`
 }
 
 type WikipediaLinks struct {

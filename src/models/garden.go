@@ -11,13 +11,35 @@ type HypixelGardenResponse struct {
 }
 
 type Garden struct {
-	Level          Skill           `json:"level"`
-	Visitors       Visitors        `json:"visitors"`
-	CropMilestones []CropMilestone `json:"cropMilestones"`
-	CropUpgrades   []CropUpgrade   `json:"cropUpgrades"`
-	Composter      map[string]int  `json:"composter"`
-	Plot           PlotLayout      `json:"plot"`
-	GardenUpgrades map[string]int  `json:"gardenUpgrades"`
+	Level                Skill                `json:"level"`
+	Visitors             Visitors             `json:"visitors"`
+	CropMilestones       []CropMilestone      `json:"cropMilestones"`
+	CropUpgrades         []CropUpgrade        `json:"cropUpgrades"`
+	Composter            map[string]int       `json:"composter"`
+	Plot                 PlotLayout           `json:"plot"`
+	GardenUpgrades       []GardenUpgrade      `json:"gardenUpgrades"`
+	GardenChips          []GardenChip         `json:"gardenChips"`
+	DNAAnalysisMilestone DNAAnalysisMilestone `json:"dnaAnalysisMilestone"`
+	Mutations            []Mutation           `json:"mutations"`
+}
+
+type DNAAnalysisMilestone struct {
+	Level    int `json:"level"`
+	MaxLevel int `json:"maxLevel"`
+}
+
+type GardenUpgrade struct {
+	Name     string `json:"name"`
+	Texture  string `json:"texture"`
+	Level    int    `json:"level"`
+	MaxLevel int    `json:"maxLevel"`
+}
+
+type GardenChip struct {
+	Name     string `json:"name"`
+	Texture  string `json:"texture"`
+	Amount   int    `json:"amount"`
+	MaxLevel int    `json:"maxLevel"`
 }
 
 type Visitors struct {
@@ -51,4 +73,11 @@ type PlotLayout struct {
 	Total    int             `json:"total"`
 	BarnSkin string          `json:"barnSkin"`
 	Layout   []ProcessedItem `json:"layout"`
+}
+
+type Mutation struct {
+	Name     string `json:"name"`
+	Texture  string `json:"texture"`
+	Unlocked bool   `json:"unlocked"`
+	Max      bool   `json:"max"`
 }

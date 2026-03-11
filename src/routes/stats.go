@@ -29,7 +29,10 @@ var statsGroup singleflight.Group
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/stats/{uuid}/{profileId} [get]
 func StatsHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Stats")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Stats")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -49,7 +52,7 @@ func StatsHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	fmt.Printf("Returning /api/stats/%s in %s\n", uuid, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
 	return c.JSON(resultIface)
 }
 

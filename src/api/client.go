@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"skycrypt/src/forensics"
+	"skycrypt/src/utility"
 	"time"
 )
 
@@ -16,6 +17,11 @@ var baseTransport = &http.Transport{
 }
 
 var HTTPClient = &http.Client{
-	Timeout:   10 * time.Second,
-	Transport: forensics.InstrumentedRoundTripper(baseTransport),
+	// Timeout: 10 * time.Second,
+}
+
+func init() {
+	if utility.IsForensicsEnabled() {
+		HTTPClient.Transport = forensics.InstrumentedRoundTripper(baseTransport)
+	}
 }

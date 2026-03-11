@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// RequestTracingMiddleware logs every incoming request with timing, status, and memory data.
 func RequestTracingMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID := uuid.New().String()
@@ -34,7 +33,6 @@ func RequestTracingMiddleware() fiber.Handler {
 		statusCode := c.Response().StatusCode()
 		endAlloc := GetAllocBytes()
 
-		// Determine log level based on status and latency
 		logLevel := zap.InfoLevel
 		if statusCode >= 500 {
 			logLevel = zap.ErrorLevel

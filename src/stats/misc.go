@@ -257,14 +257,8 @@ func getUncategorized(userProfile *skycrypttypes.Member) map[string]any {
 	}
 
 	return map[string]any{
-		"soulflow":                 userProfile.ItemData.Soulflow,
-		"teleporter_pill_consumed": userProfile.ItemData.TeleporterPillConsumed,
-		"personal_bank":            personalBank,
-		"metaphysical_serum":       userProfile.Experimentation.SerumsDrank,
-		"reaper_peppers_eaten":     userProfile.PlayerData.ReaperPeppersEaten,
-		"mcgrubber_burger":         userProfile.Rift.Castle.GrubberStacks,
-		"wriggling_larva":          userProfile.Garden.LarvaConsumed,
-		"refined_bottle_of_jyrre":  userProfile.WinterPlayerData.RefinedJyrreUses,
+		"soulflow":      userProfile.ItemData.Soulflow,
+		"personal_bank": personalBank,
 	}
 }
 
@@ -280,19 +274,18 @@ func getClaimedItems(player *skycrypttypes.Player) map[string]int64 {
 	}
 }
 
-func getGardenChips(userProfile *skycrypttypes.Member) map[string]int {
-	return map[string]int{
-		"cropshot":         userProfile.PlayerData.GardenChips["cropshot"],
-		"sowledge":         userProfile.PlayerData.GardenChips["sowledge"],
-		"mechamind":        userProfile.PlayerData.GardenChips["mechamind"],
-		"overdrive":        userProfile.PlayerData.GardenChips["overdrive"],
-		"vermin_vaporizer": userProfile.PlayerData.GardenChips["vermin_vaporizer"],
-		"quickdraw":        userProfile.PlayerData.GardenChips["quickdraw"],
-		"hypercharge":      userProfile.PlayerData.GardenChips["hypercharge"],
-		"evergreen":        userProfile.PlayerData.GardenChips["evergreen"],
-		"rarefinder":       userProfile.PlayerData.GardenChips["rarefinder"],
-		"synthesis":        userProfile.PlayerData.GardenChips["synthesis"],
+func getConsumables(userProfile *skycrypttypes.Member) []models.Consumable {
+	consumables := []models.Consumable{}
+	for _, consumableData := range constants.CONSUMABLES {
+		consumables = append(consumables, models.Consumable{
+			Name:      consumableData.Name,
+			Texture:   fmt.Sprintf("%s%s", utility.GetDomain(), consumableData.Texture),
+			Amount:    consumableData.Amount(userProfile),
+			MaxAmount: consumableData.MaxAmount,
+		})
 	}
+
+	return consumables
 }
 
 func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, player *skycrypttypes.Player) *models.MiscOutput {
@@ -310,6 +303,6 @@ func GetMisc(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, 
 		Auctions:          getAuctions(userProfile),
 		Uncategorized:     getUncategorized(userProfile),
 		ClaimedItems:      getClaimedItems(player),
-		GardenChips:       getGardenChips(userProfile),
+		Consumables:       getConsumables(userProfile),
 	}
 }

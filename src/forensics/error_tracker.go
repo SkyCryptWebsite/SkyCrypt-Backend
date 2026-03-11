@@ -7,14 +7,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// ErrorTracker categorizes and counts errors with automatic periodic summaries.
 type ErrorTracker struct {
 	logger     *zap.Logger
 	errorCount map[string]*ErrorStats
 	mu         sync.RWMutex
 }
 
-// ErrorStats holds statistics for a category of errors.
 type ErrorStats struct {
 	Count        uint64
 	LastOccurred time.Time
@@ -30,7 +28,6 @@ func InitErrorTracker() {
 	}
 }
 
-// RecordError logs and tracks an error with its category and context.
 func (et *ErrorTracker) RecordError(errType string, err error, context map[string]interface{}) {
 	et.mu.Lock()
 	defer et.mu.Unlock()
@@ -62,7 +59,6 @@ func (et *ErrorTracker) RecordError(errType string, err error, context map[strin
 	et.logger.Error("error_recorded", fields...)
 }
 
-// DumpStats logs a summary of all tracked error categories.
 func (et *ErrorTracker) DumpStats() {
 	et.mu.RLock()
 	defer et.mu.RUnlock()
@@ -82,7 +78,6 @@ func (et *ErrorTracker) DumpStats() {
 	}
 }
 
-// StartPeriodicSummary logs error summaries every 5 minutes. Run in a goroutine.
 func (et *ErrorTracker) StartPeriodicSummary() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -92,7 +87,6 @@ func (et *ErrorTracker) StartPeriodicSummary() {
 	}
 }
 
-// RecordError is a package-level convenience for GlobalErrorTracker.
 func RecordError(errType string, err error, context map[string]interface{}) {
 	if GlobalErrorTracker != nil {
 		GlobalErrorTracker.RecordError(errType, err, context)

@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
+	"skycrypt/src/utility"
 	"strings"
 	"time"
 
@@ -27,7 +28,10 @@ import (
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/accessories/{uuid}/{profileId} [get]
 func AccessoriesHandler(c *fiber.Ctx) error {
-	defer forensics.TrackSpan("handler.Accessories")()
+	if utility.IsForensicsEnabled() {
+		defer forensics.TrackSpan("handler.Accessories")()
+	}
+
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -69,7 +73,7 @@ func AccessoriesHandler(c *fiber.Ctx) error {
 
 	output := stats.GetAccessories(&userProfile, items, disabledPacks)
 
-	fmt.Printf("Returning /api/accessories/%s in %s\n", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/accessories/%s in %s", profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }
