@@ -49,10 +49,6 @@ func EmbedHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	if profileId == "" {
-		return c.JSON(models.EmbedData{})
-	}
-
 	if utility.IsUUID(profileId) {
 		embed, err := redis.Get(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profileId))
 		if err == nil && embed != "" {
