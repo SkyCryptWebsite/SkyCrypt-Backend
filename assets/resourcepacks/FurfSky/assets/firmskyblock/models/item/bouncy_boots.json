@@ -1,7 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/bouncy_boots",
-    "layer1": "cittofirmgenerated:item/bouncy_boots"
-  },
-  "parent": "cittofirmgenerated:item/skyblock/item"
-}

@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/thick_sword_of_revelations"
-  },
-  "parent": "minecraft:item/handheld"
-}

@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/personal_deletor",
+  "textures": {
+    "layer0": "hplus:skyblock/accessories/personal_deletor/personal_deletor_4000"
+  },
+  "overrides": null
+}

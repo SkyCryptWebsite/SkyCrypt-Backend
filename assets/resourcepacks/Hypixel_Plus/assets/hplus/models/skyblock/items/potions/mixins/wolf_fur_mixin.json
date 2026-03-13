@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/generated",
+  "textures": {
+    "layer0": "hplus:skyblock/items/potions/mixins/wolf_fur_mixin"
+  },
+  "overrides": null
+}

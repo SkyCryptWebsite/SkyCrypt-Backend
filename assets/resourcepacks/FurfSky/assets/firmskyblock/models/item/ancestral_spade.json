@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/ancestral_spade"
-  },
-  "parent": "minecraft:item/handheld"
-}

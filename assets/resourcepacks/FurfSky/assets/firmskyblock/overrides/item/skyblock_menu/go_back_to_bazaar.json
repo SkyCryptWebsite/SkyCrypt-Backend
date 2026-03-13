@@ -1,8 +1,0 @@
-{
-  "screen": "firmskyblock:bazaar_level_subcategory",
-  "model": "cittofirmgenerated:ui/always/go_back",
-  "predicate": {
-    "firmament:item": "minecraft:player_head",
-    "firmament:display_name": "Go Back"
-  }
-}

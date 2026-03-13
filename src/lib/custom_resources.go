@@ -341,7 +341,7 @@ type AppliedItemTexture struct {
 func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
 	// ? NOTE: we're ignoring enchanted books because they're quite expensive to render and not really worth the performance hit
 	if item.Tag.ExtraAttributes == nil || item.Tag.ExtraAttributes["id"] == "ENCHANTED_BOOK" {
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.webp", utility.GetDomain())}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/enchanted_book.webp", utility.GetDomain())}
 	}
 
 	disabledPacks := []string{}
@@ -404,11 +404,11 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 		}
 	}
 
-	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/%s.webp", strings.ToLower(item.RawId))
+	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/%s.webp", strings.ToLower(item.RawId))
 	if _, err := os.Stat(vanillaPath); err == nil {
 		return AppliedItemTexture{Texture: fmt.Sprintf("%s/%s", utility.GetDomain(), vanillaPath)}
 	}
 
 	fmt.Printf("[CUSTOM_RESOURCES] No custom texture found for item %s, returning default barrier texture\n", item.Tag.ExtraAttributes["id"])
-	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.webp", utility.GetDomain())}
+	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/barrier.webp", utility.GetDomain())}
 }

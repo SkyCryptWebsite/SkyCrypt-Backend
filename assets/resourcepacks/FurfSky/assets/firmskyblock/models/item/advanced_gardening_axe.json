@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/advanced_gardening_axe"
-  },
-  "parent": "minecraft:item/handheld"
-}

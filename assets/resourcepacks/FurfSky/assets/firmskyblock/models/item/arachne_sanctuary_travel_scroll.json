@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/arachne_sanctuary"
-  },
-  "parent": "minecraft:item/handheld"
-}

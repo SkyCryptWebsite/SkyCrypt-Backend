@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/handheld",
+  "textures": {
+    "layer0": "hplus:skyblock/weapons/swords/flaming_sword"
+  },
+  "overrides": null
+}

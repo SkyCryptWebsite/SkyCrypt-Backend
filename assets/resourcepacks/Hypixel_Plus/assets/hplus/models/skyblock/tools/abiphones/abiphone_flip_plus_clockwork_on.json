@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/handheld_abiphone_flip",
+  "textures": {
+    "layer0": "hplus:skyblock/tools/abiphones/abiphone_flip_plus_clockwork_on"
+  },
+  "overrides": null
+}

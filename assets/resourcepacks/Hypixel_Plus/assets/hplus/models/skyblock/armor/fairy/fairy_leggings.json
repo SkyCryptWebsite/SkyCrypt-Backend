@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/generated",
+  "textures": {
+    "layer0": "hplus:skyblock/armor/fairy/fairy_leggings"
+  },
+  "overrides": null
+}

@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/generated",
+  "textures": {
+    "layer0": "hplus:skyblock/items/misc/magical_milk_bucket"
+  },
+  "overrides": null
+}

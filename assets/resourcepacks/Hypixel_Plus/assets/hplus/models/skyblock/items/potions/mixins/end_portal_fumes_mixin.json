@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/generated",
+  "textures": {
+    "layer0": "hplus:skyblock/items/potions/mixins/end_portal_fumes_mixin"
+  },
+  "overrides": null
+}

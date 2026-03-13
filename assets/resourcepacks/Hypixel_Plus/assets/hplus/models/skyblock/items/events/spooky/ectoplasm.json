@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/generated",
+  "textures": {
+    "layer0": "hplus:skyblock/items/events/spooky/ectoplasm"
+  },
+  "overrides": null
+}

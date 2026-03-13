@@ -1,0 +1,7 @@
+{
+  "parent": "hplus:item/handheld_abicase",
+  "textures": {
+    "layer0": "hplus:skyblock/accessories/abicase/abicase_blue_blue"
+  },
+  "overrides": null
+}

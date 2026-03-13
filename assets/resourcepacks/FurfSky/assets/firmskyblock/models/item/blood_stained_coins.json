@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/blood_stained_coins"
-  },
-  "parent": "cittofirmgenerated:item/skyblock/item"
-}

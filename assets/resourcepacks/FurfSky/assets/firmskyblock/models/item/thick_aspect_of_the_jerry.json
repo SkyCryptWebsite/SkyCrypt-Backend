@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/thick_aspect_of_the_jerry"
-  },
-  "parent": "minecraft:item/handheld"
-}

@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/builder_ruler"
-  },
-  "parent": "minecraft:item/handheld"
-}

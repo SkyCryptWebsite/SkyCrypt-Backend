@@ -1,7 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/berserker_boots",
-    "layer1": "cittofirmgenerated:item/berserker_boots"
-  },
-  "parent": "cittofirmgenerated:item/skyblock/item"
-}
