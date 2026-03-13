@@ -3,12 +3,20 @@ package models
 import skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 
 type ItemTexture struct {
-	Parent         string            `json:"parent"`
-	Textures       map[string]string `json:"textures"`
-	Overrides      []Override        `json:"overrides"`
-	Elements       []TextureElement  `json:"elements,omitempty"`
-	HeadModel      string            `json:"firmament:head_model,omitempty"`
-	ResourcePackId string            `json:"resourcePackId,omitempty"`
+	Parent           string              `json:"parent"`
+	Textures         map[string]string   `json:"textures"`
+	Overrides        []Override          `json:"overrides"`
+	Elements         []TextureElement    `json:"elements,omitempty"`
+	HeadModel        string              `json:"firmament:head_model,omitempty"`
+	ResourcePackId   string              `json:"resourcePackId,omitempty"`
+	FormattedTexture string              `json:"formattedTexture,omitempty"`
+	Display          map[string]Position `json:"display,omitempty"`
+}
+
+type Position struct {
+	Translation [3]float64 `json:"translation"`
+	Rotation    [3]float64 `json:"rotation"`
+	Scale       [3]float64 `json:"scale"`
 }
 
 type TextureElement struct {
@@ -54,4 +62,9 @@ type McMeta struct {
 
 type McMetaAnimation struct {
 	Frametime int `json:"frametime"`
+}
+
+type FormattedTexture struct {
+	Path           string `json:"path"`
+	ResourcePackId string `json:"resourcePackId"`
 }

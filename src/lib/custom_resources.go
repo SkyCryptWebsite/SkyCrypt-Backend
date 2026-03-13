@@ -19,7 +19,7 @@ func GetTexturePath(texturePath string, textureString string) string {
 	textureId := textureString[strings.Index(textureString, "/")+1:]
 	formattedPath := ""
 	if texturePath == "Vanilla" {
-		formattedPath = fmt.Sprintf("resourcepacks/%s/assets/firmskyblock/models/item/%s", texturePath, textureId)
+		formattedPath = fmt.Sprintf("resourcepacks/%s/assets/%s", texturePath, textureId)
 	} else {
 		if after, ok := strings.CutPrefix(textureId, "firmskyblock:item"); ok {
 			textureId = after
@@ -263,40 +263,48 @@ func init() {
 		}
 
 		_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
+			if err != nil || d.IsDir() {
 				return err
 			}
 
-			if d.IsDir() {
+			// Special handling for Vanilla pack - we want to add all textures as fallback options, even if they don't have a corresponding JSON model
+			if packDir.Name() == "Vanilla" {
+				fileName := filepath.Base(path)
+				textureId := strings.Replace(fileName, ".webp", "", 1)
+
+				formattedPath := fmt.Sprintf("resourcepacks/%s/assets/%s", packDir.Name(), textureId)
+				VANILLA_ITEM_MAP[textureId] = models.ItemTexture{
+					FormattedTexture: fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath),
+					// Textures: map[string]string{"layer0": GetTexturePath(packDir.Name(), fileName)},
+					// Parent:    "item/generated",
+					// Overrides: []models.Override{},
+
+				}
 				return nil
 			}
 
-			if !strings.Contains(path, "/models/item/") {
+			if !strings.HasSuffix(path, ".json") {
 				return nil
 			}
 
-			if packDir.Name() != "Vanilla" {
-				if !strings.HasSuffix(path, ".json") {
-					return nil
-				}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				fmt.Printf("Failed to read %s: %v\n", path, err)
+				return nil
+			}
 
-				data, err := os.ReadFile(path)
-				if err != nil {
-					fmt.Printf("Failed to read %s: %v\n", path, err)
-					return nil
-				}
+			model := models.ItemTexture{ResourcePackId: config.Id}
+			if err := json.Unmarshal(data, &model); err != nil {
+				fmt.Printf("Failed to parse %s: %v\n", path, err)
+				return nil
+			}
 
-				model := models.ItemTexture{ResourcePackId: config.Id}
-				if err := json.Unmarshal(data, &model); err != nil {
-					fmt.Printf("Failed to parse %s: %v\n", path, err)
-					return nil
-				}
+			if model.Textures["0"] != "" {
+				fmt.Printf("Texture: %s\n", model.Textures["0"])
+			}
 
-				// Skip 3D models for now
-				if len(model.Elements) > 0 || model.HeadModel != "" {
-					return nil
-				}
-
+			return nil
+			/*
 				fileName := filepath.Base(path)
 				itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
 				if _, exists := ITEM_MAP[itemName]; !exists {
@@ -316,17 +324,7 @@ func init() {
 				}
 
 				ITEM_MAP[itemName] = append(ITEM_MAP[itemName], model)
-				return nil
-			} else {
-				fileName := filepath.Base(path)
-				textureId := strings.Replace(fileName, ".webp", "", 1)
-
-				VANILLA_ITEM_MAP[textureId] = models.ItemTexture{
-					Parent:    "item/generated",
-					Textures:  map[string]string{"layer0": GetTexturePath(packDir.Name(), fileName)},
-					Overrides: []models.Override{},
-				}
-			}
+			*/
 
 			return nil
 		})

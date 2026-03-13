@@ -1,0 +1,1 @@
+{"model":{"type":"condition","property":"minecraft:fishing_rod/cast","on_false":{"type":"model","model":"fsr_item_rod:item/the_shredder"},"on_true":{"type":"model","model":"fsr_item_rod:item/the_shredder_cast"}}}

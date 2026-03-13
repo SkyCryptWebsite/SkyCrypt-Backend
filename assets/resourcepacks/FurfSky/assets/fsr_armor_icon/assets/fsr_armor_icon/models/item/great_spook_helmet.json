@@ -1,0 +1,7 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "fsr_armor_icon:item/great_spook_helmet"
+  },
+  "overrides": null
+}
