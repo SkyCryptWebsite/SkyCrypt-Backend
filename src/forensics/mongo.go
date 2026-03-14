@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +23,7 @@ func NewInstrumentedCollection(coll *mongo.Collection) *InstrumentedCollection {
 	}
 }
 
-func (ic *InstrumentedCollection) FindOne(ctx context.Context, filter interface{}, opts ...*options.FindOneOptions) *mongo.SingleResult {
+func (ic *InstrumentedCollection) FindOne(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOneOptions]) *mongo.SingleResult {
 	start := time.Now()
 
 	ic.logger.Debug("mongo_query_start",
@@ -56,7 +56,7 @@ func (ic *InstrumentedCollection) FindOne(ctx context.Context, filter interface{
 	return result
 }
 
-func (ic *InstrumentedCollection) Find(ctx context.Context, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (ic *InstrumentedCollection) Find(ctx context.Context, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	start := time.Now()
 
 	ic.logger.Debug("mongo_query_start",
@@ -85,7 +85,7 @@ func (ic *InstrumentedCollection) Find(ctx context.Context, filter interface{}, 
 	return cursor, err
 }
 
-func (ic *InstrumentedCollection) InsertOne(ctx context.Context, document interface{}, opts ...*options.InsertOneOptions) (*mongo.InsertOneResult, error) {
+func (ic *InstrumentedCollection) InsertOne(ctx context.Context, document interface{}, opts ...options.Lister[options.InsertOneOptions]) (*mongo.InsertOneResult, error) {
 	start := time.Now()
 
 	ic.logger.Debug("mongo_write_start",
@@ -113,7 +113,7 @@ func (ic *InstrumentedCollection) InsertOne(ctx context.Context, document interf
 	return result, err
 }
 
-func (ic *InstrumentedCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
+func (ic *InstrumentedCollection) UpdateOne(ctx context.Context, filter interface{}, update interface{}, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error) {
 	start := time.Now()
 
 	ic.logger.Debug("mongo_write_start",
@@ -146,7 +146,7 @@ func (ic *InstrumentedCollection) UpdateOne(ctx context.Context, filter interfac
 	return result, err
 }
 
-func (ic *InstrumentedCollection) Aggregate(ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error) {
+func (ic *InstrumentedCollection) Aggregate(ctx context.Context, pipeline interface{}, opts ...options.Lister[options.AggregateOptions]) (*mongo.Cursor, error) {
 	start := time.Now()
 
 	ic.logger.Debug("mongo_aggregation_start",

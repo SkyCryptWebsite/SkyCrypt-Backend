@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var mongoClient *mongo.Client
@@ -28,7 +28,7 @@ func InitMongo(uri string, dbName string) error {
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(uri)
-	client, err := mongo.Connect(ctx, clientOptions)
+	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		return fmt.Errorf("could not connect to MongoDB: %v", err)
 	}
@@ -123,7 +123,7 @@ func UpdateEmoji(uuid string, emoji string) error {
 	defer cancel()
 
 	collection := GetMongoCollection("emojis")
-	opts := options.Update().SetUpsert(true)
+	opts := options.UpdateOne().SetUpsert(true)
 	filter := bson.M{"uuid": uuid}
 	update := bson.M{"$set": bson.M{"emoji": emoji}}
 
