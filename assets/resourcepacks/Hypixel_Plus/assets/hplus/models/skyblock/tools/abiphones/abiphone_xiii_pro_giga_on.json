@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/handheld_abiphone",
-  "textures": {
-    "layer0": "hplus:skyblock/tools/abiphones/abiphone_xiii_pro_giga_on"
-  },
-  "overrides": null
-}

@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/armor/tuxedo/seymour/velvet_top_hat"
-  },
-  "overrides": null
-}

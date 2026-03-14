@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/handheld_abicase",
-  "textures": {
-    "layer0": "hplus:skyblock/accessories/abicase/abicase_sumsung_1"
-  },
-  "overrides": null
-}

@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/items/misc/magical_water_bucket"
-  },
-  "overrides": null
-}

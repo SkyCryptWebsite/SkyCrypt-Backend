@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.18
+	github.com/HugoSmits86/nativewebp v1.2.1
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.13
 	github.com/gofiber/fiber/v2 v2.52.10
 	github.com/joho/godotenv v1.5.1
@@ -18,7 +19,6 @@ require (
 // replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
 
 require (
-	github.com/HugoSmits86/nativewebp v1.2.1 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect

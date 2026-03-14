@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/handheld",
-  "textures": {
-    "layer0": "hplus:skyblock/weapons/swords/shadow_fury"
-  },
-  "overrides": null
-}

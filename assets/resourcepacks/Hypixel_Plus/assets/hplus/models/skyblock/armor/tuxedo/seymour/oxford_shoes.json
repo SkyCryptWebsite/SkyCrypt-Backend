@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/armor/tuxedo/seymour/oxford_shoes"
-  },
-  "overrides": null
-}

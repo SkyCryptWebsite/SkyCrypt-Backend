@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/armor/rift/wizardman/wizardman_leggings"
-  },
-  "overrides": null
-}

@@ -64,157 +64,10 @@ func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) Applied
 		return AppliedItemTexture{}
 	}
 
-	// First, check all overrides with 'firmament:all' predicate
-	var evalPredicate func(key string, value interface{}) bool
-	evalPredicate = func(key string, value interface{}) bool {
-		switch key {
-		case "firmament:display_name":
-			switch v := value.(type) {
-			case map[string]interface{}:
-				if regexVal, ok := v["regex"]; ok {
-					if regexStr, ok := regexVal.(string); ok {
-						matched, err := matchString(regexStr, item.Tag.Display.Name)
-						return err == nil && matched
-					}
-				}
-			case string:
-				return v == item.Tag.Display.Name
-			}
-		case "firmament:lore":
-			switch v := value.(type) {
-			case map[string]interface{}:
-				if regexVal, ok := v["regex"]; ok {
-					if regexStr, ok := regexVal.(string); ok {
-						for _, line := range item.Tag.Display.Lore {
-							matched, err := matchString(regexStr, line)
-							if err == nil && matched {
-								return true
-							}
-						}
-					}
-				}
-			case string:
-				for _, line := range item.Tag.Display.Lore {
-					if v == line {
-						return true
-					}
-				}
-			}
-			return false
-		case "firmament:extra_attributes":
-			if m, ok := value.(map[string]interface{}); ok {
-				if path, ok := m["path"].(string); ok {
-					attrVal, exists := item.Tag.ExtraAttributes[path]
-					if !exists {
-						return false
-					}
-
-					intVal, ok := attrVal.(int)
-					if !ok {
-						// Try float64 conversion (just in case)
-						if f, ok := attrVal.(float64); ok {
-							intVal = int(f)
-						} else {
-							return false
-						}
-					}
-
-					if intMap, ok := m["int"].(map[string]interface{}); ok {
-						if minVal, ok := intMap["min"].(float64); ok {
-							if intVal < int(minVal) {
-								return false
-							}
-						}
-					}
-					return true
-				}
-			}
-			return false
-		case "firmament:all":
-			// value is expected to be []interface{} of predicate maps
-			if arr, ok := value.([]interface{}); ok {
-				for _, sub := range arr {
-					if subMap, ok := sub.(map[string]interface{}); ok {
-						for k, v := range subMap {
-							if !evalPredicate(k, v) {
-								return false
-							}
-						}
-					} else {
-						return false
-					}
-				}
-				return true
-			}
-			return false
-		case "firmament:not":
-			// value is a predicate map or array of predicate maps
-			switch v := value.(type) {
-			case map[string]interface{}:
-				for k, val := range v {
-					if evalPredicate(k, val) {
-						return false
-					}
-				}
-				return true
-			case []interface{}:
-				for _, sub := range v {
-					if subMap, ok := sub.(map[string]interface{}); ok {
-						for k, val := range subMap {
-							if evalPredicate(k, val) {
-								return false
-							}
-						}
-					}
-				}
-				return true
-			}
-			return false
-		}
-		return false
-	}
-
 	for _, texture := range textures {
-		// For each override, all predicates must match (AND logic)
-		for i := len(texture.Overrides) - 1; i >= 0; i-- {
-			override := texture.Overrides[i]
-			allMatch := true
-			for k, v := range override.Predicate {
-				if k == "firmament:not" {
-					// firmament:not must be true for the override to match
-					if !evalPredicate(k, v) {
-						allMatch = false
-						break
-					}
-				} else {
-					if !evalPredicate(k, v) {
-						allMatch = false
-						break
-					}
-				}
-			}
-			if allMatch {
-				return AppliedItemTexture{
-					Texture:     override.Texture,
-					TexturePack: texture.ResourcePackId,
-				}
-			}
+		if texture.FormattedTexture != "" {
+			return AppliedItemTexture{Texture: texture.FormattedTexture, TexturePack: texture.ResourcePackId}
 		}
-
-		if tex, ok := texture.Textures["layer0"]; ok {
-			return AppliedItemTexture{
-				Texture:     tex,
-				TexturePack: texture.ResourcePackId,
-			}
-		}
-
-		for _, tex := range texture.Textures {
-			return AppliedItemTexture{
-				Texture:     tex,
-				TexturePack: texture.ResourcePackId,
-			}
-		}
-
 	}
 
 	return AppliedItemTexture{}
@@ -293,39 +146,37 @@ func init() {
 				return nil
 			}
 
-			model := models.ItemTexture{ResourcePackId: config.Id}
+			model := models.CatharsisFormat{}
 			if err := json.Unmarshal(data, &model); err != nil {
 				fmt.Printf("Failed to parse %s: %v\n", path, err)
 				return nil
 			}
 
-			if model.Textures["0"] != "" {
-				fmt.Printf("Texture: %s\n", model.Textures["0"])
+			if model.Model.Path == "" {
+				// fmt.Printf("No model path found in %s, skipping\n", path)
+				return nil
 			}
 
-			return nil
-			/*
-				fileName := filepath.Base(path)
-				itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
-				if _, exists := ITEM_MAP[itemName]; !exists {
-					ITEM_MAP[itemName] = []models.ItemTexture{}
-				}
+			if strings.HasPrefix(model.Model.Path, "item/") {
+				return nil
+			}
 
-				for i := range model.Overrides {
-					if model.Overrides[i].Texture != "" {
-						model.Overrides[i].Texture = GetTexturePath(packDir.Name(), model.Overrides[i].Texture)
-					}
-				}
+			formattedTexture := models.FormattedTexture{
+				Path: ResolveTexturePath(filepath.Join(assetsRoot, packDir.Name(), "assets"), path, strings.Split(model.Model.Path, ":")[1]),
+			}
 
-				for key, texture := range model.Textures {
-					if texture != "" {
-						model.Textures[key] = GetTexturePath(packDir.Name(), texture)
-					}
-				}
+			fileName := filepath.Base(path)
+			itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
+			if _, exists := ITEM_MAP[itemName]; !exists {
+				ITEM_MAP[itemName] = []models.ItemTexture{}
+			}
 
-				ITEM_MAP[itemName] = append(ITEM_MAP[itemName], model)
-			*/
+			itemTexture := models.ItemTexture{
+				FormattedTexture: formattedTexture.Path,
+				ResourcePackId:   config.Id,
+			}
 
+			ITEM_MAP[itemName] = append(ITEM_MAP[itemName], itemTexture)
 			return nil
 		})
 	}
@@ -389,17 +240,7 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 	})
 
 	if texture, ok := VANILLA_ITEM_MAP[textureId]; ok {
-		if tex, ok := texture.Textures["layer0"]; ok && tex != "" {
-			return AppliedItemTexture{Texture: tex}
-		}
-
-		for _, tex := range texture.Textures {
-			if tex == "" {
-				continue
-			}
-
-			return AppliedItemTexture{Texture: tex}
-		}
+		return AppliedItemTexture{Texture: texture.FormattedTexture}
 	}
 
 	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/%s.webp", strings.ToLower(item.RawId))
@@ -409,4 +250,71 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 
 	fmt.Printf("[CUSTOM_RESOURCES] No custom texture found for item %s, returning default barrier texture\n", item.Tag.ExtraAttributes["id"])
 	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/barrier.webp", utility.GetDomain())}
+}
+
+func EnsureWebPExt(path string) string {
+	lower := strings.ToLower(path)
+	if strings.HasSuffix(lower, ".webp") {
+		return path
+	}
+
+	if strings.HasSuffix(lower, ".png") {
+		return strings.TrimSuffix(path, path[len(path)-4:]) + ".webp"
+	}
+
+	return path + ".webp"
+}
+
+func ResolveTexturePath(inputFolder, modelPath, textureRef string) string {
+	textureRef = strings.TrimSpace(textureRef)
+	if textureRef == "" {
+		return ""
+	}
+
+	sep := string(filepath.Separator)
+	addCandidate := func(candidates *[]string, relPath string) {
+		if relPath == "" {
+			return
+		}
+
+		normalized := filepath.Clean(filepath.FromSlash(relPath))
+		if filepath.IsAbs(normalized) {
+			*candidates = append(*candidates, EnsureWebPExt(normalized))
+			return
+		}
+
+		*candidates = append(*candidates, EnsureWebPExt(filepath.Join(inputFolder, normalized)))
+	}
+
+	candidates := make([]string, 0, 6)
+	addCandidate(&candidates, textureRef)
+	addCandidate(&candidates, filepath.Join(filepath.Dir(modelPath), textureRef))
+
+	if !strings.HasPrefix(filepath.FromSlash(textureRef), "assets"+sep) {
+		namespace, name, hasNamespace := strings.Cut(textureRef, ":")
+		if hasNamespace {
+			addCandidate(&candidates, filepath.Join("assets", namespace, "textures", name))
+
+			modelPathSlash := filepath.ToSlash(filepath.Clean(modelPath))
+			if modelRoot, _, found := strings.Cut(modelPathSlash, "/models/"); found && strings.HasSuffix(modelRoot, "/"+namespace) {
+				addCandidate(&candidates, filepath.Join(filepath.FromSlash(modelRoot), "textures", name))
+			}
+
+			addCandidate(&candidates, filepath.Join("assets", namespace, "assets", namespace, "textures", name))
+		} else {
+			addCandidate(&candidates, filepath.Join("assets", "minecraft", "textures", textureRef))
+		}
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+
+	return EnsureWebPExt(filepath.Join(filepath.Dir(modelPath), textureRef))
 }

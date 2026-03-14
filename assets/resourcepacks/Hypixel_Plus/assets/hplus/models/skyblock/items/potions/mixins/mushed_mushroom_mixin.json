@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/items/potions/mixins/mushed_mushroom_mixin"
-  },
-  "overrides": null
-}

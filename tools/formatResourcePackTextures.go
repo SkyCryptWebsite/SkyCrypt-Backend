@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"skycrypt/src/models"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/HugoSmits86/nativewebp"
@@ -83,17 +85,17 @@ func main() {
 
 	function := os.Args[2]
 	switch function {
-	case "format":
-		ParseImagesAndJson(inputFolder, config)
-	case "convert":
-		ConvertFromVanillaToCatharsis(inputFolder, config)
+	case "formatImages":
+		FormatVanillaResourcePackImages(inputFolder, config)
+	case "formatJSON":
+		FormatVanillaResourcePackJSON(inputFolder, config)
 	default:
 		fmt.Printf("Unknown function: %s\n", function)
 	}
 }
 
-func ConvertFromVanillaToCatharsis(inputFolder string, config models.ResourcePackConfig) {
-	convertedTextures := 0
+func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePackConfig) {
+	formattedTextures, formattedAnimatedTextures := 0, 0
 	err := filepath.Walk(inputFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -116,32 +118,191 @@ func ConvertFromVanillaToCatharsis(inputFolder string, config models.ResourcePac
 				return nil
 			}
 
-			texturePath := itemTexture.Textures["0"]
-			if texturePath == "" {
-				fmt.Printf("No texture found for %s\n", path)
+			if BLACKLISTED_PARENTS[config.Id].isBlacklisted(itemTexture.Parent) {
+				if err := os.Remove(path); err != nil {
+					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
+				} else {
+					_ = 0
+					// fmt.Printf("Deleted blacklisted model due to parent: %s\n", path)
+				}
+
+				for _, tex := range itemTexture.Textures {
+					texPath := resolveTexturePath(inputFolder, path, tex)
+					if _, err := os.Stat(texPath); err == nil {
+						if err := os.Remove(texPath); err != nil {
+							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
+						} else {
+							// fmt.Printf("Deleted associated texture due to blacklisted parent: %s\n", texPath)
+							_ = 0
+						}
+					}
+				}
+
 				return nil
 			}
 
-			texturePath = ensureWebPExt(texturePath)
+			if BLACKLISTED_PATHS[config.Id].isBlacklisted(path) {
+				if err := os.Remove(path); err != nil {
+					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
+				} else {
+					_ = 0
+					// fmt.Printf("Deleted blacklisted model because of the path: %s\n", path)
+				}
 
-			formattedTexture := models.FormattedTexture{
-				ResourcePackId: config.Id,
-				Path:           texturePath,
-			}
+				for _, tex := range itemTexture.Textures {
+					texPath := resolveTexturePath(inputFolder, path, tex)
+					if _, err := os.Stat(texPath); err == nil {
+						if err := os.Remove(texPath); err != nil {
+							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
+						} else {
+							// fmt.Printf("Deleted associated texture due to blacklisted path: %s\n", texPath)
+							_ = 0
+						}
+					}
+				}
 
-			formattedJsonData, err := json.MarshalIndent(formattedTexture, "", "  ")
-			if err != nil {
-				fmt.Printf("Failed to marshal formatted JSON for %s: %v\n", path, err)
 				return nil
 			}
 
-			if err := os.WriteFile(path, formattedJsonData, 0644); err != nil {
-				fmt.Printf("Failed to write formatted JSON to %s: %v\n", path, err)
+			if len(itemTexture.Elements) > 0 || len(itemTexture.Display) > 0 {
+				if err := os.Remove(path); err != nil {
+					fmt.Printf("Failed to delete blockstate model %s: %v\n", path, err)
+				} else {
+					_ = 0
+					// fmt.Printf("Deleted unsupported blockstate model: %s\n", path)
+				}
 				return nil
 			}
 
-			// fmt.Printf("Created formatted JSON: %s\n", formattedJsonPath)
-			convertedTextures++
+			if len(itemTexture.Textures) > 1 {
+				dedupedTextures, hadDuplicates := dedupeTextureLayers(itemTexture.Textures)
+				if hadDuplicates {
+					itemTexture.Textures = dedupedTextures
+
+					newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
+					if err != nil {
+						fmt.Printf("Failed to marshal deduplicated JSON for %s: %v\n", path, err)
+						return nil
+					}
+
+					if err := os.WriteFile(path, newJsonData, 0644); err != nil {
+						fmt.Printf("Failed to write deduplicated JSON to %s: %v\n", path, err)
+						return nil
+					}
+				}
+
+				if len(itemTexture.Textures) > 1 {
+					// fmt.Printf("Found %s with %d textures %s\n", info.Name(), len(itemTexture.Textures), path)
+
+					orderedTextureKeys := sortedTextureLayerKeys(itemTexture.Textures)
+
+					var baseImg image.Image
+					baseFromVanilla := false
+					for _, key := range orderedTextureKeys {
+						tex := itemTexture.Textures[key]
+						texPath := resolveTexturePath(inputFolder, path, tex)
+						textureFromVanilla := false
+						if _, err := os.Stat(texPath); os.IsNotExist(err) {
+							resolvedFallback := false
+							for _, prefix := range []string{"item/", "block/"} {
+								after, ok := strings.CutPrefix(tex, prefix)
+								if !ok {
+									continue
+								}
+
+								vanillaTexPath := filepath.Join(filepath.Dir(filepath.Clean(inputFolder)), "Vanilla", "assets", ensureWebPExt(after))
+								if _, err := os.Stat(vanillaTexPath); os.IsNotExist(err) {
+									continue
+								}
+
+								texPath = vanillaTexPath
+								textureFromVanilla = true
+								resolvedFallback = true
+								break
+							}
+
+							if !resolvedFallback {
+								fmt.Printf("Texture %s not found in both %s and Vanilla assets fallback\n", tex, texPath)
+								continue
+							}
+						}
+
+						texFile, err := os.Open(texPath)
+						if err != nil {
+							fmt.Printf("Failed to open texture %s: %v\n", texPath, err)
+							continue
+						}
+						defer func() {
+							_ = texFile.Close()
+						}()
+
+						texImg, _, err := image.Decode(texFile)
+						if err != nil {
+							fmt.Printf("Failed to decode texture %s: %v\n", texPath, err)
+							continue
+						}
+
+						if baseImg == nil {
+							baseImg = texImg
+							baseFromVanilla = textureFromVanilla
+						} else {
+							if baseFromVanilla && !textureFromVanilla && (baseImg.Bounds().Dx() != texImg.Bounds().Dx() || baseImg.Bounds().Dy() != texImg.Bounds().Dy()) {
+								baseImg = resizeImageNearest(baseImg, texImg.Bounds().Dx(), texImg.Bounds().Dy())
+								baseFromVanilla = false
+							}
+
+							if textureFromVanilla && (texImg.Bounds().Dx() != baseImg.Bounds().Dx() || texImg.Bounds().Dy() != baseImg.Bounds().Dy()) {
+								texImg = resizeImageNearest(texImg, baseImg.Bounds().Dx(), baseImg.Bounds().Dy())
+							}
+
+							combinedImg := image.NewNRGBA(baseImg.Bounds())
+							draw.Draw(combinedImg, combinedImg.Bounds(), baseImg, baseImg.Bounds().Min, draw.Src)
+							draw.Draw(combinedImg, combinedImg.Bounds(), texImg, texImg.Bounds().Min, draw.Over)
+							baseImg = combinedImg
+						}
+					}
+
+					if baseImg != nil {
+						outPath, textureRef := buildTextureOutputForModel(inputFolder, path)
+						if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+							fmt.Printf("Failed to create output directory for %s: %v\n", outPath, err)
+							return nil
+						}
+						outFile, err := os.Create(outPath)
+						if err != nil {
+							fmt.Printf("Failed to create WebP %s: %v\n", outPath, err)
+							return nil
+						}
+						defer func() {
+							_ = outFile.Close()
+						}()
+						if err := nativewebp.Encode(outFile, baseImg, nil); err != nil {
+							fmt.Printf("Failed to encode WebP %s: %v\n", outPath, err)
+							return nil
+						}
+
+						// fmt.Printf("Created combined WebP: %s\n", outPath)
+
+						itemTexture.Textures = map[string]string{
+							"layer0": textureRef,
+						}
+
+						newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
+						if err != nil {
+							fmt.Printf("Failed to marshal updated JSON for %s: %v\n", path, err)
+							return nil
+						}
+
+						if err := os.WriteFile(path, newJsonData, 0644); err != nil {
+							fmt.Printf("Failed to write updated JSON to %s: %v\n", path, err)
+							return nil
+						}
+
+						formattedTextures++
+					}
+				}
+
+			}
 
 		}
 
@@ -149,13 +310,13 @@ func ConvertFromVanillaToCatharsis(inputFolder string, config models.ResourcePac
 	})
 
 	if err != nil {
-		fmt.Printf("Error walking through folder while converting textures: %v\n", err)
+		fmt.Printf("Error walking through folder while parsing JSONs: %v\n", err)
 	}
 
-	fmt.Printf("Finished converting textures. Total converted: %d\n", convertedTextures)
+	fmt.Printf("Finished formatting textures. Total formatted: %d (Animated: %d)\n", formattedTextures, formattedAnimatedTextures)
 }
 
-func ParseImagesAndJson(inputFolder string, config models.ResourcePackConfig) {
+func FormatVanillaResourcePackImages(inputFolder string, config models.ResourcePackConfig) {
 	formattedTextures, formattedAnimatedTextures := 0, 0
 	err := filepath.Walk(inputFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -296,7 +457,13 @@ func ParseImagesAndJson(inputFolder string, config models.ResourcePackConfig) {
 		fmt.Printf("Error walking through folder while parsing pngs: %v\n", err)
 	}
 
-	err = filepath.Walk(inputFolder, func(path string, info os.FileInfo, err error) error {
+	fmt.Printf("Finished formatting textures. Total formatted: %d (Animated: %d)\n", formattedTextures, formattedAnimatedTextures)
+}
+
+/*
+func ConvertFromVanillaToCatharsis(inputFolder string, config models.ResourcePackConfig) {
+	convertedTextures := 0
+	err := filepath.Walk(inputFolder, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				// fmt.Printf("Warning: skipped missing path %s: %v\n", path, err)
@@ -318,188 +485,63 @@ func ParseImagesAndJson(inputFolder string, config models.ResourcePackConfig) {
 				return nil
 			}
 
-			if BLACKLISTED_PARENTS[config.Id].isBlacklisted(itemTexture.Parent) {
+			// Custom models
+			if len(itemTexture.Elements) > 0 || itemTexture.HeadModel != "" {
 				if err := os.Remove(path); err != nil {
-					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
+					fmt.Printf("Failed to delete unsupported model %s: %v\n", path, err)
 				} else {
 					_ = 0
-					// fmt.Printf("Deleted blacklisted model due to parent: %s\n", path)
+					// fmt.Printf("Deleted unsupported model with '0' texture reference: %s\n", path)
 				}
 
-				for _, tex := range itemTexture.Textures {
-					texPath := resolveTexturePath(inputFolder, path, tex)
-					if _, err := os.Stat(texPath); err == nil {
-						if err := os.Remove(texPath); err != nil {
-							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
-						} else {
-							// fmt.Printf("Deleted associated texture due to blacklisted parent: %s\n", texPath)
-							_ = 0
-						}
+				texPath := resolveTexturePath(inputFolder, path, itemTexture.Textures["0"])
+				if _, err := os.Stat(texPath); err == nil {
+					if err := os.Remove(texPath); err != nil {
+						fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
+					} else {
+						// fmt.Printf("Deleted associated texture for unsupported model with '0' texture reference: %s\n", texPath)
+						_ = 0
 					}
 				}
+			}
 
+			texturePath := itemTexture.Textures["layer0"]
+			if texturePath == "" {
+				// fmt.Printf("No texture found for %s\n", path)
 				return nil
 			}
 
-			if BLACKLISTED_PATHS[config.Id].isBlacklisted(path) {
-				if err := os.Remove(path); err != nil {
-					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
-				} else {
-					_ = 0
-					// fmt.Printf("Deleted blacklisted model because of the path: %s\n", path)
-				}
+			formattedTexture := models.CatharsisFormat{
+				Model: models.CatharsisModel{
+					Type: "model",
+					Path: texturePath,
+				},
+			}
 
-				for _, tex := range itemTexture.Textures {
-					texPath := resolveTexturePath(inputFolder, path, tex)
-					if _, err := os.Stat(texPath); err == nil {
-						if err := os.Remove(texPath); err != nil {
-							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
-						} else {
-							// fmt.Printf("Deleted associated texture due to blacklisted path: %s\n", texPath)
-							_ = 0
-						}
-					}
-				}
-
+			formattedJsonData, err := json.MarshalIndent(formattedTexture, "", "  ")
+			if err != nil {
+				fmt.Printf("Failed to marshal formatted JSON for %s: %v\n", path, err)
 				return nil
 			}
 
-			if len(itemTexture.Elements) > 0 || len(itemTexture.Display) > 0 {
-				if err := os.Remove(path); err != nil {
-					fmt.Printf("Failed to delete blockstate model %s: %v\n", path, err)
-				} else {
-					_ = 0
-					// fmt.Printf("Deleted unsupported blockstate model: %s\n", path)
-				}
+			if err := os.WriteFile(path, formattedJsonData, 0644); err != nil {
+				fmt.Printf("Failed to write formatted JSON to %s: %v\n", path, err)
 				return nil
 			}
 
-			if len(itemTexture.Textures) > 1 {
-				uniqueTextures := make(map[string]struct{})
-				for _, tex := range itemTexture.Textures {
-					uniqueTextures[tex] = struct{}{}
-				}
-
-				if len(uniqueTextures) > 1 {
-					// fmt.Printf("Found %s with %d textures %s\n", info.Name(), len(itemTexture.Textures), path)
-
-					var baseImg image.Image
-					baseFromVanilla := false
-					for _, tex := range itemTexture.Textures {
-						texPath := resolveTexturePath(inputFolder, path, tex)
-						textureFromVanilla := false
-						if _, err := os.Stat(texPath); os.IsNotExist(err) {
-							resolvedFallback := false
-							for _, prefix := range []string{"item/", "block/"} {
-								after, ok := strings.CutPrefix(tex, prefix)
-								if !ok {
-									continue
-								}
-
-								vanillaTexPath := filepath.Join(filepath.Dir(filepath.Clean(inputFolder)), "Vanilla", "assets", ensureWebPExt(after))
-								if _, err := os.Stat(vanillaTexPath); os.IsNotExist(err) {
-									continue
-								}
-
-								texPath = vanillaTexPath
-								textureFromVanilla = true
-								resolvedFallback = true
-								break
-							}
-
-							if !resolvedFallback {
-								fmt.Printf("Texture %s not found in both %s and Vanilla assets fallback\n", tex, texPath)
-								continue
-							}
-						}
-
-						texFile, err := os.Open(texPath)
-						if err != nil {
-							fmt.Printf("Failed to open texture %s: %v\n", texPath, err)
-							continue
-						}
-						defer func() {
-							_ = texFile.Close()
-						}()
-
-						texImg, _, err := image.Decode(texFile)
-						if err != nil {
-							fmt.Printf("Failed to decode texture %s: %v\n", texPath, err)
-							continue
-						}
-
-						if baseImg == nil {
-							baseImg = texImg
-							baseFromVanilla = textureFromVanilla
-						} else {
-							if baseFromVanilla && !textureFromVanilla && (baseImg.Bounds().Dx() != texImg.Bounds().Dx() || baseImg.Bounds().Dy() != texImg.Bounds().Dy()) {
-								baseImg = resizeImageNearest(baseImg, texImg.Bounds().Dx(), texImg.Bounds().Dy())
-								baseFromVanilla = false
-							}
-
-							if textureFromVanilla && (texImg.Bounds().Dx() != baseImg.Bounds().Dx() || texImg.Bounds().Dy() != baseImg.Bounds().Dy()) {
-								texImg = resizeImageNearest(texImg, baseImg.Bounds().Dx(), baseImg.Bounds().Dy())
-							}
-
-							combinedImg := image.NewNRGBA(baseImg.Bounds())
-							draw.Draw(combinedImg, combinedImg.Bounds(), baseImg, baseImg.Bounds().Min, draw.Src)
-							draw.Draw(combinedImg, combinedImg.Bounds(), texImg, texImg.Bounds().Min, draw.Over)
-							baseImg = combinedImg
-						}
-					}
-
-					if baseImg != nil {
-						outPath, textureRef := buildTextureOutputForModel(inputFolder, path)
-						if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-							fmt.Printf("Failed to create output directory for %s: %v\n", outPath, err)
-							return nil
-						}
-						outFile, err := os.Create(outPath)
-						if err != nil {
-							fmt.Printf("Failed to create WebP %s: %v\n", outPath, err)
-							return nil
-						}
-						defer func() {
-							_ = outFile.Close()
-						}()
-						if err := nativewebp.Encode(outFile, baseImg, nil); err != nil {
-							fmt.Printf("Failed to encode WebP %s: %v\n", outPath, err)
-							return nil
-						}
-
-						// fmt.Printf("Created combined WebP: %s\n", outPath)
-
-						itemTexture.Textures = map[string]string{
-							"layer0": textureRef,
-						}
-
-						newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
-						if err != nil {
-							fmt.Printf("Failed to marshal updated JSON for %s: %v\n", path, err)
-							return nil
-						}
-
-						if err := os.WriteFile(path, newJsonData, 0644); err != nil {
-							fmt.Printf("Failed to write updated JSON to %s: %v\n", path, err)
-							return nil
-						}
-
-						formattedTextures++
-					}
-				}
-			}
-
+			convertedTextures++
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		fmt.Printf("Error walking through folder while parsing JSONs: %v\n", err)
+		fmt.Printf("Error walking through folder while converting textures: %v\n", err)
 	}
 
-	fmt.Printf("Finished formatting textures. Total formatted: %d (Animated: %d)\n", formattedTextures, formattedAnimatedTextures)
+	fmt.Printf("Finished converting textures. Total converted: %d\n", convertedTextures)
 }
+*/
 
 func ensureWebPExt(path string) string {
 	lower := strings.ToLower(path)
@@ -512,6 +554,77 @@ func ensureWebPExt(path string) string {
 	}
 
 	return path + ".webp"
+}
+
+func sortedTextureLayerKeys(textures map[string]string) []string {
+	keys := make([]string, 0, len(textures))
+	for key := range textures {
+		keys = append(keys, key)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		iLayer, iIndex := parseLayerKey(keys[i])
+		jLayer, jIndex := parseLayerKey(keys[j])
+
+		if iLayer && jLayer {
+			return iIndex < jIndex
+		}
+
+		if iLayer != jLayer {
+			return iLayer
+		}
+
+		return keys[i] < keys[j]
+	})
+
+	return keys
+}
+
+func dedupeTextureLayers(textures map[string]string) (map[string]string, bool) {
+	orderedKeys := sortedTextureLayerKeys(textures)
+	uniqueTextures := make(map[string]struct{}, len(textures))
+	deduped := make(map[string]string, len(textures))
+
+	layerIndex := 0
+	for _, key := range orderedKeys {
+		tex := strings.TrimSpace(textures[key])
+		if tex == "" {
+			continue
+		}
+
+		if _, exists := uniqueTextures[tex]; exists {
+			continue
+		}
+
+		uniqueTextures[tex] = struct{}{}
+		deduped[fmt.Sprintf("layer%d", layerIndex)] = tex
+		layerIndex++
+	}
+
+	hadDuplicates := len(deduped) < len(textures)
+	if !hadDuplicates {
+		return textures, false
+	}
+
+	return deduped, true
+}
+
+func parseLayerKey(key string) (bool, int) {
+	if !strings.HasPrefix(key, "layer") {
+		return false, 0
+	}
+
+	layerNumber := strings.TrimPrefix(key, "layer")
+	if layerNumber == "" {
+		return true, 0
+	}
+
+	parsed, err := strconv.Atoi(layerNumber)
+	if err != nil {
+		return false, 0
+	}
+
+	return true, parsed
 }
 
 func resolveTexturePath(inputFolder, modelPath, textureRef string) string {

@@ -1,7 +1,0 @@
-{
-  "parent": "hplus:item/generated",
-  "textures": {
-    "layer0": "hplus:skyblock/items/potions/brews/cheap_coffee"
-  },
-  "overrides": null
-}

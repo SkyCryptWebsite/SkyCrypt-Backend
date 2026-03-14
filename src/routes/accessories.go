@@ -6,6 +6,7 @@ import (
 	"os"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
+	"skycrypt/src/lib"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"strings"
@@ -71,9 +72,9 @@ func AccessoriesHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	output := stats.GetAccessories(&userProfile, items, disabledPacks)
+	_ = stats.GetAccessories(&userProfile, items, disabledPacks)
 
 	utility.LogVerbose("Returning /api/accessories/%s in %s", profileId, time.Since(timeNow))
 
-	return c.JSON(output)
+	return c.JSON(lib.ITEM_MAP)
 }

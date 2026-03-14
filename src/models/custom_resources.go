@@ -61,10 +61,18 @@ type McMeta struct {
 }
 
 type McMetaAnimation struct {
-	Frametime int `json:"frametime"`
+	Frametime float64 `json:"frametime"`
 }
 
 type FormattedTexture struct {
-	Path           string `json:"path"`
-	ResourcePackId string `json:"resourcePackId"`
+	Path string `json:"path"`
+}
+
+type CatharsisFormat struct {
+	Model CatharsisModel `json:"model"`
+}
+
+type CatharsisModel struct {
+	Type string `json:"type"`
+	Path string `json:"model"`
 }

@@ -1,1 +1,0 @@
-{"model":{"type":"range_dispatch","property":"catharsis:data_type","data_type":"fuel","entries":[{"threshold":1,"model":{"type":"model","model":"fsr_legacy_drill:item/titanium_drill_2"}}],"fallback":{"type":"model","model":"fsr_legacy_drill:item/titanium_drill_2_empty"}}}
