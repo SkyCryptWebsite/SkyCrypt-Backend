@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/utility"
 )
 
-func GetTexture(mob neu.NEUBestiaryRawMob) string {
+func getTexture(mob neu.NEUBestiaryRawMob) string {
 	if mob.Texture == "" {
 		return fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), mob.Item)
 	}
@@ -45,7 +45,7 @@ func FormatBestiaryConstants(bestiaryConstants neu.NEUBestiaryRaw) neu.BestiaryC
 				for i, mob := range subcategoryMobs.Mobs {
 					category.Mobs[i] = neu.BestiaryMob{
 						Name:    utility.GetRawLore(mob.Name),
-						Texture: GetTexture(mob),
+						Texture: getTexture(mob),
 						Cap:     mob.Cap,
 						Mobs:    mob.Mobs,
 						Bracket: mob.Bracket,
@@ -66,7 +66,7 @@ func FormatBestiaryConstants(bestiaryConstants neu.NEUBestiaryRaw) neu.BestiaryC
 		for i, mob := range islandData.Mobs {
 			category.Mobs[i] = neu.BestiaryMob{
 				Name:    utility.GetRawLore(mob.Name),
-				Texture: GetTexture(mob),
+				Texture: getTexture(mob),
 				Cap:     mob.Cap,
 				Mobs:    mob.Mobs,
 				Bracket: mob.Bracket,

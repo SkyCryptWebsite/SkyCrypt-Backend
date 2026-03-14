@@ -7,7 +7,12 @@
       255
     ],
     "min_format": 15,
-    "max_format": 255
+    "max_format": 255,
+    "____FOLLOW_PROPS_ARE_BY_SKYCRYPT____": "",
+    "name": "FurfSky Reborn",
+    "author": "The Reborn Team",
+    "url": "https://furfsky.net/",
+    "disabled": false
   },
   "catharsis:pack/v1": {
     "id": "furfsky",

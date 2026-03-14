@@ -6,15 +6,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
-	"slices"
 	"strings"
-	"sync"
 )
 
+/*
 func GetTexturePath(texturePath string, textureString string) string {
 	textureId := textureString[strings.Index(textureString, "/")+1:]
 	formattedPath := ""
@@ -44,39 +42,46 @@ func matchString(pattern, s string) (bool, error) {
 	regexCache.Store(pattern, re)
 	return re.MatchString(s), nil
 }
+*/
 
-func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
+func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) *AppliedItemTexture {
 	textures := ITEM_MAP[strings.ToLower(item.Tag.ExtraAttributes["id"].(string))]
 	if len(textures) == 0 {
-		return AppliedItemTexture{}
+		return nil
 	}
 
-	textures = slices.Clone(textures)
-
-	disabledPacks := disabledPacksParam[0]
-	for _, disabledPack := range disabledPacks {
-		textures = slices.DeleteFunc(textures, func(t models.ItemTexture) bool {
-			return t.ResourcePackId == disabledPack
-		})
-	}
-
-	if len(textures) == 0 {
-		return AppliedItemTexture{}
-	}
-
-	for _, texture := range textures {
-		if texture.FormattedTexture != "" {
-			return AppliedItemTexture{Texture: texture.FormattedTexture, TexturePack: texture.ResourcePackId}
+	disabledPacks := map[string]struct{}{}
+	if len(disabledPacksParam) > 0 {
+		for _, packID := range disabledPacksParam[0] {
+			disabledPacks[packID] = struct{}{}
 		}
 	}
 
-	return AppliedItemTexture{}
+	for _, texture := range textures {
+		if _, disabled := disabledPacks[texture.PackId]; disabled {
+			continue
+		}
+
+		// TODO: Item matching?
+		if texture.Path != "" {
+			return &AppliedItemTexture{
+				Texture:     texture.Path,
+				TexturePack: texture.PackId,
+			}
+		}
+	}
+
+	return nil
 }
 
-var VANILLA_ITEM_MAP = map[string]models.ItemTexture{}
-var ITEM_MAP = map[string][]models.ItemTexture{}
+var VANILLA_ITEM_MAP = map[string]string{}
+var ITEM_MAP = map[string][]models.FormattedTexture{}
 
 func init() {
+	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+		return
+	}
+
 	assetsRoot := "assets/resourcepacks"
 	packDirs, err := os.ReadDir(assetsRoot)
 	if err != nil {
@@ -85,100 +90,122 @@ func init() {
 	}
 
 	for _, packDir := range packDirs {
-		if !packDir.IsDir() {
-			continue
-		}
+		if packDir.Name() == "Vanilla" {
+			err := filepath.WalkDir(filepath.Join(assetsRoot, packDir.Name(), "assets"), func(path string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
 
-		packAssetsPath := filepath.Join(assetsRoot, packDir.Name(), "assets")
-		if _, err := os.Stat(packAssetsPath); os.IsNotExist(err) {
-			continue
-		}
-
-		configPath := filepath.Join(assetsRoot, packDir.Name(), "config.json")
-		if _, err := os.Stat(configPath); err != nil {
-			fmt.Printf("No config.json found for pack %s, skipping\n", packDir.Name())
-			continue
-		}
-
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			fmt.Printf("Failed to read config.json for pack %s: %v\n", packDir.Name(), err)
-		}
-
-		var config models.ResourcePackConfig
-		if err := json.Unmarshal(data, &config); err != nil {
-			fmt.Printf("Failed to parse config.json for pack %s: %v\n", packDir.Name(), err)
-		}
-
-		if config.Disabled {
-			fmt.Printf("Skipping disabled resource pack: %s\n", packDir.Name())
-			continue
-		}
-
-		_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-
-			// Special handling for Vanilla pack - we want to add all textures as fallback options, even if they don't have a corresponding JSON model
-			if packDir.Name() == "Vanilla" {
 				fileName := filepath.Base(path)
 				textureId := strings.Replace(fileName, ".webp", "", 1)
 
 				formattedPath := fmt.Sprintf("resourcepacks/%s/assets/%s", packDir.Name(), textureId)
-				VANILLA_ITEM_MAP[textureId] = models.ItemTexture{
-					FormattedTexture: fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath),
-					// Textures: map[string]string{"layer0": GetTexturePath(packDir.Name(), fileName)},
-					// Parent:    "item/generated",
-					// Overrides: []models.Override{},
-
-				}
+				formattedUrl := fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath)
+				VANILLA_ITEM_MAP[textureId] = formattedUrl
 				return nil
-			}
+			})
 
-			if !strings.HasSuffix(path, ".json") {
-				return nil
-			}
-
-			data, err := os.ReadFile(path)
 			if err != nil {
-				fmt.Printf("Failed to read %s: %v\n", path, err)
+				fmt.Printf("Failed to process Vanilla pack: %v\n", err)
+			}
+			continue
+		}
+
+		config, err := GetPackConfig(assetsRoot, packDir)
+		if err != nil {
+			fmt.Printf("Failed to get config for pack %s: %v\n", packDir.Name(), err)
+			continue
+		}
+
+		relativePath := filepath.Join(assetsRoot, packDir.Name())
+		for _, category := range config.FabricOverlays.Entries {
+			joinedPath := filepath.Join(relativePath, category.Directory)
+			if _, err := os.Stat(joinedPath); os.IsNotExist(err) {
+				// fmt.Printf("Directory not found for %s category, skipping\n", category.Directory)
+				continue
+			}
+
+			fmt.Printf("Path: %s %s\n", joinedPath, category.Directory)
+			err := filepath.WalkDir(joinedPath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+
+				fmt.Printf("Found %s\n", path)
 				return nil
+			})
+
+			if err != nil {
+				fmt.Printf("Failed to process category %s in pack %s: %v\n", category.Directory, packDir.Name(), err)
 			}
 
-			model := models.CatharsisFormat{}
-			if err := json.Unmarshal(data, &model); err != nil {
-				fmt.Printf("Failed to parse %s: %v\n", path, err)
-				return nil
-			}
+		}
 
-			if model.Model.Path == "" {
-				// fmt.Printf("No model path found in %s, skipping\n", path)
-				return nil
-			}
+		/*
+			packAssetsPath := filepath.Join(assetsRoot, packDir.Name(), "assets")
+			if _, err := os.Stat(packAssetsPath); os.IsNotExist(err) {
+				fmt.Printf("No assets directory found for pack %s, skipping\n", packDir.Name())
+				continue
+			}*/
 
-			if strings.HasPrefix(model.Model.Path, "item/") {
-				return nil
-			}
+		/*
+			_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
 
-			formattedTexture := models.FormattedTexture{
-				Path: ResolveTexturePath(filepath.Join(assetsRoot, packDir.Name(), "assets"), path, strings.Split(model.Model.Path, ":")[1]),
-			}
+				// Special handling for Vanilla pack - we want to add all textures as fallback options, even if they don't have a corresponding JSON model
+				if packDir.Name() == "Vanilla" {
+					fileName := filepath.Base(path)
+					textureId := strings.Replace(fileName, ".webp", "", 1)
 
-			fileName := filepath.Base(path)
-			itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
-			if _, exists := ITEM_MAP[itemName]; !exists {
-				ITEM_MAP[itemName] = []models.ItemTexture{}
-			}
+					formattedPath := fmt.Sprintf("resourcepacks/%s/assets/%s", packDir.Name(), textureId)
+					VANILLA_ITEM_MAP[textureId] = fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath)
+					return nil
+				} else {
+					return nil
+				}
+					if !strings.HasSuffix(path, ".json") {
+						return nil
+					}
 
-			itemTexture := models.ItemTexture{
-				FormattedTexture: formattedTexture.Path,
-				ResourcePackId:   config.Id,
-			}
+					data, err := os.ReadFile(path)
+					if err != nil {
+						fmt.Printf("Failed to read %s: %v\n", path, err)
+						return nil
+					}
 
-			ITEM_MAP[itemName] = append(ITEM_MAP[itemName], itemTexture)
-			return nil
-		})
+					model := models.CatharsisFormat{}
+					if err := json.Unmarshal(data, &model); err != nil {
+						fmt.Printf("Failed to parse %s: %v\n", path, err)
+						return nil
+					}
+
+					if model.Model.Path == "" {
+						// fmt.Printf("No model path found in %s, skipping\n", path)
+						return nil
+					}
+
+					if strings.HasPrefix(model.Model.Path, "item/") {
+						return nil
+					}
+
+					formattedTexture := models.FormattedTexture{
+						Path:   ResolveTexturePath(filepath.Join(assetsRoot, packDir.Name(), "assets"), path, strings.Split(model.Model.Path, ":")[1]),
+						PackId: config.CatharsisPackV1.ID,
+					}
+
+					fileName := filepath.Base(path)
+					itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
+					if _, exists := ITEM_MAP[itemName]; !exists {
+						ITEM_MAP[itemName] = []models.FormattedTexture{}
+					}
+
+					ITEM_MAP[itemName] = append(ITEM_MAP[itemName], formattedTexture)
+					return nil
+
+			})
+		*/
 	}
 }
 
@@ -199,9 +226,9 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 	}
 
 	customTexture := GetTexture(item, disabledPacks)
-	if customTexture.Texture != "" {
+	if customTexture != nil {
 		if !strings.Contains(customTexture.Texture, "Vanilla") && !strings.Contains(customTexture.Texture, "skull") {
-			return customTexture
+			return *customTexture
 		}
 	}
 
@@ -240,7 +267,7 @@ func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) Appli
 	})
 
 	if texture, ok := VANILLA_ITEM_MAP[textureId]; ok {
-		return AppliedItemTexture{Texture: texture.FormattedTexture}
+		return AppliedItemTexture{Texture: texture}
 	}
 
 	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/%s.webp", strings.ToLower(item.RawId))
@@ -317,4 +344,27 @@ func ResolveTexturePath(inputFolder, modelPath, textureRef string) string {
 	}
 
 	return EnsureWebPExt(filepath.Join(filepath.Dir(modelPath), textureRef))
+}
+
+func GetPackConfig(assetsRoot string, packDir os.DirEntry) (*models.PackConfig, error) {
+	configPath := filepath.Join(assetsRoot, packDir.Name(), "pack.mcmeta")
+	if _, err := os.Stat(configPath); err != nil {
+		return nil, fmt.Errorf("pack.mcmeta not found for pack %s", packDir.Name())
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read pack.mcmeta for pack %s", packDir.Name())
+	}
+
+	var config models.PackConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse pack.mcmeta for pack %s, err: %v", packDir.Name(), err)
+	}
+
+	if config.Pack.Disabled {
+		return nil, fmt.Errorf("resource pack %s is disabled", packDir.Name())
+	}
+
+	return &config, nil
 }
