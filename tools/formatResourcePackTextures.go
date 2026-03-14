@@ -123,7 +123,7 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
 				} else {
 					_ = 0
-					// fmt.Printf("Deleted blacklisted model due to parent: %s\n", path)
+					fmt.Printf("Deleted blacklisted model due to parent: %s\n", path)
 				}
 
 				for _, tex := range itemTexture.Textures {
@@ -132,7 +132,7 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 						if err := os.Remove(texPath); err != nil {
 							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
 						} else {
-							// fmt.Printf("Deleted associated texture due to blacklisted parent: %s\n", texPath)
+							fmt.Printf("Deleted associated texture due to blacklisted parent: %s\n", texPath)
 							_ = 0
 						}
 					}
@@ -146,7 +146,7 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 					fmt.Printf("Failed to delete blacklisted model %s: %v\n", path, err)
 				} else {
 					_ = 0
-					// fmt.Printf("Deleted blacklisted model because of the path: %s\n", path)
+					fmt.Printf("Deleted blacklisted model because of the path: %s\n", path)
 				}
 
 				for _, tex := range itemTexture.Textures {
@@ -155,7 +155,7 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 						if err := os.Remove(texPath); err != nil {
 							fmt.Printf("Failed to delete associated texture %s: %v\n", texPath, err)
 						} else {
-							// fmt.Printf("Deleted associated texture due to blacklisted path: %s\n", texPath)
+							fmt.Printf("Deleted associated texture due to blacklisted path: %s\n", texPath)
 							_ = 0
 						}
 					}
@@ -165,42 +165,68 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 			}
 
 			if len(itemTexture.Elements) > 0 || len(itemTexture.Display) > 0 {
+				if strings.HasPrefix(itemTexture.Parent, "builtin/") {
+					if err := os.Remove(path); err != nil {
+						fmt.Printf("Failed to delete blockstate model %s: %v\n", path, err)
+					} else {
+						_ = 0
+						fmt.Printf("Deleted unsupported blockstate model: %s\n", path)
+					}
+					return nil
+				}
+			}
+
+			if itemTexture.Parent == "item/template_skull" {
 				if err := os.Remove(path); err != nil {
-					fmt.Printf("Failed to delete blockstate model %s: %v\n", path, err)
+					fmt.Printf("Failed to delete custom skull model %s: %v\n", path, err)
 				} else {
 					_ = 0
-					// fmt.Printf("Deleted unsupported blockstate model: %s\n", path)
+					fmt.Printf("Deleted custom skull model: %s\n", path)
 				}
 				return nil
 			}
 
-			if len(itemTexture.Textures) > 1 {
-				dedupedTextures, hadDuplicates := dedupeTextureLayers(itemTexture.Textures)
-				if hadDuplicates {
-					itemTexture.Textures = dedupedTextures
-
-					newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
-					if err != nil {
-						fmt.Printf("Failed to marshal deduplicated JSON for %s: %v\n", path, err)
-						return nil
-					}
-
-					if err := os.WriteFile(path, newJsonData, 0644); err != nil {
-						fmt.Printf("Failed to write deduplicated JSON to %s: %v\n", path, err)
-						return nil
-					}
+			// loop thru itemTexture.Textures and if it has #0 remove it
+			textures := map[string]string{}
+			for key, tex := range textures {
+				if tex == "" || tex == "#0" {
+					continue
 				}
 
-				if len(itemTexture.Textures) > 1 {
+				textures[key] = tex
+			}
+
+			if len(textures) > 1 {
+				dedupedTextures, hadDuplicates := dedupeTextureLayers(textures)
+				if hadDuplicates {
+					// newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
+					// if err != nil {
+					// 	fmt.Printf("Failed to marshal deduplicated JSON for %s: %v\n", path, err)
+					// 	return nil
+					// }
+
+					// if err := os.WriteFile(path, newJsonData, 0644); err != nil {
+					// 	fmt.Printf("Failed to write deduplicated JSON to %s: %v\n", path, err)
+					// 	return nil
+					// }
+
+					fmt.Printf("Deduplicated textures for %s, reduced from %d to %d layers\n", path, len(itemTexture.Textures), len(dedupedTextures))
+				}
+
+				if len(dedupedTextures) > 1 {
 					// fmt.Printf("Found %s with %d textures %s\n", info.Name(), len(itemTexture.Textures), path)
 
-					orderedTextureKeys := sortedTextureLayerKeys(itemTexture.Textures)
+					// orderedTextureKeys := sortedTextureLayerKeys(itemTexture.Textures)
 
 					var baseImg image.Image
 					baseFromVanilla := false
-					for _, key := range orderedTextureKeys {
-						tex := itemTexture.Textures[key]
+					for _, tex := range dedupedTextures {
+						if strings.HasSuffix(tex, "_model") {
+							continue
+						}
+
 						texPath := resolveTexturePath(inputFolder, path, tex)
+
 						textureFromVanilla := false
 						if _, err := os.Stat(texPath); os.IsNotExist(err) {
 							resolvedFallback := false
@@ -281,22 +307,22 @@ func FormatVanillaResourcePackJSON(inputFolder string, config models.ResourcePac
 							return nil
 						}
 
-						// fmt.Printf("Created combined WebP: %s\n", outPath)
+						fmt.Printf("Created combined WebP for %s: %s\n", outPath, path)
 
 						itemTexture.Textures = map[string]string{
 							"layer0": textureRef,
 						}
 
-						newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
-						if err != nil {
-							fmt.Printf("Failed to marshal updated JSON for %s: %v\n", path, err)
-							return nil
-						}
+						// newJsonData, err := json.MarshalIndent(itemTexture, "", "  ")
+						// if err != nil {
+						// 	fmt.Printf("Failed to marshal updated JSON for %s: %v\n", path, err)
+						// 	return nil
+						// }
 
-						if err := os.WriteFile(path, newJsonData, 0644); err != nil {
-							fmt.Printf("Failed to write updated JSON to %s: %v\n", path, err)
-							return nil
-						}
+						// if err := os.WriteFile(path, newJsonData, 0644); err != nil {
+						// 	fmt.Printf("Failed to write updated JSON to %s: %v\n", path, err)
+						// 	return nil
+						// }
 
 						formattedTextures++
 					}
@@ -592,6 +618,10 @@ func dedupeTextureLayers(textures map[string]string) (map[string]string, bool) {
 			continue
 		}
 
+		// if tex == "#0" {
+		// 	tex = textures["0"]
+		// }
+
 		if _, exists := uniqueTextures[tex]; exists {
 			continue
 		}
@@ -628,57 +658,18 @@ func parseLayerKey(key string) (bool, int) {
 }
 
 func resolveTexturePath(inputFolder, modelPath, textureRef string) string {
-	textureRef = strings.TrimSpace(textureRef)
-	if textureRef == "" {
+	if textureRef == "#0" {
 		return ""
 	}
 
-	sep := string(filepath.Separator)
-	addCandidate := func(candidates *[]string, relPath string) {
-		if relPath == "" {
-			return
-		}
+	splitString := strings.Split(textureRef, ":")
+	category := splitString[0]
+	item := splitString[1]
 
-		normalized := filepath.Clean(filepath.FromSlash(relPath))
-		if filepath.IsAbs(normalized) {
-			*candidates = append(*candidates, ensureWebPExt(normalized))
-			return
-		}
+	formattedPath := filepath.Join(inputFolder, category, "assets", category, "textures", item+".webp")
 
-		*candidates = append(*candidates, ensureWebPExt(filepath.Join(inputFolder, normalized)))
-	}
+	return formattedPath
 
-	candidates := make([]string, 0, 6)
-	addCandidate(&candidates, textureRef)
-	addCandidate(&candidates, filepath.Join(filepath.Dir(modelPath), textureRef))
-
-	if !strings.HasPrefix(filepath.FromSlash(textureRef), "assets"+sep) {
-		namespace, name, hasNamespace := strings.Cut(textureRef, ":")
-		if hasNamespace {
-			addCandidate(&candidates, filepath.Join("assets", namespace, "textures", name))
-
-			modelPathSlash := filepath.ToSlash(filepath.Clean(modelPath))
-			if modelRoot, _, found := strings.Cut(modelPathSlash, "/models/"); found && strings.HasSuffix(modelRoot, "/"+namespace) {
-				addCandidate(&candidates, filepath.Join(filepath.FromSlash(modelRoot), "textures", name))
-			}
-
-			addCandidate(&candidates, filepath.Join("assets", namespace, "assets", namespace, "textures", name))
-		} else {
-			addCandidate(&candidates, filepath.Join("assets", "minecraft", "textures", textureRef))
-		}
-	}
-
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-
-	if len(candidates) > 0 {
-		return candidates[0]
-	}
-
-	return ensureWebPExt(filepath.Join(filepath.Dir(modelPath), textureRef))
 }
 
 func buildTextureOutputForModel(inputFolder, modelPath string) (string, string) {
