@@ -64,15 +64,6 @@ type McMetaAnimation struct {
 	Frametime float64 `json:"frametime"`
 }
 
-type CatharsisFormat struct {
-	Model CatharsisModel `json:"model"`
-}
-
-type CatharsisModel struct {
-	Type string `json:"type"`
-	Path string `json:"model"`
-}
-
 type FormattedTexture struct {
 	Path   string `json:"path"`
 	PackId string `json:"packId"`
@@ -280,4 +271,38 @@ type FormattedResourcePack struct {
 }
 
 type FormattedCatharsisTexture struct {
+}
+
+type CatharsisModelData struct {
+	Model CatharsisModel `json:"model"`
+}
+
+type CatharsisModel struct {
+	Type     string             `json:"type"`
+	Property string             `json:"property"`
+	OnTrue   CatharsisModelBool `json:"on_true"`
+	OnFalse  CatharsisModelBool `json:"on_false"`
+	Model    string             `json:"model,omitempty"`
+	DataType string             `json:"data_type,omitempty"`
+}
+
+type CatharsisModelBool struct {
+	Type     string                 `json:"type"`
+	Model    string                 `json:"model"`
+	Cases    []CatharsisModelCases  `json:"cases"`
+	Property string                 `json:"property,omitempty"`
+	FallBack CatharsisModelFallback `json:"fallback,omitempty"`
+}
+
+type CatharsisModelCases struct {
+	When  string `json:"when"`
+	Model struct {
+		Type  string `json:"type"`
+		Model string `json:"model"`
+	} `json:"model"`
+}
+
+type CatharsisModelFallback struct {
+	Type  string `json:"type"`
+	Model string `json:"model"`
 }

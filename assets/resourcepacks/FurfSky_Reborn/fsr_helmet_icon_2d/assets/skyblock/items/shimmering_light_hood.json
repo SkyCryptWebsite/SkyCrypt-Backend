@@ -1,1 +1,14 @@
-{"model":{"type":"condition","property":"catharsis:data_type","data_type":"has_skin_fallback","on_true":{"type":"catharsis:fallthrough"},"on_false":{"type":"model","model":"fsr_helmet_icon:item/shimmering_light_hood"}}}
+{
+    "model": {
+        "type": "condition",
+        "property": "catharsis:data_type",
+        "data_type": "has_skin_fallback",
+        "on_true": {
+            "type": "catharsis:fallthrough"
+        },
+        "on_false": {
+            "type": "model",
+            "model": "fsr_helmet_icon:item/shimmering_light_hood"
+        }
+    }
+}

@@ -1,1 +1,6 @@
-{"model":{"type":"model","model":"fsr_equipment_icon:item/amethyst_gauntlet"}}
+{
+    "model": {
+        "type": "model",
+        "model": "fsr_equipment_icon:item/amethyst_gauntlet"
+    }
+}

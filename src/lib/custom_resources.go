@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -125,13 +126,42 @@ func init() {
 				continue
 			}
 
-			fmt.Printf("Path: %s %s\n", joinedPath, category.Directory)
+			fmt.Printf("\n\nCATEGORY: %s\n\n\n", category.Directory)
 			err := filepath.WalkDir(joinedPath, func(path string, d fs.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
 					return err
 				}
 
+				if !strings.HasSuffix(path, ".json") {
+					return nil
+				}
+
+				if strings.Contains(path, "/models/") {
+					return nil
+				}
+
 				fmt.Printf("Found %s\n", path)
+
+				data, err := os.ReadFile(path)
+				if err != nil {
+					fmt.Printf("Failed to read %s: %v\n", path, err)
+					return nil
+				}
+
+				var model models.CatharsisModelData
+				dec := json.NewDecoder(bytes.NewReader(data))
+				dec.DisallowUnknownFields()
+
+				if err := dec.Decode(&model); err != nil {
+					fmt.Printf("Failed to parse %s: %v\n", path, err)
+					return nil
+				}
+
+				if dec.More() {
+					fmt.Printf("Failed to parse %s: %v\n", path, fmt.Errorf("invalid JSON: extra trailing data"))
+					return nil
+				}
+
 				return nil
 			})
 
