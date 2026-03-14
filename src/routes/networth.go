@@ -58,6 +58,13 @@ func NetworthHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	player, err := api.GetPlayer(mowojang.UUID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get player data: %v", err),
+		})
+	}
+
 	profileMuseum, err := api.GetMuseum(profile.ProfileID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -89,7 +96,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 		"nonCosmetic": nonCosmeticNetworth.Networth,
 	}
 
-	go stats.StoreEmbedData(mowojang, userProfile, profile, formattedNetworth)
+	go stats.StoreEmbedData(mowojang, player, userProfile, profile, formattedNetworth)
 
 	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
 
