@@ -3,6 +3,7 @@ package models
 type EmbedData struct {
 	DisplayName     string            `json:"displayName"`
 	Username        string            `json:"username"`
+	Rank            RankOutput        `json:"rank"`
 	Uuid            string            `json:"uuid"`
 	ProfileId       string            `json:"profile_id"`
 	ProfileCuteName string            `json:"profile_cute_name"`

@@ -59,7 +59,7 @@ func getSlayersForEmbed(slayers *models.SlayersOutput) models.EmbedDataSlayers {
 	return output
 }
 
-func StoreEmbedData(mowojang *models.MowojangReponse, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, networth map[string]float64) {
+func StoreEmbedData(mowojang *models.MowojangReponse, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, networth map[string]float64) {
 	skills := GetSkills(userProfile, profile, &skycrypttypes.Player{})
 	dungeons := GetDungeons(userProfile)
 	slayers := GetSlayers(userProfile)
@@ -77,6 +77,7 @@ func StoreEmbedData(mowojang *models.MowojangReponse, userProfile *skycrypttypes
 	output := models.EmbedData{
 		DisplayName:     mowojang.Name,
 		Username:        mowojang.Name,
+		Rank:            *GetRank(player),
 		Uuid:            mowojang.UUID,
 		ProfileId:       profile.ProfileID,
 		ProfileCuteName: profile.CuteName,

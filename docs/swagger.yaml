@@ -458,6 +458,8 @@ components:
           type: string
         purse:
           type: number
+        rank:
+          $ref: '#/components/schemas/models.RankOutput'
         skills:
           $ref: '#/components/schemas/models.EmbedDataSkills'
         skyblock_level:
