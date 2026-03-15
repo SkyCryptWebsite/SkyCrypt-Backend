@@ -498,7 +498,7 @@ components:
             type: integer
           type: object
         xp:
-          type: number
+          type: integer
       type: object
     models.EmbedNetworth:
       properties:

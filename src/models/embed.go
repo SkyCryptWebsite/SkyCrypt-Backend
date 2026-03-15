@@ -30,7 +30,7 @@ type EmbedDataDungeons struct {
 }
 
 type EmbedDataSlayers struct {
-	Experience float64        `json:"xp"`
+	Experience int            `json:"xp"`
 	Slayers    map[string]int `json:"slayers"`
 }
 

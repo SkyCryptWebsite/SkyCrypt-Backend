@@ -10,8 +10,8 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
-func roundToTwoDecimals(value float64) float64 {
-	rounded := math.Round(value*100) / 100
+func RoundToOneDecimal(value float64) float64 {
+	rounded := math.Round(value*10) / 10
 	if rounded == math.Floor(rounded) {
 		return math.Floor(rounded)
 	}
@@ -21,7 +21,7 @@ func roundToTwoDecimals(value float64) float64 {
 
 func getSkillsForEmbed(skills *models.Skills) models.EmbedDataSkills {
 	output := models.EmbedDataSkills{
-		SkillAverage: roundToTwoDecimals(skills.AverageSkillLevelWithProgress),
+		SkillAverage: math.Floor(skills.AverageSkillLevelWithProgress),
 		Skills:       make(map[string]int, len(skills.Skills)),
 	}
 
@@ -34,8 +34,8 @@ func getSkillsForEmbed(skills *models.Skills) models.EmbedDataSkills {
 
 func getDungeonsForEmbed(dungeons *models.DungeonsOutput) models.EmbedDataDungeons {
 	output := models.EmbedDataDungeons{
-		Dungeoneering: roundToTwoDecimals(dungeons.Level.LevelWithProgress),
-		ClassAverage:  roundToTwoDecimals(dungeons.Classes.ClassAverageWithProgress),
+		Dungeoneering: math.Floor(dungeons.Level.LevelWithProgress),
+		ClassAverage:  math.Floor(dungeons.Classes.ClassAverageWithProgress),
 		Classes:       make(map[string]int, len(dungeons.Classes.Classes)),
 	}
 
@@ -48,7 +48,7 @@ func getDungeonsForEmbed(dungeons *models.DungeonsOutput) models.EmbedDataDungeo
 
 func getSlayersForEmbed(slayers *models.SlayersOutput) models.EmbedDataSlayers {
 	output := models.EmbedDataSlayers{
-		Experience: roundToTwoDecimals(float64(slayers.TotalSlayerExperience)),
+		Experience: slayers.TotalSlayerExperience,
 		Slayers:    make(map[string]int, len(slayers.Data)),
 	}
 
@@ -70,8 +70,8 @@ func StoreEmbedData(mowojang *models.MowojangReponse, player *skycrypttypes.Play
 	}
 
 	formattedNetworth := models.EmbedNetworth{
-		Normal:      roundToTwoDecimals(networth["normal"]),
-		NonCosmetic: roundToTwoDecimals(networth["nonCosmetic"]),
+		Normal:      RoundToOneDecimal(networth["normal"]),
+		NonCosmetic: RoundToOneDecimal(networth["nonCosmetic"]),
 	}
 
 	output := models.EmbedData{
@@ -83,11 +83,11 @@ func StoreEmbedData(mowojang *models.MowojangReponse, player *skycrypttypes.Play
 		ProfileCuteName: profile.CuteName,
 		Joined:          userProfile.Profile.FirstJoin,
 		GameMode:        profile.GameMode,
-		SkyBlockLevel:   roundToTwoDecimals(GetSkyBlockLevel(userProfile).LevelWithProgress),
+		SkyBlockLevel:   math.Floor(GetSkyBlockLevel(userProfile).LevelWithProgress),
 		Skills:          getSkillsForEmbed(skills),
 		Networth:        formattedNetworth,
-		Purse:           roundToTwoDecimals(userProfile.Currencies.CoinPurse),
-		Bank:            roundToTwoDecimals(bank),
+		Purse:           RoundToOneDecimal(userProfile.Currencies.CoinPurse),
+		Bank:            RoundToOneDecimal(bank),
 		Dungeons:        getDungeonsForEmbed(&dungeons),
 		Slayers:         getSlayersForEmbed(&slayers),
 	}
