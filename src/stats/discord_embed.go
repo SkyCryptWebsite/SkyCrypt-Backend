@@ -48,7 +48,7 @@ func getDungeonsForEmbed(dungeons *models.DungeonsOutput) models.EmbedDataDungeo
 
 func getSlayersForEmbed(slayers *models.SlayersOutput) models.EmbedDataSlayers {
 	output := models.EmbedDataSlayers{
-		Experience: math.Floor(float64(slayers.TotalSlayerExperience)),
+		Experience: slayers.TotalSlayerExperience,
 		Slayers:    make(map[string]int, len(slayers.Data)),
 	}
 
