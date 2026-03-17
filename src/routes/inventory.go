@@ -113,6 +113,10 @@ func InventoryHandler(c *fiber.Ctx) error {
 	userProfile := &userProfileValue
 
 	if inventoryId == "sacks" {
+		if userProfile.Inventory == nil {
+			userProfile.Inventory = &skycrypttypes.Inventory{}
+		}
+
 		itemSlice := stats.GetInventory(userProfile, inventoryId)
 		parsedSacks := statsItems.ProcessItems(itemSlice, inventoryId, disabledPacks)
 
