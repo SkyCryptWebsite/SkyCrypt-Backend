@@ -56,8 +56,9 @@ func GetAttributeShards(userProfile *skycrypttypes.Member) models.AttributeShard
 
 		output.MaxSyphoned += getMaxSyphon(shard.Rarity)
 		output.Syphoned += syphoned
-		output.Unlocked += 1
-
+		if syphoned > 0 {
+			output.Unlocked += 1
+		}
 	}
 
 	return output
