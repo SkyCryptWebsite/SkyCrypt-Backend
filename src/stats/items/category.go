@@ -96,6 +96,27 @@ func GetSkillTools(skill string, allItems []models.ProcessedItem) models.SkillTo
 	toolCategory := skill + "_tool"
 	tools := GetCategory(allItems, toolCategory)
 
+	for categoryId, enchantments := range constants.ENCHANTMENTS_TO_CATEGORIES {
+		if categoryId == toolCategory {
+			continue
+		}
+
+		for _, enchantment := range enchantments {
+			for _, tool := range tools {
+				if tool.Tag.ExtraAttributes.Enchantments[enchantment] > 0 {
+					for i, t := range tools {
+						if t.DisplayName == tool.DisplayName {
+							tools = append(tools[:i], tools[i+1:]...)
+							break
+						}
+					}
+				}
+			}
+
+		}
+
+	}
+
 	var highestPriorityTool *models.ProcessedItem
 	if len(tools) > 0 {
 		highestPriorityTool = &tools[0]
