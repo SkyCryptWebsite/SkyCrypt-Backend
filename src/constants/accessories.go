@@ -226,6 +226,10 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 		AllowsRecomb:     false,
 		AllowsEnrichment: true,
 	},
+	"VOTER_BADGE_SUPREME": {
+		AllowsRecomb:     false,
+		AllowsEnrichment: true,
+	},
 }
 
 var MAGICAL_POWER = map[string]int{
