@@ -9,11 +9,21 @@ type AttributeShardsOutput struct {
 }
 
 type AttributeShard struct {
-	Name      string   `json:"name"`
-	Lore      []string `json:"lore"`
-	Texture   string   `json:"texture"`
-	Owned     int      `json:"owned"`
-	Syphoned  int      `json:"syphoned"`
-	MaxSyphon int      `json:"maxSyphon"`
-	Captured  int64    `json:"captured"`
+	Texture string `json:"texture"`
+	Name    string `json:"name"`
+
+	ShardId string   `json:"shardId"`
+	Family  []string `json:"family"`
+	Rarity  string   `json:"rarity"`
+
+	AbilityName     string `json:"abilityName"`
+	AbilityLevel    int    `json:"abilityLevel"`
+	AbilityMaxLevel int    `json:"abilityMaxLevel"`
+
+	Lore []string `json:"lore"`
+
+	Owned             int   `json:"owned"`
+	Syphoned          int   `json:"syphoned"`
+	MaxSyphon         int   `json:"maxSyphon"`
+	CapturedTimestamp int64 `json:"capturedTimestamp"`
 }
