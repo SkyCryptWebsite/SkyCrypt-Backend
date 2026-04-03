@@ -441,7 +441,7 @@ func GetPetScore(pets []models.ProcessedPet) models.PetScore {
 	return output
 }
 
-func GetPets(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) models.OutputPets {
+func GetPets(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) *models.OutputPets {
 	if userProfile.Pets == nil {
 		userProfile.Pets = &skycrypttypes.Pets{}
 	}
@@ -468,7 +468,7 @@ func GetPets(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) 
 		}
 	}
 
-	output := models.OutputPets{
+	output := &models.OutputPets{
 		Pets:               stats.StripPets(pets),
 		Amount:             len(petAmount),
 		Total:              len(getMaxPetIds()),

@@ -88,8 +88,8 @@ func StoreEmbedData(mowojang *models.MowojangReponse, player *skycrypttypes.Play
 		Networth:        formattedNetworth,
 		Purse:           RoundToOneDecimal(userProfile.Currencies.CoinPurse),
 		Bank:            RoundToOneDecimal(bank),
-		Dungeons:        getDungeonsForEmbed(&dungeons),
-		Slayers:         getSlayersForEmbed(&slayers),
+		Dungeons:        getDungeonsForEmbed(dungeons),
+		Slayers:         getSlayersForEmbed(slayers),
 	}
 
 	outputString, err := json.Marshal(output)

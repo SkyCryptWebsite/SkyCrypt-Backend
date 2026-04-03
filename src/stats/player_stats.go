@@ -23,7 +23,7 @@ func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 	items := getItems(userProfile, profileId)
 	processedItems := processItems(items)
 
-	accessoriesStats := GetAccessories(userProfile, items)
+	accessoriesStats := GetAccessories(userProfile, processedItems)
 	for statName, statValue := range accessoriesStats.Stats {
 		if _, exists := stats[statName]; !exists {
 			continue

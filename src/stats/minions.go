@@ -79,10 +79,10 @@ func getCraftedMinions(profile *skycrypttypes.Profile) map[string][]int {
 	return craftedMinions
 }
 
-func GetMinions(profile *skycrypttypes.Profile) models.MinionsOutput {
+func GetMinions(profile *skycrypttypes.Profile) *models.MinionsOutput {
 	craftedMinions := getCraftedMinions(profile)
 
-	output := models.MinionsOutput{
+	output := &models.MinionsOutput{
 		Minions: make(map[string]models.MinionCategory),
 	}
 
