@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
+	"strings"
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -36,10 +37,7 @@ func StatsHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
-	profileId := c.Params("profileId")
-	if len(profileId) > 0 && profileId[0] == '/' {
-		profileId = profileId[1:]
-	}
+	profileId := normalizeProfileID(c.Params("profileId"))
 
 	// Singleflight: deduplicate concurrent requests for the same player+profile
 	sfKey := fmt.Sprintf("stats:%s:%s", uuid, profileId)
@@ -54,6 +52,21 @@ func StatsHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
 	return c.JSON(resultIface)
+}
+
+func normalizeProfileID(profileId string) string {
+	profileId = strings.TrimSpace(profileId)
+	profileId = strings.Trim(profileId, "/")
+	if profileId == "" {
+		return ""
+	}
+
+	switch strings.ToLower(profileId) {
+	case "undefined", "null":
+		return ""
+	default:
+		return profileId
+	}
 }
 
 // computeStats fetches all data with maximum pipeline parallelism.
