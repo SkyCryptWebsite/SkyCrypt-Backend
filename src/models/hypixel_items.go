@@ -1,5 +1,11 @@
 package models
 
+import (
+	"encoding/json"
+	"strconv"
+	"strings"
+)
+
 type HypixelItemsResponse struct {
 	Success     bool          `json:"success"`
 	Cause       string        `json:"cause,omitempty"`
@@ -14,7 +20,7 @@ type HypixelItem struct {
 	Category          string                 `json:"category"`
 	Rarity            string                 `json:"tier"`
 	SkyBlockID        string                 `json:"id,omitempty"`
-	Damage            int                    `json:"damage,omitempty"`
+	Damage            HypixelDurability      `json:"durability,omitempty"`
 	Origin            string                 `json:"origin,omitempty"`
 	RiftTransferrable bool                   `json:"rift_transferrable,omitempty"`
 	MuseumData        *hypixelItemMuseumData `json:"museum_data,omitempty"`
@@ -46,6 +52,42 @@ type ProcessedHypixelItem struct {
 type skin struct {
 	Value     string `json:"value"`
 	Signature string `json:"signature,omitempty"`
+}
+
+type HypixelDurability uint64
+
+func (d *HypixelDurability) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*d = 0
+		return nil
+	}
+
+	var number uint64
+	if err := json.Unmarshal(data, &number); err == nil {
+		*d = HypixelDurability(number)
+		return nil
+	}
+
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		*d = 0
+		return nil
+	}
+
+	text = strings.TrimSpace(text)
+	if text == "" {
+		*d = 0
+		return nil
+	}
+
+	number, err := strconv.ParseUint(text, 10, 64)
+	if err != nil {
+		*d = 0
+		return nil
+	}
+
+	*d = HypixelDurability(number)
+	return nil
 }
 
 type hypixelItemMuseumData struct {
