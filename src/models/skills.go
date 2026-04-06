@@ -23,9 +23,10 @@ type Skill struct {
 }
 
 type SkillsOutput struct {
-	Mining     MiningOutput     `json:"mining"`
-	Foraging   ForagingOutput   `json:"foraging"`
-	Farming    FarmingOutput    `json:"farming"`
-	Fishing    FishingOuput     `json:"fishing"`
-	Enchanting EnchantingOutput `json:"enchanting"`
+	Mining     MiningOutput          `json:"mining"`
+	Foraging   ForagingOutput        `json:"foraging"`
+	Farming    FarmingOutput         `json:"farming"`
+	Fishing    FishingOuput          `json:"fishing"`
+	Enchanting EnchantingOutput      `json:"enchanting"`
+	Hunting    AttributeShardsOutput `json:"hunting"`
 }

@@ -72,6 +72,8 @@ func getSkyBlockItemsFromCache(cachedData string) ([]models.HypixelItem, error) 
 			err = json.Unmarshal([]byte(cachedData), &data)
 			if err == nil {
 				return data.Items, nil
+			} else {
+				fmt.Printf("%s\n", err)
 			}
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -157,7 +159,7 @@ func processItems(items *[]models.HypixelItem) map[string]models.ProcessedHypixe
 			Name:              item.Name,
 			ItemId:            constants.BUKKIT_TO_ID[item.Material],
 			Rarity:            strings.ToLower(item.Rarity),
-			Damage:            item.Damage,
+			Damage:            int(item.Damage),
 			Texture:           texture,
 			TextureId:         utility.GetSkinHash(item.Skin.Value),
 			Category:          strings.ToLower(item.Category),

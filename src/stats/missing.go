@@ -298,9 +298,9 @@ func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices ma
 
 }
 
-func GetMissingAccessories(accessories models.AccessoriesOutput, userProfile *skycrypttypes.Member) models.GetMissingAccessoresOutput {
+func GetMissingAccessories(accessories models.AccessoriesOutput, userProfile *skycrypttypes.Member) *models.GetMissingAccessoresOutput {
 	if len(accessories.AccessoryIds) == 0 && accessories.Accessories == nil {
-		return models.GetMissingAccessoresOutput{}
+		return &models.GetMissingAccessoresOutput{}
 	}
 
 	missingAccessories := getMissing(&accessories.Accessories, accessories.AccessoryIds)
@@ -324,7 +324,7 @@ func GetMissingAccessories(accessories models.AccessoriesOutput, userProfile *sk
 		processedItems[i].IsInactive = &accessory.IsInactive
 	}
 
-	output := models.GetMissingAccessoresOutput{
+	output := &models.GetMissingAccessoresOutput{
 		Stats:               stats.GetStatsFromItems(processedItems),
 		Enrichments:         getEnrichments(accessories.Accessories),
 		Unique:              len(activeAccessories),
@@ -339,5 +339,4 @@ func GetMissingAccessories(accessories models.AccessoriesOutput, userProfile *sk
 	}
 
 	return output
-
 }

@@ -13,17 +13,17 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, profileId string) map[string]models.StatsInfo {
+func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, profileId string, memberUUID string) map[string]models.StatsInfo {
 	stats := map[string]models.StatsInfo{}
 	for statName, statInfo := range constants.PLAYER_STATS {
 		stats[statName] = models.StatsInfo{}
 		maps.Copy(stats[statName], statInfo)
 	}
 
-	items := getItems(userProfile, profileId)
+	items := getItems(userProfile, profileId, memberUUID)
 	processedItems := processItems(items)
 
-	accessoriesStats := GetAccessories(userProfile, items)
+	accessoriesStats := GetAccessories(userProfile, processedItems)
 	for statName, statValue := range accessoriesStats.Stats {
 		if _, exists := stats[statName]; !exists {
 			continue
@@ -142,9 +142,9 @@ func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 	return stats
 }
 
-func getItems(userProfile *skycrypttypes.Member, profileId string) map[string][]*skycrypttypes.Item {
+func getItems(userProfile *skycrypttypes.Member, profileId string, memberUUID string) map[string][]*skycrypttypes.Item {
 	var items map[string][]*skycrypttypes.Item
-	cache, err := redis.Get(fmt.Sprintf("items:%s", profileId))
+	cache, err := redis.Get(fmt.Sprintf("items:%s:%s", profileId, memberUUID))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &items)
@@ -152,7 +152,7 @@ func getItems(userProfile *skycrypttypes.Member, profileId string) map[string][]
 			return map[string][]*skycrypttypes.Item{}
 		}
 	} else {
-		items, err = GetItems(userProfile, profileId)
+		items, err = GetItems(userProfile, profileId, memberUUID)
 		if err != nil {
 			return map[string][]*skycrypttypes.Item{}
 		}

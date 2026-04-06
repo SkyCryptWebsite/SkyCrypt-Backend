@@ -51,18 +51,17 @@ func GearHandler(c *fiber.Ctx) error {
 	member := profile.Members[uuid]
 	if member.Inventory == nil {
 		member.Inventory = &skycrypttypes.Inventory{}
-		profile.Members[uuid] = member
 	}
 
 	specifiedInventories := skyhelpernetworthgo.SpecifiedInventory{
-		"armor":      profile.Members[uuid].Inventory.Armor,
-		"equipment":  profile.Members[uuid].Inventory.Equipment,
-		"wardrobe":   profile.Members[uuid].Inventory.Wardrobe,
-		"inventory":  profile.Members[uuid].Inventory.Inventory,
-		"enderchest": profile.Members[uuid].Inventory.Enderchest,
+		"armor":      member.Inventory.Armor,
+		"equipment":  member.Inventory.Equipment,
+		"wardrobe":   member.Inventory.Wardrobe,
+		"inventory":  member.Inventory.Inventory,
+		"enderchest": member.Inventory.Enderchest,
 	}
 
-	for backpackId, backpackData := range profile.Members[uuid].Inventory.Backpack {
+	for backpackId, backpackData := range member.Inventory.Backpack {
 		specifiedInventories[fmt.Sprintf("backpack_%s", backpackId)] = backpackData
 	}
 

@@ -141,6 +141,7 @@ func SkillsHandler(c *fiber.Ctx) error {
 		Farming:    stats.GetFarming(userProfile, allItems),
 		Fishing:    stats.GetFishing(userProfile, allItems),
 		Enchanting: stats.GetEnchanting(userProfile),
+		Hunting:    stats.GetAttributeShards(userProfile),
 	}
 
 	utility.LogVerbose("Returning /api/skills/%s in %s", profileId, time.Since(timeNow))

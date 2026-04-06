@@ -68,8 +68,8 @@ func getSlayerLevel(experience int, slayerId string) models.SlayerLevel {
 	}
 }
 
-func GetSlayers(userProfile *skycrypttypes.Member) models.SlayersOutput {
-	output := models.SlayersOutput{
+func GetSlayers(userProfile *skycrypttypes.Member) *models.SlayersOutput {
+	output := &models.SlayersOutput{
 		Data:  make(map[string]models.SlayerData),
 		Stats: make(map[string]float64),
 	}

@@ -80,6 +80,15 @@ func InventoryHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 	inventoryId := c.Params("inventoryId")
+
+	resolvedPlayer, err := api.ResolvePlayer(uuid)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to resolve player: %v", err),
+		})
+	}
+	resolvedUUID := resolvedPlayer.UUID
+
 	if inventoryId == "museum" {
 		profileMuseum, err := api.GetMuseum(profileId)
 		if err != nil {
@@ -88,7 +97,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			})
 		}
 
-		museum := profileMuseum[uuid]
+		museum := profileMuseum[resolvedUUID]
 		if museum == nil {
 			return c.JSON([]models.StrippedItem{})
 		}
@@ -109,7 +118,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	userProfileValue := profile.Members[uuid]
+	userProfileValue := profile.Members[resolvedUUID]
 	userProfile := &userProfileValue
 
 	if inventoryId == "sacks" {
@@ -132,7 +141,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 	if inventoryId == "search" {
 		var items map[string][]*skycrypttypes.Item
-		cache, err := redis.Get(fmt.Sprintf("items:%s", profileId))
+		cache, err := redis.Get(fmt.Sprintf("items:%s:%s", profile.ProfileID, resolvedUUID))
 		if err == nil && cache != "" {
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err = json.Unmarshal([]byte(cache), &items)
@@ -142,7 +151,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 				})
 			}
 		} else {
-			items, err = stats.GetItems(userProfile, profile.ProfileID)
+			items, err = stats.GetItems(userProfile, profile.ProfileID, resolvedUUID)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": fmt.Sprintf("Failed to get items: %v", err),
@@ -182,7 +191,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		searchResults := make([]models.StrippedItem, len(strippedItems))
 		for i, item := range strippedItems {
 			item.SourceTab = &models.SourceTab{
-				Icon: getIcon(item.Source, uuid),
+				Icon: getIcon(item.Source, resolvedUUID),
 				Name: utility.TitleCase(item.Source),
 			}
 

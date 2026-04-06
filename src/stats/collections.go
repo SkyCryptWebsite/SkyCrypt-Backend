@@ -117,7 +117,7 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 	}
 }
 
-func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) models.CollectionsOutput {
+func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) *models.CollectionsOutput {
 	usernames := map[string]string{}
 	for memberId := range profile.Members {
 		username, err := api.GetUsername(memberId)
@@ -128,7 +128,7 @@ func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 		usernames[memberId] = username
 	}
 
-	output := models.CollectionsOutput{
+	output := &models.CollectionsOutput{
 		Categories: map[string]models.CollectionCategory{},
 	}
 

@@ -1,30 +1,33 @@
 package routes
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// StatsHandler godoc
+// CombinedHandler godoc
 //
-//	@Summary		Get stats of a specified player
-//	@Description	Returns stats for the given user and profile ID
-//	@Tags			stats
+//	@Summary		Get combined stats of a specified player
+//	@Description	Returns combined  stats for the given user and profile ID
+//	@Tags			combinedStats
 //	@Produce		json
 //	@Param			uuid		path		string	true	"User UUID"
 //	@Param			profileId	path		string	true	"Profile ID"
-//	@Success		200			{object}	models.StatsOutput
+//	@Success		200			{object}	models.CombinedOutput
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
-//	@Router			/api/stats/{uuid}/{profileId} [get]
-func StatsHandler(c *fiber.Ctx) error {
+//	@Router			/api/combined/{uuid}/{profileId} [get]
+func CombinedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Stats")()
 	}
@@ -37,20 +40,35 @@ func StatsHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	output, err := computeStats(uuid, profileId)
+	disabledPacks := []string{""}
+	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
+	if disabledPacksCookies != "FAILED" {
+		var parsedPacks []string
+		err := json.Unmarshal([]byte(disabledPacksCookies), &parsedPacks)
+		if err == nil {
+			disabledPacks = append(disabledPacks, parsedPacks...)
+		}
+	} else if os.Getenv("DEV") == "true" {
+		disabledResourcePacks := c.Query("disabledPacks", "")
+		if disabledResourcePacks != "" {
+			disabledPacks = strings.Split(disabledResourcePacks, ",")
+		}
+	}
+
+	result, err := computeCombined(uuid, profileId, disabledPacks)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
-	return c.JSON(output)
+	utility.LogVerbose("Returning /api/combined/%s in %s", uuid, time.Since(timeNow))
+	return c.JSON(result)
 }
 
-func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
-	var mowojang *models.MowojangReponse
+func computeCombined(rawInput string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
 	var err error
+	var mowojang *models.MowojangReponse
 	mowojang, err = api.ResolvePlayer(rawInput)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve player: %v", err)
@@ -86,5 +104,5 @@ func computeStats(rawInput string, profileId string) (*models.StatsOutput, error
 	museum := profileMuseum[mowojang.UUID]
 	userProfile := &userProfileValue
 
-	return stats.GetStats(mowojang, profiles, profile, player, userProfile, museum, members)
+	return stats.GetCombined(mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
 }

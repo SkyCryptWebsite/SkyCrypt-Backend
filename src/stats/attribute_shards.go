@@ -5,34 +5,46 @@ import (
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"slices"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
 func getMaxSyphon(shardRarity string) int {
-	switch shardRarity {
-	case "COMMON":
-		return 96
-	case "UNCOMMON":
-		return 64
-	case "RARE":
-		return 48
-	case "EPIC":
-		return 32
-	case "LEGENDARY":
-		return 24
+	sum := 0
+	for _, i := range notenoughupdates.NEUConstants.AttributeShards.Level[shardRarity] {
+		sum += i
 	}
 
-	return 0
+	return sum
+}
+
+func getAbilityLevel(rarity string, amount int) int {
+	table := notenoughupdates.NEUConstants.AttributeShards.Level[rarity]
+	if len(table) == 0 {
+		return 0
+	}
+
+	for i, levelReq := range table {
+		if amount < levelReq {
+			return i
+		}
+	}
+
+	return len(table)
 }
 
 func GetAttributeShards(userProfile *skycrypttypes.Member) models.AttributeShardsOutput {
 	output := models.AttributeShardsOutput{
 		Shards:      []models.AttributeShard{},
-		MaxUnlocked: len(notenoughupdates.NEUConstants.AttributeShards),
+		MaxUnlocked: len(notenoughupdates.NEUConstants.AttributeShards.Shards) - len(notenoughupdates.NEUConstants.AttributeShards.UnconsumableShards),
 	}
 
-	for _, shard := range notenoughupdates.NEUConstants.AttributeShards {
+	for _, shard := range notenoughupdates.NEUConstants.AttributeShards.Shards {
+		if slices.Contains(notenoughupdates.NEUConstants.AttributeShards.UnconsumableShards, shard.BazaarName) {
+			continue
+		}
+
 		owned := 0
 		captureTimesamp := int64(0)
 		syphoned := userProfile.Attributes.Stacks[shard.ShardStackId]
@@ -45,13 +57,19 @@ func GetAttributeShards(userProfile *skycrypttypes.Member) models.AttributeShard
 		}
 
 		output.Shards = append(output.Shards, models.AttributeShard{
-			Name:      fmt.Sprintf("%s (%s Shard)", shard.Name, shard.ShardName),
-			Lore:      shard.Lore,
-			Texture:   fmt.Sprintf("%s%s", utility.GetDomain(), shard.Texture),
-			Owned:     owned,
-			Syphoned:  syphoned,
-			MaxSyphon: getMaxSyphon(shard.Rarity),
-			Captured:  captureTimesamp,
+			Name:              shard.Name,
+			Texture:           fmt.Sprintf("%s%s", utility.GetDomain(), shard.Texture),
+			ShardId:           shard.ShardID,
+			Family:            shard.Family,
+			Rarity:            shard.Rarity,
+			AbilityName:       shard.AbilityName,
+			AbilityLevel:      getAbilityLevel(shard.Rarity, syphoned),
+			AbilityMaxLevel:   getAbilityLevel(shard.Rarity, getMaxSyphon(shard.Rarity)),
+			Lore:              shard.Lore,
+			Owned:             owned,
+			Syphoned:          syphoned,
+			MaxSyphon:         getMaxSyphon(shard.Rarity),
+			CapturedTimestamp: captureTimesamp,
 		})
 
 		output.MaxSyphoned += getMaxSyphon(shard.Rarity)

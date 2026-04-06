@@ -135,7 +135,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards.Attributes, GetItem)
+			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards, GetItem)
 		} else if constant.Name() == "sacks.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)

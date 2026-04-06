@@ -21,8 +21,19 @@ components:
       type: object
     models.AttributeShard:
       properties:
-        captured:
+        abilityLevel:
           type: integer
+        abilityMaxLevel:
+          type: integer
+        abilityName:
+          type: string
+        capturedTimestamp:
+          type: integer
+        family:
+          items:
+            type: string
+          type: array
+          uniqueItems: false
         lore:
           items:
             type: string
@@ -34,6 +45,10 @@ components:
           type: string
         owned:
           type: integer
+        rarity:
+          type: string
+        shardId:
+          type: string
         syphoned:
           type: integer
         texture:
@@ -215,6 +230,38 @@ components:
           type: integer
         totalCollections:
           type: integer
+      type: object
+    models.CombinedOutput:
+      properties:
+        accessories:
+          $ref: '#/components/schemas/models.GetMissingAccessoresOutput'
+        bestiary:
+          $ref: '#/components/schemas/models.BestiaryOutput'
+        collections:
+          $ref: '#/components/schemas/models.CollectionsOutput'
+        crimsonIsle:
+          $ref: '#/components/schemas/models.CrimsonIsleOutput'
+        dungeons:
+          $ref: '#/components/schemas/models.DungeonsOutput'
+        gear:
+          $ref: '#/components/schemas/models.Gear'
+        inventory:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
+        minions:
+          $ref: '#/components/schemas/models.MinionsOutput'
+        misc:
+          $ref: '#/components/schemas/models.MiscOutput'
+        pets:
+          $ref: '#/components/schemas/models.OutputPets'
+        rift:
+          $ref: '#/components/schemas/models.RiftOutput'
+        skills:
+          $ref: '#/components/schemas/models.SkillsOutput'
+        slayers:
+          $ref: '#/components/schemas/models.SlayersOutput'
       type: object
     models.Commissions:
       properties:
@@ -1561,6 +1608,8 @@ components:
           $ref: '#/components/schemas/models.FishingOuput'
         foraging:
           $ref: '#/components/schemas/models.ForagingOutput'
+        hunting:
+          $ref: '#/components/schemas/models.AttributeShardsOutput'
         mining:
           $ref: '#/components/schemas/models.MiningOutput'
       type: object
@@ -2139,38 +2188,6 @@ paths:
       summary: Get accessories stats of a specified player
       tags:
       - accessories
-  /api/attribute_shards/{uuid}/{profileId}:
-    get:
-      description: Returns attribute shards stats for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.AttributeShardsOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get attribute shards stats of a specified player
-      tags:
-      - attribute_shards
   /api/bestiary/{uuid}/{profileId}:
     get:
       description: Returns bestiary for the given user and profile ID
@@ -2235,6 +2252,44 @@ paths:
       summary: Get collections stats of a specified player
       tags:
       - collections
+  /api/combined/{uuid}/{profileId}:
+    get:
+      description: Returns combined  stats for the given user and profile ID
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Profile ID
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.CombinedOutput'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Internal Server Error
+      summary: Get combined stats of a specified player
+      tags:
+      - combinedStats
   /api/crimson_isle/{uuid}/{profileId}:
     get:
       description: Returns Crimson Isle stats for the given user and profile ID

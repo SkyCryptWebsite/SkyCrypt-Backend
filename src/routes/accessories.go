@@ -6,12 +6,15 @@ import (
 	"os"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
+	"skycrypt/src/models"
 	"skycrypt/src/stats"
+	statsItems "skycrypt/src/stats/items"
 	"skycrypt/src/utility"
 	"strings"
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -37,25 +40,6 @@ func AccessoriesHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 
-	profile, err := api.GetProfile(uuid, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
-		})
-	}
-
-	userProfile := profile.Members[uuid]
-	if userProfile.Inventory == nil {
-		userProfile.Inventory = &skycrypttypes.Inventory{}
-	}
-
-	items := map[string][]*skycrypttypes.Item{
-		"talisman_bag": stats.GetInventory(&userProfile, "talisman_bag"),
-		"inventory":    stats.GetInventory(&userProfile, "inventory"),
-		"enderchest":   stats.GetInventory(&userProfile, "enderchest"),
-		"backpack":     stats.GetInventory(&userProfile, "backpack"),
-	}
-
 	disabledPacks := []string{""}
 	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
 	if disabledPacksCookies != "FAILED" {
@@ -71,7 +55,63 @@ func AccessoriesHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	output := stats.GetAccessories(&userProfile, items, disabledPacks)
+	profile, err := api.GetProfile(uuid, profileId)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get profile: %v", err),
+		})
+	}
+
+	member := profile.Members[uuid]
+	if member.Inventory == nil {
+		member.Inventory = &skycrypttypes.Inventory{}
+	}
+
+	specifiedInventories := skyhelpernetworthgo.SpecifiedInventory{
+		"inventory":    member.Inventory.Inventory,
+		"enderchest":   member.Inventory.Enderchest,
+		"talisman_bag": member.Inventory.BagContents.TalismanBag,
+	}
+
+	for backpackId, backpackData := range member.Inventory.Backpack {
+		specifiedInventories[fmt.Sprintf("backpack_%s", backpackId)] = backpackData
+	}
+
+	decodedItems, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(specifiedInventories, skyhelpernetworthgo.NetworthOptions{
+		IncludeItemData:  true,
+		KeepInvalidItems: true,
+	}.ToInternal())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to calculate networth: %v", err),
+		})
+	}
+
+	processedItems := map[string][]models.ProcessedItem{}
+	for inventoryId := range specifiedInventories {
+		if decodedItems.Types[inventoryId] == nil {
+			continue
+		}
+
+		inventoryData := decodedItems.Types[inventoryId].Items
+		if len(inventoryData) == 0 {
+			continue
+		}
+
+		combinedItems := make([]*skycrypttypes.Item, len(inventoryData))
+		for i, item := range inventoryData {
+			combinedItems[i] = item.ItemData
+			if combinedItems[i] == nil {
+				continue
+			}
+
+			combinedItems[i].Price = item.Price
+		}
+
+		processedItems[inventoryId] = statsItems.ProcessItems(combinedItems, inventoryId, disabledPacks)
+	}
+
+	output := stats.GetAccessories(&member, processedItems, disabledPacks)
 
 	utility.LogVerbose("Returning /api/accessories/%s in %s", profileId, time.Since(timeNow))
 

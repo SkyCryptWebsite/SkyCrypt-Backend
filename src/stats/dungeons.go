@@ -223,11 +223,11 @@ func GetFloorCompletions(userProfile *skycrypttypes.Member) *models.FloorComplet
 	}
 }
 
-func GetDungeons(userProfile *skycrypttypes.Member) models.DungeonsOutput {
+func GetDungeons(userProfile *skycrypttypes.Member) *models.DungeonsOutput {
 	catacombs := userProfile.Dungeons.DungeonTypes["catacombs"]
 	masterCatacombs := userProfile.Dungeons.DungeonTypes["master_catacombs"]
 
-	output := models.DungeonsOutput{
+	output := &models.DungeonsOutput{
 		Level:           stats.GetLevelByXp(int(catacombs.Experience), &stats.ExtraSkillData{Type: "dungeoneering"}),
 		Classes:         getClassData(userProfile),
 		Catacombs:       formatCatacombsFloor(&catacombs, "catacombs"),

@@ -14,15 +14,15 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
-func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycrypttypes.Item, disabledPacks ...[]string) models.GetMissingAccessoresOutput {
-	if items == nil {
-		return models.GetMissingAccessoresOutput{}
+func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string][]models.ProcessedItem, disabledPacks ...[]string) *models.GetMissingAccessoresOutput {
+	if processedItems == nil {
+		return &models.GetMissingAccessoresOutput{}
 	}
 
-	talismanBag := items["talisman_bag"]
+	talismanBag := processedItems["talisman_bag"]
 	accessoryIds := make([]models.AccessoryIds, 0)
 	accessories := make([]models.InsertAccessory, 0)
-	for _, item := range stats.ProcessItems(talismanBag, "talisman_bag", disabledPacks...) {
+	for _, item := range talismanBag {
 		id := stats.GetId(item)
 		if len(id) == 0 {
 			continue
@@ -43,17 +43,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, items map[string][]*skycry
 		accessoryIds = append(accessoryIds, newAccessoryId)
 	}
 
-	var processedItems = make(map[string][]models.ProcessedItem)
 	inventoryKeys := []string{"inventory", "enderchest", "backpack"}
-	for _, inventoryId := range inventoryKeys {
-		inventoryData := items[inventoryId]
-		if len(inventoryData) == 0 {
-			continue
-		}
-
-		processedItems[inventoryId] = stats.ProcessItems(inventoryData, inventoryId, disabledPacks...)
-	}
-
 	for _, inventoryId := range inventoryKeys {
 		if processedItems[inventoryId] == nil {
 			continue

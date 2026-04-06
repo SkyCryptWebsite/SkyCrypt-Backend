@@ -1,13 +1,16 @@
 package neu
 
 type FormattedShard struct {
-	Name         string   `json:"name"`
-	ShardName    string   `json:"shardName"`
-	Lore         []string `json:"lore"`
 	Texture      string   `json:"texture"`
+	Name         string   `json:"name"`
+	AbilityName  string   `json:"abilityName"`
+	Lore         []string `json:"lore"`
+	Rarity       string   `json:"rarity"`
+	Family       []string `json:"family"`
+	ShardID      string   `json:"shardId"`
 	ShardStackId string   `json:"shardStackId"`
 	ShardOwnedId string   `json:"shardOwnedId"`
-	Rarity       string   `json:"rarity"`
+	BazaarName   string   `json:"bazaarName"`
 }
 
 type AttributeShardRaw struct {
@@ -22,5 +25,13 @@ type AttributeShardRaw struct {
 }
 
 type AttributeShardsRaw struct {
-	Attributes []AttributeShardRaw `json:"attributes"`
+	Attributes         []AttributeShardRaw `json:"attributes"`
+	Level              map[string][]int    `json:"attribute_levelling"`
+	UnconsumableShards []string            `json:"unconsumable_attributes"`
+}
+
+type FormattedShards struct {
+	Shards             []FormattedShard `json:"shards"`
+	Level              map[string][]int `json:"attribute_levelling"`
+	UnconsumableShards []string         `json:"unconsumable_attributes"`
 }

@@ -10,29 +10,37 @@ import (
 
 type ItemGetter func(name string) (models.NEUItem, error)
 
-func FormatAttributeShards(shards []neu.AttributeShardRaw, getItem ItemGetter) []neu.FormattedShard {
-	result := make([]neu.FormattedShard, 0, len(shards))
+func FormatAttributeShards(attributeShards neu.AttributeShardsRaw, getItem ItemGetter) neu.FormattedShards {
+	output := neu.FormattedShards{
+		Shards:             []neu.FormattedShard{},
+		Level:              attributeShards.Level,
+		UnconsumableShards: attributeShards.UnconsumableShards,
+	}
 
-	for _, shard := range shards {
+	shards := make([]neu.FormattedShard, 0, len(attributeShards.Attributes))
+	for _, shard := range attributeShards.Attributes {
 		itemData, err := getItem(shard.InternalName)
 		if err != nil {
 			log.Printf("Error getting item data for %s: %v", shard.InternalName, err)
 		}
 
-		formattedShard := neu.FormattedShard{
-			Name:         shard.AbilityName,
-			ShardName:    shard.DisplayName,
-			Lore:         extractLore(itemData.Lore),
+		shards = append(shards, neu.FormattedShard{
 			Texture:      resolveTexture(itemData),
+			Name:         shard.DisplayName,
+			AbilityName:  shard.AbilityName,
+			Lore:         extractLore(itemData.Lore),
+			Rarity:       shard.Rarity,
+			Family:       shard.Family,
+			ShardID:      shard.ShardId,
 			ShardStackId: extractID(shard.InternalName, "ATTRIBUTE_SHARD_", ";"),
 			ShardOwnedId: strings.ReplaceAll(shard.BazaarName, "SHARD_", ""),
-			Rarity:       shard.Rarity,
-		}
-
-		result = append(result, formattedShard)
+			BazaarName:   shard.BazaarName,
+		})
 	}
 
-	return result
+	output.Shards = shards
+
+	return output
 }
 
 func extractLore(lines []string) []string {

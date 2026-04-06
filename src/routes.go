@@ -182,6 +182,9 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/stats/:uuid/:profileId", routes.StatsHandler)
 	api.Get("/stats/:uuid", routes.StatsHandler)
 
+	api.Get("/combined/:uuid/:profileId", routes.CombinedHandler)
+	api.Get("/combined/:uuid", routes.CombinedHandler)
+
 	api.Get("/playerStats/:uuid/:profileId", routes.PlayerStatsHandler)
 
 	api.Get("/networth/:uuid/:profileId", routes.NetworthHandler)
@@ -195,8 +198,6 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/inventory/:uuid/:profileId/:inventoryId", routes.InventoryHandler)
 
 	api.Get("/skills/:uuid/:profileId", routes.SkillsHandler)
-
-	api.Get("/attribute_shards/:uuid/:profileId", routes.AttributeShardsHandler)
 
 	api.Get("/dungeons/:uuid/:profileId", routes.DungeonsHandler)
 
