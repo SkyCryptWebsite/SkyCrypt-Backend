@@ -30,7 +30,7 @@ import (
 //	@Param			uuid		path		string	true	"User UUID"
 //	@Param			profileId	path		string	true	"Profile ID"
 //	@Param			query		query		string	false	"Search query (required when inventoryId is 'search')"
-//	@Success		200			{object}	[]models.StrippedItem
+//	@Success		200			{object}	[]models.Inventory
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
 //	@Router			/api/inventory/{uuid}/{profileId} [get]
