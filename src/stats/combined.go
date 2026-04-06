@@ -89,22 +89,10 @@ func GetCombined(
 		allItems = append(allItems, processed...)
 	}
 
-	inventory := processedItems["inventory"]
-	strippedInventory := statsItems.StripItems(&inventory)
-	// Move hotbar to end of inventory
-	if len(strippedInventory) > 9 {
-		strippedInventory = append(strippedInventory[9:], strippedInventory[:9]...)
-	}
-
 	return &models.CombinedOutput{
 		Gear:         GetGear(processedItems, allItems),
 		Accesssories: GetAccessories(userProfile, processedItems, disabledPacks),
 		Pets:         GetPets(userProfile, profile),
-		Inventory: &models.Inventory{
-			Name:    "Inventory",
-			Texture: fmt.Sprintf(`https://crafatar.com/renders/head/%s?overlay`, mowojang.UUID),
-			Items:   strippedInventory,
-		},
 		Skills: &models.SkillsOutput{
 			Mining:     GetMining(userProfile, player, allItems),
 			Foraging:   GetForaging(userProfile, player, allItems),

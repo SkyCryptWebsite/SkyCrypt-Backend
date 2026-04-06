@@ -85,9 +85,10 @@ func InventoryHandler(c *fiber.Ctx) error {
 			museumItems := statsItems.GetMuseum(profileMuseum[uuid], disabledPacks)
 
 			output = append(output, models.Inventory{
-				Name:    inventoryData.Name,
-				Texture: fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
-				Items:   statsItems.StripItems(&museumItems),
+				Name:           inventoryData.Name,
+				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
+				SeparatorAfter: inventoryData.SeparatorAfter,
+				Items:          statsItems.StripItems(&museumItems),
 			})
 			continue
 		} else if inventoryId == "sacks" {
@@ -98,11 +99,17 @@ func InventoryHandler(c *fiber.Ctx) error {
 			processedSacks := statsItems.ProcessSacks(parsedSacks, sackItems)
 
 			output = append(output, models.Inventory{
-				Name:    inventoryData.Name,
-				Texture: fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
-				Items:   statsItems.StripItems(&processedSacks),
+				Name:           inventoryData.Name,
+				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
+				SeparatorAfter: inventoryData.SeparatorAfter,
+				Items:          statsItems.StripItems(&processedSacks),
 			})
 			continue
+		}
+
+		texture := fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture)
+		if inventoryId == "inventory" {
+			texture = fmt.Sprintf(`https://crafatar.com/renders/head/%s?overlay`, uuid)
 		}
 
 		inventoryItems := stats.GetInventory(&userProfile, inventoryId)
@@ -115,9 +122,10 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 
 		output = append(output, models.Inventory{
-			Name:    inventoryData.Name,
-			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
-			Items:   strippedItems,
+			Name:           inventoryData.Name,
+			Texture:        texture,
+			SeparatorAfter: inventoryData.SeparatorAfter,
+			Items:          strippedItems,
 		})
 	}
 
@@ -125,14 +133,6 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 	// Cache the full inventory for search functionality
 	go func() {
-		inventoryItems := stats.GetInventory(&userProfile, "inventory")
-		processedItems := statsItems.ProcessItems(inventoryItems, "inventory", disabledPacks)
-		output = append(output, models.Inventory{
-			Name:    "Inventory",
-			Texture: fmt.Sprintf(`https://crafatar.com/renders/head/%s?overlay`, uuid),
-			Items:   statsItems.StripItems(&processedItems),
-		})
-
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		jsonData, err := json.Marshal(output)
 		if err != nil {
