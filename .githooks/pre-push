@@ -8,3 +8,10 @@ if ! command -v swag >/dev/null 2>&1; then
 fi
 
 swag init -g main.go --v3.1 --parseDependency --parseInternal
+
+git add docs
+git commit -m "docs: update swagger docs"
+
+
+
+
