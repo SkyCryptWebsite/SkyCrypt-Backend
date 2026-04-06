@@ -10,7 +10,14 @@ fi
 swag init -g main.go --v3.1 --parseDependency --parseInternal
 
 git add docs
+if git diff --cached --quiet; then
+  echo "Swagger docs are up to date; continuing push."
+  exit 0
+fi
+
 git commit -m "docs: update swagger docs"
+echo "Created commit with regenerated docs. Re-run 'git push' to include it."
+exit 1
 
 
 
