@@ -72,9 +72,13 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 			})
 		}
 	} else {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "No cached items found for this player and profile",
-		})
+		// Couldn't find cache to use so call InventoryHandler so it gets cached and rerun the search handler to get the data from cache
+		err := InventoryHandler(c)
+		if err != nil {
+			return err
+		}
+
+		return InventorySearchHandler(c)
 	}
 
 	output := []models.StrippedItem{}
