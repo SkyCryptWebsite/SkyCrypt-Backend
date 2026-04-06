@@ -159,6 +159,10 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 	}
 
 	rawInventory := GetRawInventory(useProfile, inventoryId)
+	if rawInventory == "" {
+		return []*skycrypttypes.Item{}
+	}
+
 	decodedInventory, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(
 		skyhelpernetworthgo.SpecifiedInventory{
 			"inventory": skycrypttypes.EncodedItems{Data: rawInventory},

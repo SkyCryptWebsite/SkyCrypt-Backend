@@ -19,6 +19,7 @@ var INVENTORY_ORDER = []string{
 	"museum",
 	"rift_inventory",
 	"rift_enderchest",
+	"search",
 }
 
 var INVENTORY map[string]inventoryData = map[string]inventoryData{
@@ -34,4 +35,5 @@ var INVENTORY map[string]inventoryData = map[string]inventoryData{
 	"museum":          {Name: "Museum", SeparatorAfter: 54, Texture: "/api/head/438cf3f8e54afc3b3f91d20a49f324dca1486007fe545399055524c17941f4dc"},
 	"rift_inventory":  {Name: "Rift Inventory", SeparatorAfter: 45, Texture: "/api/head/445240fcf1a9796327dda5593985343af9121a7156bc76e3d6b341b02e6a6e52"},
 	"rift_enderchest": {Name: "Rift Ender Chest", SeparatorAfter: 45, Texture: "/api/head/a6cc486c2be1cb9dfcb2e53dd9a3e9a883bfadb27cb956f1896d602b4067"},
+	"search":          {Name: "Search", SeparatorAfter: 45, Texture: "/api/item/EYE_OF_ENDER"},
 }
