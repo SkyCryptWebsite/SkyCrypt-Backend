@@ -245,8 +245,6 @@ components:
           $ref: '#/components/schemas/models.DungeonsOutput'
         gear:
           $ref: '#/components/schemas/models.Gear'
-        inventory:
-          $ref: '#/components/schemas/models.Inventory'
         minions:
           $ref: '#/components/schemas/models.MinionsOutput'
         misc:
@@ -927,18 +925,6 @@ components:
           type: integer
         total:
           type: integer
-      type: object
-    models.Inventory:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/models.StrippedItem'
-          type: array
-          uniqueItems: false
-        name:
-          type: string
-        texture:
-          type: string
       type: object
     models.Kill:
       properties:
