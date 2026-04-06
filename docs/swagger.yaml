@@ -2368,7 +2368,7 @@ paths:
       summary: Get inventory items for a specified player
       tags:
       - inventory
-  /api/inventorySearch/{uuid}/{profileId}:
+  /api/inventory/search/{uuid}/{profileId}/{searchParam}:
     get:
       description: Returns inventory items that match the search parameter for the
         given user and profile ID. Searches across all inventories and returns items
