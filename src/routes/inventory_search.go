@@ -28,7 +28,7 @@ import (
 //	@Success		200			{object}	[]models.StrippedItem
 //	@Failure		400			{object}	models.ProcessingError
 //	@Failure		500			{object}	models.ProcessingError
-//	@Router			/api/inventorySearch/{uuid}/{profileId} [get]
+//	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
 func InventorySearchHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Inventory")()
@@ -72,13 +72,9 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 			})
 		}
 	} else {
-		// Couldn't find cache to use so call InventoryHandler so it gets cached and rerun the search handler to get the data from cache
-		err := InventoryHandler(c)
-		if err != nil {
-			return err
-		}
-
-		return InventorySearchHandler(c)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "No cached items found for this player and profile. Please try again later.",
+		})
 	}
 
 	output := []models.StrippedItem{}
@@ -105,7 +101,7 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	utility.LogVerbose("Returning /api/inventorySearch/%s/%s/%s in %s", uuid, profileId, searchParam, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/inventory/search/%s/%s/%s in %s", uuid, profileId, searchParam, time.Since(timeNow))
 
 	return c.JSON(output)
 }
