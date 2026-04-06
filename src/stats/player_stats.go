@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"maps"
 	"skycrypt/src/constants"
-	redis "skycrypt/src/db"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
 	statsLeveling "skycrypt/src/stats/leveling"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, profileId string, memberUUID string) map[string]models.StatsInfo {
@@ -143,19 +141,9 @@ func GetPlayerStats(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 }
 
 func getItems(userProfile *skycrypttypes.Member, profileId string, memberUUID string) map[string][]*skycrypttypes.Item {
-	var items map[string][]*skycrypttypes.Item
-	cache, err := redis.Get(fmt.Sprintf("items:%s:%s", profileId, memberUUID))
-	if err == nil && cache != "" {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err = json.Unmarshal([]byte(cache), &items)
-		if err != nil {
-			return map[string][]*skycrypttypes.Item{}
-		}
-	} else {
-		items, err = GetItems(userProfile, profileId, memberUUID)
-		if err != nil {
-			return map[string][]*skycrypttypes.Item{}
-		}
+	items, err := GetItems(userProfile, profileId, memberUUID)
+	if err != nil {
+		return map[string][]*skycrypttypes.Item{}
 	}
 
 	return items
