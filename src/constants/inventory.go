@@ -22,7 +22,7 @@ var INVENTORY_ORDER = []string{
 }
 
 var INVENTORY map[string]inventoryData = map[string]inventoryData{
-	"inventory":       {Name: "Inventory", SeparatorAfter: 27, Texture: "https://crafatar.com/renders/head/4855c53ee4fb4100997600a92fc50984?overlay"},
+	"inventory":       {Name: "Inventory", SeparatorAfter: 27, Texture: "https://nmsr.nickac.dev/headiso/4855c53ee4fb4100997600a92fc50984?noshading&no=shadow"},
 	"backpack":        {Name: "Backpack", SeparatorAfter: 45, Texture: "/api/item/chest"},
 	"enderchest":      {Name: "Ender Chest", SeparatorAfter: 45, Texture: "/api/item/ender_chest"},
 	"personal_vault":  {Name: "Personal Vault", SeparatorAfter: 45, Texture: "/api/head/f7aadff9ddc546fdcec6ed5919cc39dfa8d0c07ff4bc613a19f2e6d7f2593"},

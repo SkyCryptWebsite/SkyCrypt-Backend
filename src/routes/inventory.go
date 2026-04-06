@@ -109,7 +109,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 		texture := fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture)
 		if inventoryId == "inventory" {
-			texture = fmt.Sprintf(`https://crafatar.com/renders/head/%s?overlay`, uuid)
+			texture = fmt.Sprintf(`https://nmsr.nickac.dev/headiso/%s?noshading&no=shadow`, uuid)
 		}
 
 		inventoryItems := stats.GetInventory(&userProfile, inventoryId)
