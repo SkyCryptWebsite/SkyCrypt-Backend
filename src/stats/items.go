@@ -190,7 +190,7 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 	return items
 }
 
-func GetItems(useProfile *skycrypttypes.Member, profileId string) (map[string][]*skycrypttypes.Item, error) {
+func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID string) (map[string][]*skycrypttypes.Item, error) {
 	if useProfile.Inventory == nil {
 		useProfile.Inventory = &skycrypttypes.Inventory{}
 	}
@@ -292,7 +292,7 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string) (map[string][]
 	if err != nil {
 		fmt.Printf("Error marshaling items for caching: %v\n", err)
 	} else {
-		_ = redis.Set(fmt.Sprintf("items:%s", profileId), string(jsonData), 5*60)
+		_ = redis.Set(fmt.Sprintf("items:%s:%s", profileId, memberUUID), string(jsonData), 5*60)
 	}
 
 	return output, nil

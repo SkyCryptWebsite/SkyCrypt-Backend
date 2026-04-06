@@ -40,7 +40,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 	mowojang, err := api.ResolvePlayer(uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to resolve player: %v", err),
+			"error": fmt.Sprintf("Failed to resolve embed player: %v", err),
 		})
 	}
 
@@ -71,14 +71,14 @@ func EmbedHandler(c *fiber.Ctx) error {
 	profiles, err := api.GetProfiles(mowojang.UUID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+			"error": fmt.Sprintf("Failed to get embed profile: %v", err),
 		})
 	}
 
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+			"error": fmt.Sprintf("Failed to get embed profile: %v", err),
 		})
 	}
 

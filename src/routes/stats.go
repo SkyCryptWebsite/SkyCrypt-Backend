@@ -36,13 +36,28 @@ func StatsHandler(c *fiber.Ctx) error {
 
 	timeNow := time.Now()
 
-	uuid := c.Params("uuid")
-	profileId := normalizeProfileID(c.Params("profileId"))
+	uuidInput := c.Params("uuid")
+	rawProfileID := strings.TrimSpace(c.Params("profileId"))
+	if strings.EqualFold(rawProfileID, "undefined") || strings.EqualFold(rawProfileID, "null") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid profileId",
+		})
+	}
+
+	profileId := normalizeProfileID(rawProfileID)
+
+	resolvedPlayer, err := api.ResolvePlayer(uuidInput)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to resolve player: %v", err),
+		})
+	}
+	resolvedUUID := resolvedPlayer.UUID
 
 	// Singleflight: deduplicate concurrent requests for the same player+profile
-	sfKey := fmt.Sprintf("stats:%s:%s", uuid, profileId)
+	sfKey := fmt.Sprintf("stats:%s:%s", resolvedUUID, profileId)
 	resultIface, err, _ := statsGroup.Do(sfKey, func() (interface{}, error) {
-		return computeStats(uuid, profileId)
+		return computeStats(resolvedUUID, profileId)
 	})
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -50,7 +65,7 @@ func StatsHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/stats/%s in %s", resolvedUUID, time.Since(timeNow))
 	return c.JSON(resultIface)
 }
 
