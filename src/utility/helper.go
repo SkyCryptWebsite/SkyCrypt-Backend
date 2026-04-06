@@ -215,12 +215,27 @@ func AddCommas(n int) string {
 }
 
 func ParseTimestamp(timestamp string) int {
-	t, err := time.Parse("1/2/06 3:04 PM", timestamp)
-	if err != nil {
-		return 0
+	cleanedTimestamp := strings.TrimSpace(strings.ReplaceAll(timestamp, "\u00a0", " "))
+	cleanedTimestamp = strings.Join(strings.Fields(cleanedTimestamp), " ")
+	layouts := []string{
+		"1/2/06 3:04 PM",
+		"1/2/06 3:04PM",
+		"01/02/06 3:04 PM",
+		"01/02/06 3:04PM",
+		"1/2/2006 3:04 PM",
+		"1/2/2006 3:04PM",
+		"01/02/2006 3:04 PM",
+		"01/02/2006 3:04PM",
 	}
 
-	return int(t.Unix())
+	for _, layout := range layouts {
+		t, err := time.Parse(layout, cleanedTimestamp)
+		if err == nil {
+			return int(t.Unix())
+		}
+	}
+
+	return 0
 }
 
 func Every[T any](slice []T, predicate func(T) bool) bool {
@@ -579,5 +594,3 @@ func GetHexColor(color string) string {
 
 	return "FFFFFF"
 }
-
-
