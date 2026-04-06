@@ -926,6 +926,20 @@ components:
         total:
           type: integer
       type: object
+    models.Inventory:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
+        name:
+          type: string
+        separatorAfter:
+          type: integer
+        texture:
+          type: string
+      type: object
     models.Kill:
       properties:
         amount:
@@ -2336,7 +2350,7 @@ paths:
             application/json:
               schema:
                 items:
-                  $ref: '#/components/schemas/models.StrippedItem'
+                  $ref: '#/components/schemas/models.Inventory'
                 type: array
           description: OK
         "400":
