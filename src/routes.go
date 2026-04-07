@@ -181,7 +181,6 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/networth/:uuid/:profileId", routes.NetworthHandler)
 
 	api.Get("/combined/:uuid/:profileId", routes.CombinedHandler)
-	api.Get("/combined/:uuid", routes.CombinedHandler)
 
 	api.Get("/inventory/:uuid/:profileId", routes.InventoryHandler)
 	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.InventorySearchHandler)
