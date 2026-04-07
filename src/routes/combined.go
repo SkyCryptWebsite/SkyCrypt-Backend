@@ -118,16 +118,10 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	player := playerRes.player
 
 	museumRes := <-museumCh
-	profileMuseum := museumRes.museum
-	if museumRes.err != nil || profile.ProfileID != profileId {
-		profileMuseum, err = api.GetMuseum(profile.ProfileID)
-		if err != nil {
-			if museumRes.err != nil {
-				return nil, fmt.Errorf("failed to get museum: %v", museumRes.err)
-			}
-			return nil, fmt.Errorf("failed to get museum: %v", err)
-		}
+	if museumRes.err != nil {
+		return nil, fmt.Errorf("failed to get museum: %v", museumRes.err)
 	}
+	profileMuseum := museumRes.museum
 
 	members, err := stats.FormatMembers(profile)
 	if err != nil {
