@@ -11,7 +11,7 @@ import (
 )
 
 func GetCombined(
-	mowojang *models.MowojangReponse,
+	mowojang *models.MowojangResponse,
 	profiles *models.HypixelProfilesResponse,
 	profile *skycrypttypes.Profile,
 	player *skycrypttypes.Player,

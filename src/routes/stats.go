@@ -50,7 +50,7 @@ func StatsHandler(c *fiber.Ctx) error {
 }
 
 func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
-	var mowojang *models.MowojangReponse
+	var mowojang *models.MowojangResponse
 	var err error
 	mowojang, err = api.ResolvePlayer(rawInput)
 	if err != nil {
