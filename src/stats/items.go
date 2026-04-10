@@ -2,14 +2,12 @@ package stats
 
 import (
 	"fmt"
-	redis "skycrypt/src/db"
 	"skycrypt/src/utility"
 	"strings"
 	"sync"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func GetRawInventory(userProfile *skycrypttypes.Member, inventoryId string) string {
@@ -161,6 +159,10 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 	}
 
 	rawInventory := GetRawInventory(useProfile, inventoryId)
+	if rawInventory == "" {
+		return []*skycrypttypes.Item{}
+	}
+
 	decodedInventory, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(
 		skyhelpernetworthgo.SpecifiedInventory{
 			"inventory": skycrypttypes.EncodedItems{Data: rawInventory},
@@ -285,14 +287,6 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID str
 				fmt.Printf("No icon found for backpack %s\n", backpackIndex)
 			}
 		}
-	}
-
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	jsonData, err := json.Marshal(output)
-	if err != nil {
-		fmt.Printf("Error marshaling items for caching: %v\n", err)
-	} else {
-		_ = redis.Set(fmt.Sprintf("items:%s:%s", profileId, memberUUID), string(jsonData), 5*60)
 	}
 
 	return output, nil

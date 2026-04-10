@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -40,7 +41,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	disabledPacks := []string{""}
+	disabledPacks := []string{}
 	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
 	if disabledPacksCookies != "FAILED" {
 		var parsedPacks []string
@@ -66,42 +67,91 @@ func CombinedHandler(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func computeCombined(rawInput string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
+func computeCombined(uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
 	var err error
-	var mowojang *models.MowojangReponse
-	mowojang, err = api.ResolvePlayer(rawInput)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve player: %v", err)
-	}
-	uuid := mowojang.UUID
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		mowojang, err = api.ResolvePlayer(uuid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve player: %v", err)
+		}
 
-	profiles, err := api.GetProfiles(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get profiles: %v", err)
+		uuid = mowojang.UUID
 	}
+
+	type profilesResult struct {
+		profiles *models.HypixelProfilesResponse
+		err      error
+	}
+	type playerResult struct {
+		player *skycrypttypes.Player
+		err    error
+	}
+	type museumResult struct {
+		museum map[string]*skycrypttypes.Museum
+		err    error
+	}
+
+	profilesCh := make(chan profilesResult, 1)
+	playerCh := make(chan playerResult, 1)
+	museumCh := make(chan museumResult, 1)
+	museumProfileIDCh := make(chan string, 1)
+
+	go func() {
+		profiles, fetchErr := api.GetProfiles(uuid)
+		profilesCh <- profilesResult{profiles: profiles, err: fetchErr}
+	}()
+
+	go func() {
+		player, fetchErr := api.GetPlayer(uuid)
+		playerCh <- playerResult{player: player, err: fetchErr}
+	}()
+
+	go func() {
+		actualProfileID := <-museumProfileIDCh
+		museum, fetchErr := api.GetMuseum(actualProfileID)
+		museumCh <- museumResult{museum: museum, err: fetchErr}
+	}()
+
+	if utility.IsUUID(profileId) {
+		museumProfileIDCh <- profileId
+	}
+
+	profilesRes := <-profilesCh
+	if profilesRes.err != nil {
+		return nil, fmt.Errorf("failed to get profiles: %v", profilesRes.err)
+	}
+	profiles := profilesRes.profiles
 
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get profile: %v", err)
 	}
 
-	player, err := api.GetPlayer(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get player: %v", err)
+	if !utility.IsUUID(profileId) {
+		profileId = profile.ProfileID
+		museumProfileIDCh <- profileId
 	}
 
-	profileMuseum, err := api.GetMuseum(profile.ProfileID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get museum: %v", err)
+	playerRes := <-playerCh
+	if playerRes.err != nil {
+		return nil, fmt.Errorf("failed to get player: %v", playerRes.err)
 	}
+	player := playerRes.player
+
+	museumRes := <-museumCh
+	if museumRes.err != nil {
+		return nil, fmt.Errorf("failed to get museum: %v", museumRes.err)
+	}
+	profileMuseum := museumRes.museum
 
 	members, err := stats.FormatMembers(profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
 
-	userProfileValue := profile.Members[mowojang.UUID]
-	museum := profileMuseum[mowojang.UUID]
+	userProfileValue := profile.Members[uuid]
+	museum := profileMuseum[uuid]
 	userProfile := &userProfileValue
 
 	return stats.GetCombined(mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)

@@ -245,11 +245,6 @@ components:
           $ref: '#/components/schemas/models.DungeonsOutput'
         gear:
           $ref: '#/components/schemas/models.Gear'
-        inventory:
-          items:
-            $ref: '#/components/schemas/models.StrippedItem'
-          type: array
-          uniqueItems: false
         minions:
           $ref: '#/components/schemas/models.MinionsOutput'
         misc:
@@ -930,6 +925,20 @@ components:
           type: integer
         total:
           type: integer
+      type: object
+    models.Inventory:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
+        name:
+          type: string
+        separatorAfter:
+          type: integer
+        texture:
+          type: string
       type: object
     models.Kill:
       properties:
@@ -2150,108 +2159,6 @@ info:
   version: "1.0"
 openapi: 3.1.0
 paths:
-  /api/accessories/{uuid}/{profileId}:
-    get:
-      description: Returns accessories for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.GetMissingAccessoresOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get accessories stats of a specified player
-      tags:
-      - accessories
-  /api/bestiary/{uuid}/{profileId}:
-    get:
-      description: Returns bestiary for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.BestiaryOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get bestiary stats of a specified player
-      tags:
-      - bestiary
-  /api/collections/{uuid}/{profileId}:
-    get:
-      description: Returns collections for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.CollectionsOutput'
-          description: OK
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get collections stats of a specified player
-      tags:
-      - collections
   /api/combined/{uuid}/{profileId}:
     get:
       description: Returns combined  stats for the given user and profile ID
@@ -2290,70 +2197,6 @@ paths:
       summary: Get combined stats of a specified player
       tags:
       - combinedStats
-  /api/crimson_isle/{uuid}/{profileId}:
-    get:
-      description: Returns Crimson Isle stats for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.CrimsonIsleOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get Crimson Isle stats of a specified player
-      tags:
-      - crimson_isle
-  /api/dungeons/{uuid}/{profileId}:
-    get:
-      description: Returns dungeons for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.DungeonsOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get dungeons stats of a specified player
-      tags:
-      - dungeons
   /api/embed/{uuid}:
     get:
       description: Returns embed data for the given user (UUID or username) and optional
@@ -2444,44 +2287,6 @@ paths:
       summary: Get garden stats of a specified profile
       tags:
       - garden
-  /api/gear/{uuid}/{profileId}:
-    get:
-      description: Returns gear for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.Gear'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get gear stats of a specified player
-      tags:
-      - gear
   /api/head/{textureId}:
     get:
       description: Returns a PNG image of a head for the given texture ID
@@ -2518,10 +2323,9 @@ paths:
       summary: Render and return a head image
       tags:
       - head
-  /api/inventory/{uuid}/{profileId}/{inventoryId}:
+  /api/inventory/{uuid}/{profileId}:
     get:
-      description: Returns inventory items for the given user, profile ID, and inventory
-        ID. Supports museum, search, and other inventories.
+      description: Returns inventory items for the given user, profile ID
       parameters:
       - description: User UUID
         in: path
@@ -2535,15 +2339,57 @@ paths:
         required: true
         schema:
           type: string
-      - description: Inventory ID (e.g., museum, search, or other inventory types)
-        in: path
-        name: inventoryId
-        required: true
-        schema:
-          type: string
       - description: Search query (required when inventoryId is 'search')
         in: query
         name: query
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/models.Inventory'
+                type: array
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Internal Server Error
+      summary: Get inventory items for a specified player
+      tags:
+      - inventory
+  /api/inventory/search/{uuid}/{profileId}/{searchParam}:
+    get:
+      description: Returns inventory items that match the search parameter for the
+        given user and profile ID. Searches across all inventories and returns items
+        that contain the search parameter in their name or lore.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Profile ID
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
+      - description: Search parameter to filter inventory items
+        in: path
+        name: searchParam
+        required: true
         schema:
           type: string
       responses:
@@ -2567,7 +2413,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Internal Server Error
-      summary: Get inventory items for a specified player
+      summary: Get searched inventory items for a specified player and search parameter
       tags:
       - inventory
   /api/item/{itemId}:
@@ -2648,70 +2494,6 @@ paths:
       summary: Render and return a leather armor image
       tags:
       - leather
-  /api/minions/{uuid}/{profileId}:
-    get:
-      description: Returns minions for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.MinionsOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get minions stats of a specified player
-      tags:
-      - minions
-  /api/misc/{uuid}/{profileId}:
-    get:
-      description: Returns misc stats for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.MiscOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get misc stats of a specified player
-      tags:
-      - misc
   /api/networth/{uuid}/{profileId}:
     get:
       description: Returns networth for the given user and profile ID
@@ -2750,38 +2532,6 @@ paths:
       summary: Get networth of a specified player
       tags:
       - networth
-  /api/pets/{uuid}/{profileId}:
-    get:
-      description: Returns pets for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.OutputPets'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get pets stats of a specified player
-      tags:
-      - pets
   /api/playerStats/{uuid}/{profileId}:
     get:
       description: Returns player stats for the given user and profile ID
@@ -2871,114 +2621,6 @@ paths:
       summary: Get list of resource packs
       tags:
       - resourcepacks
-  /api/rift/{uuid}/{profileId}:
-    get:
-      description: Returns rift data for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.RiftOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get rift stats of a specified player
-      tags:
-      - rift
-  /api/skills/{uuid}/{profileId}:
-    get:
-      description: Returns skills for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.SkillsOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get skills stats of a specified player
-      tags:
-      - skills
-  /api/slayer/{uuid}/{profileId}:
-    get:
-      description: Returns slayer statistics for the given user and profile ID
-      parameters:
-      - description: User UUID
-        in: path
-        name: uuid
-        required: true
-        schema:
-          type: string
-      - description: Profile ID
-        in: path
-        name: profileId
-        required: true
-        schema:
-          type: string
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.SlayersOutput'
-          description: OK
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get slayer stats of a specified player
-      tags:
-      - slayers
   /api/stats/{uuid}/{profileId}:
     get:
       description: Returns stats for the given user and profile ID

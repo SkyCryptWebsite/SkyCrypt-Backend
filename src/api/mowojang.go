@@ -27,7 +27,7 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 		shouldThrowError = throwAnError[0]
 	}
 
-	var post models.MowojangReponse
+	var post models.MowojangResponse
 
 	cache, err := redis.Get(fmt.Sprintf("uuid:%s", strings.ToLower(username)))
 	if err == nil && cache != "" {
@@ -94,7 +94,7 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 		shouldThrowError = throwAnError[0]
 	}
 
-	var post models.MowojangReponse
+	var post models.MowojangResponse
 
 	cache, err := redis.Get(fmt.Sprintf("username:%s", uuid))
 	if err == nil && cache != "" {
@@ -147,7 +147,7 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 	return post.Name, nil
 }
 
-func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse, error) {
+func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangResponse, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.ResolvePlayer")()
 	}
@@ -157,7 +157,7 @@ func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse,
 		shouldThrowError = throwAnError[0]
 	}
 
-	var post models.MowojangReponse
+	var post models.MowojangResponse
 	uuid := input
 	if !utility.IsUUID(uuid) {
 		tempUUID, err := GetUUID(uuid, shouldThrowError)
@@ -182,11 +182,11 @@ func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangReponse,
 		return &post, nil
 	}
 
-	return resultIface.(*models.MowojangReponse), nil
+	return resultIface.(*models.MowojangResponse), nil
 }
 
-func resolvePlayerByUUID(uuid string) (*models.MowojangReponse, error) {
-	var post models.MowojangReponse
+func resolvePlayerByUUID(uuid string) (*models.MowojangResponse, error) {
+	var post models.MowojangResponse
 
 	cache, err := redis.Get(fmt.Sprintf("mowojangUUID:%s", uuid))
 	if err == nil && cache != "" {
@@ -220,7 +220,7 @@ func resolvePlayerByUUID(uuid string) (*models.MowojangReponse, error) {
 	}
 
 	if resp.StatusCode == http.StatusNotFound || string(body) == "player not found" {
-		return &models.MowojangReponse{
+		return &models.MowojangResponse{
 			Name: "Player not Found",
 			UUID: uuid,
 		}, nil

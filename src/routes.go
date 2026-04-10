@@ -172,61 +172,29 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/uuid/:username", routes.UUIDHandler)
 	api.Get("/username/:uuid", routes.UsernameHandler)
 
-	// HYPIXEL API ENDPOINTS
-	api.Get("/profiles/:uuid", routes.ProfilesHandler)
-	api.Get("/player/:uuid", routes.PlayerHandler)
-	api.Get("/museum/:profileId", routes.MuseumHandler)
-	api.Get("/garden/:uuid/:profileId", routes.GardenHandler)
-
 	// STATS ENDPOINTS
 	api.Get("/stats/:uuid/:profileId", routes.StatsHandler)
 	api.Get("/stats/:uuid", routes.StatsHandler)
-
-	api.Get("/combined/:uuid/:profileId", routes.CombinedHandler)
-	api.Get("/combined/:uuid", routes.CombinedHandler)
 
 	api.Get("/playerStats/:uuid/:profileId", routes.PlayerStatsHandler)
 
 	api.Get("/networth/:uuid/:profileId", routes.NetworthHandler)
 
-	api.Get("/gear/:uuid/:profileId", routes.GearHandler)
+	api.Get("/combined/:uuid/:profileId", routes.CombinedHandler)
 
-	api.Get("/accessories/:uuid/:profileId", routes.AccessoriesHandler)
+	api.Get("/inventory/:uuid/:profileId", routes.InventoryHandler)
+	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.InventorySearchHandler)
 
-	api.Get("/pets/:uuid/:profileId", routes.PetsHandler)
-
-	api.Get("/inventory/:uuid/:profileId/:inventoryId", routes.InventoryHandler)
-
-	api.Get("/skills/:uuid/:profileId", routes.SkillsHandler)
-
-	api.Get("/dungeons/:uuid/:profileId", routes.DungeonsHandler)
-
-	api.Get("/slayer/:uuid/:profileId", routes.SlayersHandler)
-
-	api.Get("/minions/:uuid/:profileId", routes.MinionsHandler)
-
-	api.Get("/bestiary/:uuid/:profileId", routes.BestiaryHandler)
-
-	api.Get("/collections/:uuid/:profileId", routes.CollectionsHandler)
-
-	api.Get("/crimson_isle/:uuid/:profileId", routes.CrimsonIsleHandler)
-
-	api.Get("/rift/:uuid/:profileId", routes.RiftHandler)
-
-	api.Get("/misc/:uuid/:profileId", routes.MiscHandler)
+	api.Get("/garden/:uuid/:profileId", routes.GardenHandler)
 
 	api.Get("/embed/:uuid/:profileId", routes.EmbedHandler)
 	api.Get("/embed/:uuid", routes.EmbedHandler)
 
 	// RENDERING ENDPOINTS
 	api.Get("/head/:textureId", routes.HeadHandlers)
-
 	api.Get("/item/:itemId", routes.ItemHandlers)
-
 	api.Get("/potion/:type/:color", routes.PotionHandlers)
-
 	api.Get("/leather/:type/:color", routes.LeatherHandlers)
-
 	api.Get("/resourcepacks", routes.ResourcePackHandler)
 
 	// OTHER

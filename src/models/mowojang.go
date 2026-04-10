@@ -1,6 +1,6 @@
 package models
 
-type MowojangReponse struct {
+type MowojangResponse struct {
 	UUID string `json:"id"`
 	Name string `json:"name"`
 }

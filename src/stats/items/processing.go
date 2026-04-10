@@ -91,7 +91,7 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 			}
 
 			if timestampStr != "" {
-				if source == "museum" && len(timestampStr) == 10 {
+				if len(timestampStr) == 10 {
 					timestampStr += "000"
 				}
 

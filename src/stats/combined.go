@@ -11,7 +11,7 @@ import (
 )
 
 func GetCombined(
-	mowojang *models.MowojangReponse,
+	mowojang *models.MowojangResponse,
 	profiles *models.HypixelProfilesResponse,
 	profile *skycrypttypes.Profile,
 	player *skycrypttypes.Player,
@@ -89,13 +89,10 @@ func GetCombined(
 		allItems = append(allItems, processed...)
 	}
 
-	inventory := processedItems["inventory"]
-
 	return &models.CombinedOutput{
 		Gear:         GetGear(processedItems, allItems),
 		Accesssories: GetAccessories(userProfile, processedItems, disabledPacks),
 		Pets:         GetPets(userProfile, profile),
-		Inventory:    statsItems.StripItems(&inventory),
 		Skills: &models.SkillsOutput{
 			Mining:     GetMining(userProfile, player, allItems),
 			Foraging:   GetForaging(userProfile, player, allItems),

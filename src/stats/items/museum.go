@@ -228,6 +228,10 @@ func getMuseumCategoryItems(section string) []string {
 }
 
 func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models.ProcessedItem {
+	if museum == nil {
+		return make([]models.ProcessedItem, 6*9)
+	}
+
 	museumItems := ProcessMuseumItems(museum, disabledPacks...)
 
 	output := make([]models.ProcessedItem, 6*9)

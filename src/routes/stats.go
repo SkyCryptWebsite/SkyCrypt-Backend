@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -49,7 +50,7 @@ func StatsHandler(c *fiber.Ctx) error {
 }
 
 func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
-	var mowojang *models.MowojangReponse
+	var mowojang *models.MowojangResponse
 	var err error
 	mowojang, err = api.ResolvePlayer(rawInput)
 	if err != nil {
@@ -57,20 +58,44 @@ func computeStats(rawInput string, profileId string) (*models.StatsOutput, error
 	}
 	uuid := mowojang.UUID
 
-	profiles, err := api.GetProfiles(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get profiles: %v", err)
+	type profilesResult struct {
+		profiles *models.HypixelProfilesResponse
+		err      error
 	}
+	type playerResult struct {
+		player *skycrypttypes.Player
+		err    error
+	}
+
+	profilesCh := make(chan profilesResult, 1)
+	playerCh := make(chan playerResult, 1)
+
+	go func() {
+		profiles, fetchErr := api.GetProfiles(uuid)
+		profilesCh <- profilesResult{profiles: profiles, err: fetchErr}
+	}()
+
+	go func() {
+		player, fetchErr := api.GetPlayer(uuid)
+		playerCh <- playerResult{player: player, err: fetchErr}
+	}()
+
+	profilesRes := <-profilesCh
+	if profilesRes.err != nil {
+		return nil, fmt.Errorf("failed to get profiles: %v", profilesRes.err)
+	}
+	profiles := profilesRes.profiles
 
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get profile: %v", err)
 	}
 
-	player, err := api.GetPlayer(uuid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get player: %v", err)
+	playerRes := <-playerCh
+	if playerRes.err != nil {
+		return nil, fmt.Errorf("failed to get player: %v", playerRes.err)
 	}
+	player := playerRes.player
 
 	profileMuseum, err := api.GetMuseum(profile.ProfileID)
 	if err != nil {
