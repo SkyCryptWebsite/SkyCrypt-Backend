@@ -1,10 +1,7 @@
 package stats
 
 import (
-	"encoding/json"
-	"fmt"
 	"math"
-	redis "skycrypt/src/db"
 	"skycrypt/src/models"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -59,7 +56,7 @@ func getSlayersForEmbed(slayers *models.SlayersOutput) models.EmbedDataSlayers {
 	return output
 }
 
-func StoreEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, networth map[string]float64) {
+func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, networth map[string]float64) *models.EmbedData {
 	skills := GetSkills(userProfile, profile, &skycrypttypes.Player{})
 	dungeons := GetDungeons(userProfile)
 	slayers := GetSlayers(userProfile)
@@ -74,7 +71,7 @@ func StoreEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Pla
 		NonCosmetic: RoundToOneDecimal(networth["nonCosmetic"]),
 	}
 
-	output := models.EmbedData{
+	return &models.EmbedData{
 		DisplayName:     mowojang.Name,
 		Username:        mowojang.Name,
 		Rank:            *GetRank(player),
@@ -91,12 +88,4 @@ func StoreEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Pla
 		Dungeons:        getDungeonsForEmbed(dungeons),
 		Slayers:         getSlayersForEmbed(slayers),
 	}
-
-	outputString, err := json.Marshal(output)
-	if err != nil {
-		fmt.Printf("Failed to marshal embed data: %v\n", err)
-		return
-	}
-
-	_ = redis.Set(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profile.ProfileID), outputString, 7*24*60*60) // Cache for 7 days
 }

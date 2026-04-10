@@ -1,17 +1,14 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
 	"skycrypt/src/api"
-	"skycrypt/src/constants"
-	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
-	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"time"
 
+	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -35,65 +32,73 @@ func EmbedHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
-	isBot := utility.IsKnownBot(c)
-
-	mowojang, err := api.ResolvePlayer(uuid)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to resolve embed player: %v", err),
-		})
-	}
-
 	profileId := c.Params("profileId")
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
 
-	if utility.IsUUID(profileId) {
-		embed, err := redis.Get(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profileId))
-		if err == nil && embed != "" {
-			var embedData models.EmbedData
-			if err := json.Unmarshal([]byte(embed), &embedData); err == nil {
-				utility.LogVerbose("Returning /api/embed/%s (cache hit) in %s", profileId, time.Since(timeNow))
-				return c.JSON(embedData)
-			}
-		}
-
-		if isBot {
-			utility.LogVerbose("Returning /api/embed/%s (bot, no cache) in %s", profileId, time.Since(timeNow))
-			return c.JSON(models.EmbedData{})
-		}
-	} else if isBot {
-		utility.LogVerbose("Returning /api/embed/%s (bot, unresolvable) in %s", profileId, time.Since(timeNow))
-		return c.JSON(models.EmbedData{})
+	mowojang, err := api.ResolvePlayer(uuid)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to resolve player: %v", err),
+		})
 	}
 
 	profiles, err := api.GetProfiles(mowojang.UUID)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get embed profile: %v", err),
+			"error": fmt.Sprintf("Failed to get profile: %v", err),
 		})
 	}
 
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get embed profile: %v", err),
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get profile: %v", err),
 		})
 	}
 
-	embed, err := redis.Get(fmt.Sprintf("embed:%s:%s", mowojang.UUID, profile.ProfileID))
+	player, err := api.GetPlayer(mowojang.UUID)
 	if err != nil {
-		c.Status(400)
-		return c.JSON(constants.InvalidUserError)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get player data: %v", err),
+		})
 	}
 
-	var embedData models.EmbedData
-	if err := json.Unmarshal([]byte(embed), &embedData); err != nil {
-		return c.JSON(embedData)
+	profileMuseum, err := api.GetMuseum(profile.ProfileID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to get museum: %v", err),
+		})
 	}
+	userProfileValue := profile.Members[mowojang.UUID]
+	museum := profileMuseum[mowojang.UUID]
+	userProfile := &userProfileValue
+
+	var bankBalance float64
+	if profile.Banking != nil && profile.Banking.Balance != nil {
+		bankBalance = *profile.Banking.Balance
+	} else {
+		bankBalance = 0.0
+	}
+
+	calculator, err := skyhelpernetworthgo.NewProfileNetworthCalculator(userProfile, museum, bankBalance)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to create networth calculator: %v", err),
+		})
+	}
+
+	networth := calculator.GetNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
+	nonCosmeticNetworth := calculator.GetNonCosmeticNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
+	formattedNetworth := map[string]float64{
+		"normal":      networth.Networth,
+		"nonCosmetic": nonCosmeticNetworth.Networth,
+	}
+
+	output := stats.GetEmbedData(mowojang, player, userProfile, profile, formattedNetworth)
 
 	utility.LogVerbose("Returning /api/embed/%s in %s", profileId, time.Since(timeNow))
 
-	return c.JSON(embedData)
+	return c.JSON(output)
 }

@@ -68,6 +68,17 @@ func CombinedHandler(c *fiber.Ctx) error {
 }
 
 func computeCombined(uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
+	var err error
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		mowojang, err = api.ResolvePlayer(uuid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve player: %v", err)
+		}
+
+		uuid = mowojang.UUID
+	}
+
 	type profilesResult struct {
 		profiles *models.HypixelProfilesResponse
 		err      error
@@ -84,6 +95,7 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	profilesCh := make(chan profilesResult, 1)
 	playerCh := make(chan playerResult, 1)
 	museumCh := make(chan museumResult, 1)
+	museumProfileIDCh := make(chan string, 1)
 
 	go func() {
 		profiles, fetchErr := api.GetProfiles(uuid)
@@ -96,9 +108,14 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	}()
 
 	go func() {
-		museum, fetchErr := api.GetMuseum(profileId)
+		actualProfileID := <-museumProfileIDCh
+		museum, fetchErr := api.GetMuseum(actualProfileID)
 		museumCh <- museumResult{museum: museum, err: fetchErr}
 	}()
+
+	if utility.IsUUID(profileId) {
+		museumProfileIDCh <- profileId
+	}
 
 	profilesRes := <-profilesCh
 	if profilesRes.err != nil {
@@ -109,6 +126,11 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	profile, err := stats.GetProfile(profiles, profileId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get profile: %v", err)
+	}
+
+	if !utility.IsUUID(profileId) {
+		profileId = profile.ProfileID
+		museumProfileIDCh <- profileId
 	}
 
 	playerRes := <-playerCh
@@ -131,7 +153,6 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	userProfileValue := profile.Members[uuid]
 	museum := profileMuseum[uuid]
 	userProfile := &userProfileValue
-	mowojang := &models.MowojangResponse{UUID: uuid}
 
 	return stats.GetCombined(mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
 }
