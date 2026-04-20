@@ -213,14 +213,14 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
 					object.Wiki.Official = NEUItem.Wiki[0]
 				} else {
-					object.Wiki.Fandom = NEUItem.Wiki[0]
+					object.Wiki.Independent = NEUItem.Wiki[0]
 				}
 			} else {
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
 					object.Wiki.Official = NEUItem.Wiki[0]
-					object.Wiki.Fandom = NEUItem.Wiki[1]
+					object.Wiki.Independent = NEUItem.Wiki[1]
 				} else {
-					object.Wiki.Fandom = NEUItem.Wiki[0]
+					object.Wiki.Independent = NEUItem.Wiki[0]
 					object.Wiki.Official = NEUItem.Wiki[1]
 				}
 			}

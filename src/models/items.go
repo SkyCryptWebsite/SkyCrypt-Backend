@@ -27,8 +27,8 @@ type ProcessedItem struct {
 }
 
 type WikipediaLinks struct {
-	Official string `json:"official,omitempty"`
-	Fandom   string `json:"fandom,omitempty"`
+	Official    string `json:"official,omitempty"`
+	Independent string `json:"independent,omitempty"`
 }
 
 type SkillToolsResult struct {
