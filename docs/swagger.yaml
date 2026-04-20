@@ -1893,7 +1893,7 @@ components:
       type: object
     models.WikipediaLinks:
       properties:
-        fandom:
+        independent:
           type: string
         official:
           type: string

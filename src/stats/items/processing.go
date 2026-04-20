@@ -139,14 +139,14 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
 					processedItem.Wiki.Official = NEUItem.Wiki[0]
 				} else {
-					processedItem.Wiki.Fandom = NEUItem.Wiki[0]
+					processedItem.Wiki.Independent = NEUItem.Wiki[0]
 				}
 			} else {
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
 					processedItem.Wiki.Official = NEUItem.Wiki[0]
-					processedItem.Wiki.Fandom = NEUItem.Wiki[1]
+					processedItem.Wiki.Independent = NEUItem.Wiki[1]
 				} else {
-					processedItem.Wiki.Fandom = NEUItem.Wiki[0]
+					processedItem.Wiki.Independent = NEUItem.Wiki[0]
 					processedItem.Wiki.Official = NEUItem.Wiki[1]
 				}
 			}
