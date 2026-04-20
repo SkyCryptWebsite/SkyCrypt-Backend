@@ -20,15 +20,10 @@ type ProcessedItem struct {
 	Id             string          `json:"id,omitempty"`
 	IsInactive     *bool           `json:"isInactive,omitempty"`
 	Shiny          bool            `json:"shiny,omitempty"`
-	Wiki           *WikipediaLinks `json:"wiki,omitempty"`
+	Wiki           *string         `json:"wiki,omitempty"`
 	Price          float64         `json:"price,omitempty"`
 	ItemIndex      int             `json:"itemIndex,omitempty"`
 	Count          *int            `json:"Count,omitempty"`
-}
-
-type WikipediaLinks struct {
-	Official    string `json:"official,omitempty"`
-	Independent string `json:"independent,omitempty"`
 }
 
 type SkillToolsResult struct {
@@ -49,19 +44,19 @@ type EquipmentResult struct {
 }
 
 type StrippedItem struct {
-	DisplayName    string          `json:"display_name,omitempty"`
-	Lore           []string        `json:"lore,omitempty"`
-	Rarity         string          `json:"rarity,omitempty"`
-	Recombobulated bool            `json:"recombobulated,omitempty"`
-	ContainsItems  []StrippedItem  `json:"containsItems,omitempty"`
-	Source         string          `json:"source,omitempty"`
-	Texture        string          `json:"texture_path,omitempty"`
-	IsInactive     *bool           `json:"isInactive,omitempty"`
-	Count          *int            `json:"Count,omitempty"`
-	Shiny          bool            `json:"shiny,omitempty"`
-	Wiki           *WikipediaLinks `json:"wiki,omitempty"`
-	TexturePack    string          `json:"texture_pack,omitempty"`
-	SourceTab      *SourceTab      `json:"sourceTab,omitempty"`
+	DisplayName    string         `json:"display_name,omitempty"`
+	Lore           []string       `json:"lore,omitempty"`
+	Rarity         string         `json:"rarity,omitempty"`
+	Recombobulated bool           `json:"recombobulated,omitempty"`
+	ContainsItems  []StrippedItem `json:"containsItems,omitempty"`
+	Source         string         `json:"source,omitempty"`
+	Texture        string         `json:"texture_path,omitempty"`
+	IsInactive     *bool          `json:"isInactive,omitempty"`
+	Count          *int           `json:"Count,omitempty"`
+	Shiny          bool           `json:"shiny,omitempty"`
+	Wiki           *string        `json:"wiki,omitempty"`
+	TexturePack    string         `json:"texture_pack,omitempty"`
+	SourceTab      *SourceTab     `json:"sourceTab,omitempty"`
 }
 
 type SourceTab struct {

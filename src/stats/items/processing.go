@@ -134,20 +134,15 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 		// Wiki links
 		NEUItem, err := notenoughupdates.GetItem(item.Tag.ExtraAttributes.Id)
 		if err == nil && len(NEUItem.Wiki) > 0 {
-			processedItem.Wiki = &models.WikipediaLinks{}
 			if len(NEUItem.Wiki) == 1 {
-				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					processedItem.Wiki.Official = NEUItem.Wiki[0]
-				} else {
-					processedItem.Wiki.Independent = NEUItem.Wiki[0]
+				if !strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
+					processedItem.Wiki = &NEUItem.Wiki[0]
 				}
 			} else {
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					processedItem.Wiki.Official = NEUItem.Wiki[0]
-					processedItem.Wiki.Independent = NEUItem.Wiki[1]
+					processedItem.Wiki = &NEUItem.Wiki[1]
 				} else {
-					processedItem.Wiki.Independent = NEUItem.Wiki[0]
-					processedItem.Wiki.Official = NEUItem.Wiki[1]
+					processedItem.Wiki = &NEUItem.Wiki[0]
 				}
 			}
 		}

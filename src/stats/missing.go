@@ -208,20 +208,15 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 		// Wiki links
 		NEUItem, err := notenoughupdates.GetItem(missingAccessory.Id)
 		if err == nil && len(NEUItem.Wiki) > 0 {
-			object.Wiki = &models.WikipediaLinks{}
 			if len(NEUItem.Wiki) == 1 {
-				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					object.Wiki.Official = NEUItem.Wiki[0]
-				} else {
-					object.Wiki.Independent = NEUItem.Wiki[0]
+				if !strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
+					object.Wiki = &NEUItem.Wiki[0]
 				}
 			} else {
 				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					object.Wiki.Official = NEUItem.Wiki[0]
-					object.Wiki.Independent = NEUItem.Wiki[1]
+					object.Wiki = &NEUItem.Wiki[1]
 				} else {
-					object.Wiki.Independent = NEUItem.Wiki[0]
-					object.Wiki.Official = NEUItem.Wiki[1]
+					object.Wiki = &NEUItem.Wiki[0]
 				}
 			}
 		}

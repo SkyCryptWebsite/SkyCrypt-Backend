@@ -1418,7 +1418,7 @@ components:
         texture_path:
           type: string
         wiki:
-          $ref: '#/components/schemas/models.WikipediaLinks'
+          type: string
       type: object
     models.ProcessingError:
       properties:
@@ -1761,7 +1761,7 @@ components:
         texture_path:
           type: string
         wiki:
-          $ref: '#/components/schemas/models.WikipediaLinks'
+          type: string
       type: object
     models.StrippedPet:
       properties:
@@ -1890,13 +1890,6 @@ components:
           type: integer
         total:
           type: integer
-      type: object
-    models.WikipediaLinks:
-      properties:
-        independent:
-          type: string
-        official:
-          type: string
       type: object
     skycrypt_src_models.NetworthResult:
       properties:
