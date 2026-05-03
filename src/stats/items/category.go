@@ -73,9 +73,9 @@ func GetWeapons(allItems []models.ProcessedItem) models.WeaponsResult {
 		id := GetId(weapon)
 		itemCounts[id]++
 
-		if itemCounts[id] <= 2 {
-			filteredWeapons = append(filteredWeapons, weapon)
-		}
+		// if itemCounts[id] <= 2 {
+		// 	 filteredWeapons = append(filteredWeapons, weapon)
+		// }
 	}
 
 	weapons = filteredWeapons
