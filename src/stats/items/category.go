@@ -11,6 +11,20 @@ import (
 
 type itemSorter []models.ProcessedItem
 
+func getPrimaryCategory(item models.ProcessedItem) string {
+	for _, category := range item.Categories {
+		if category != "" && category != "weapon" {
+			return category
+		}
+	}
+
+	if len(item.Categories) > 0 {
+		return item.Categories[0]
+	}
+
+	return ""
+}
+
 func (s itemSorter) Len() int {
 	return len(s)
 }
@@ -26,6 +40,17 @@ func (s itemSorter) Less(i, j int) bool {
 		aIndex := utility.IndexOf(constants.RARITIES, a.Rarity)
 		bIndex := utility.IndexOf(constants.RARITIES, b.Rarity)
 		return bIndex < aIndex
+	}
+
+	// aID, bID := GetId(a), GetId(b)
+	// if aID != bID {
+	// 	return strings.Compare(aID, bID) < 0
+	// }
+
+	aCategory := getPrimaryCategory(a)
+	bCategory := getPrimaryCategory(b)
+	if aCategory != bCategory {
+		return strings.Compare(aCategory, bCategory) < 0
 	}
 
 	if a.ItemIndex != b.ItemIndex {
@@ -82,8 +107,21 @@ func GetWeapons(allItems []models.ProcessedItem) models.WeaponsResult {
 
 	swords := GetCategory(allItems, "sword")
 	var highestPriorityWeapon *models.ProcessedItem
-	if len(swords) > 0 {
-		highestPriorityWeapon = &swords[0]
+	for _, sword := range swords {
+		for _, weapon := range weapons {
+			if weapon.Source != "inventory" {
+				continue
+			}
+
+			if weapon.ItemIndex >= sword.ItemIndex {
+				highestPriorityWeapon = &weapon
+				break
+			}
+		}
+
+		if highestPriorityWeapon != nil {
+			break
+		}
 	}
 
 	return models.WeaponsResult{
