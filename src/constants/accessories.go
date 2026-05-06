@@ -141,6 +141,8 @@ var AccessoryUpgrades = [][]string{
 	{"WITCH_TALISMAN", "WITCH_RING", "WITCH_ARTIFACT"},
 	{"ORGAN_DONOR_TALISMAN", "ORGAN_DONOR_RING", "ORGAN_DONOR_ARTIFACT"},
 	{"COPPER_TALISMAN", "COPPER_RING", "COPPER_ARTIFACT"},
+	{"GRATITUDE_TALISMAN", "GRATITUDE_RING", "GRATITUDE_ARTIFACT"},
+	{"FRESHLY_BAKED_TALISMAN", "FRESHLY_BAKED_RING", "FRESHLY_BAKED_ARTIFACT", "FRESHLY_BAKED_RELIC", "FRESHLY_BAKED_HEIRLOOM"}
 }
 
 var ignoredAccessories = []string{
@@ -192,7 +194,7 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 	},
 	"TRAPPER_CREST": {
 		AllowsRecomb:     true,
-		Rarities:         []string{"uncommon"},
+		Rarities:         []string{"uncommon", "rare"},
 		AllowsEnrichment: true,
 	},
 	"PULSE_RING": {
