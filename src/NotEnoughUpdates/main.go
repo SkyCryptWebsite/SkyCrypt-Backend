@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func InitializeNEURepository() error {
@@ -31,6 +32,11 @@ func InitializeNEURepository() error {
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository cloned successfully")
 	} else {
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository already exists")
+		go func() {
+			if err := UpdateNEURepository(); err != nil {
+				fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to update repository: %v\n", err)
+			}
+		}()
 	}
 
 	return nil
@@ -61,7 +67,8 @@ func UpdateNEURepository() error {
 	}
 
 	outputStr := string(output)
-	if outputStr == "Already up to date.\n" {
+	if strings.Contains(outputStr, "Already up to date.") {
+		fmt.Println("[NOT-ENOUGH-UPDATES] Repository is already up to date")
 		return nil
 	}
 
