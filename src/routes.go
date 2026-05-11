@@ -169,26 +169,26 @@ func SetupRoutes(app *fiber.App) {
 	})
 
 	// USERNAME AND UUID RESOLVING
-	api.Get("/uuid/:username", routes.UUIDHandler)
-	api.Get("/username/:uuid", routes.UsernameHandler)
+	api.Get("/uuid/:username", routes.ServerAPITokenMiddleware, routes.UUIDHandler)
+	api.Get("/username/:uuid", routes.ServerAPITokenMiddleware, routes.UsernameHandler)
 
 	// STATS ENDPOINTS
-	api.Get("/stats/:uuid/:profileId", routes.StatsHandler)
-	api.Get("/stats/:uuid", routes.StatsHandler)
+	api.Get("/stats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.StatsHandler)
+	api.Get("/stats/:uuid", routes.ServerAPITokenMiddleware, routes.StatsHandler)
 
-	api.Get("/playerStats/:uuid/:profileId", routes.PlayerStatsHandler)
+	api.Get("/playerStats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.PlayerStatsHandler)
 
-	api.Get("/networth/:uuid/:profileId", routes.NetworthHandler)
+	api.Get("/networth/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.NetworthHandler)
 
-	api.Get("/combined/:uuid/:profileId", routes.CombinedHandler)
+	api.Get("/combined/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.CombinedHandler)
 
-	api.Get("/inventory/:uuid/:profileId", routes.InventoryHandler)
-	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.InventorySearchHandler)
+	api.Get("/inventory/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.InventoryHandler)
+	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.ServerAPITokenMiddleware, routes.InventorySearchHandler)
 
-	api.Get("/garden/:uuid/:profileId", routes.GardenHandler)
+	api.Get("/garden/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.GardenHandler)
 
-	api.Get("/embed/:uuid/:profileId", routes.EmbedHandler)
-	api.Get("/embed/:uuid", routes.EmbedHandler)
+	api.Get("/embed/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.EmbedHandler)
+	api.Get("/embed/:uuid", routes.ServerAPITokenMiddleware, routes.EmbedHandler)
 
 	// RENDERING ENDPOINTS
 	api.Get("/head/:textureId", routes.HeadHandlers)
