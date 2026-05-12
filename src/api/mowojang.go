@@ -35,11 +35,12 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 	}
 
 	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", username))
-	if err != nil {
-		if shouldThrowError {
-			return post.UUID, fmt.Errorf("error making request: %v", err)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		// Fallback to official Mojang API
+		if resp != nil {
+			_ = resp.Body.Close()
 		}
-		return "", nil
+		return getUUIDFromMojang(username, shouldThrowError)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -53,12 +54,9 @@ func GetUUID(username string, throwAnError ...bool) (string, error) {
 		return "", nil
 	}
 
-	if resp.StatusCode == http.StatusNotFound || string(body) == "player not found" {
-		if shouldThrowError {
-			return post.UUID, fmt.Errorf("invalid username or UUID provided")
-		}
-
-		return "Player not Found", nil
+	if string(body) == "player not found" {
+		// Fallback to official Mojang API
+		return getUUIDFromMojang(username, shouldThrowError)
 	}
 
 	if len(body) == 0 {
@@ -102,11 +100,12 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 	}
 
 	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
-	if err != nil {
-		if shouldThrowError {
-			return post.Name, fmt.Errorf("error making request: %v", err)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		// Fallback to official Mojang API
+		if resp != nil {
+			_ = resp.Body.Close()
 		}
-		return "", nil
+		return getUsernameFromMojang(uuid, shouldThrowError)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -120,8 +119,9 @@ func GetUsername(uuid string, throwAnError ...bool) (string, error) {
 		return "", nil
 	}
 
-	if resp.StatusCode == http.StatusNotFound || string(body) == "player not found" {
-		return "Player not Found", nil
+	if string(body) == "player not found" {
+		// Fallback to official Mojang API
+		return getUsernameFromMojang(uuid, shouldThrowError)
 	}
 
 	if len(body) == 0 {
@@ -207,8 +207,12 @@ func resolvePlayerByUUID(uuid string) (*models.MowojangResponse, error) {
 	}
 
 	resp, err := HTTPClient.Get(fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
-	if err != nil {
-		return &post, fmt.Errorf("error making request: %v", err)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		// Fallback to official Mojang API
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		return resolvePlayerFromMojang(uuid)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -219,11 +223,9 @@ func resolvePlayerByUUID(uuid string) (*models.MowojangResponse, error) {
 		return &post, fmt.Errorf("error reading response: %v", err)
 	}
 
-	if resp.StatusCode == http.StatusNotFound || string(body) == "player not found" {
-		return &models.MowojangResponse{
-			Name: "Player not Found",
-			UUID: uuid,
-		}, nil
+	if string(body) == "player not found" {
+		// Fallback to official Mojang API
+		return resolvePlayerFromMojang(uuid)
 	}
 
 	if len(body) == 0 {
@@ -242,4 +244,159 @@ func resolvePlayerByUUID(uuid string) (*models.MowojangResponse, error) {
 	_ = redis.Set(fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)                             // Cross-cache for GetUsername
 
 	return &post, nil
+}
+
+func getUUIDFromMojang(username string, shouldThrowError bool) (string, error) {
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://api.mojang.com/users/profiles/minecraft/%s", username))
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error making request to Mojang API: %v", err)
+		}
+		return "", nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error reading Mojang API response: %v", err)
+		}
+		return "", nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		if shouldThrowError {
+			return "", fmt.Errorf("invalid username or UUID provided")
+		}
+		return "Player not Found", nil
+	}
+
+	if len(body) == 0 {
+		if shouldThrowError {
+			return "", fmt.Errorf("received empty response from Mojang API")
+		}
+		return "", nil
+	}
+
+	var mojangResp struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	err = json.Unmarshal(body, &mojangResp)
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error parsing Mojang API response: %v", err)
+		}
+		return "", nil
+	}
+
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), mojangResp.ID, 24*60*60)
+	_ = redis.Set(fmt.Sprintf("username:%s", mojangResp.ID), mojangResp.Name, 24*60*60)
+
+	return mojangResp.ID, nil
+}
+
+func getUsernameFromMojang(uuid string, shouldThrowError bool) (string, error) {
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error making request to Mojang API: %v", err)
+		}
+		return "", nil
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error reading Mojang API response: %v", err)
+		}
+		return "", nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return "Player not Found", nil
+	}
+
+	if len(body) == 0 {
+		if shouldThrowError {
+			return "", fmt.Errorf("received empty response from Mojang API")
+		}
+		return "", nil
+	}
+
+	var mojangResp struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	err = json.Unmarshal(body, &mojangResp)
+	if err != nil {
+		if shouldThrowError {
+			return "", fmt.Errorf("error parsing Mojang API response: %v", err)
+		}
+		return "", nil
+	}
+
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), uuid, 24*60*60)
+	_ = redis.Set(fmt.Sprintf("username:%s", uuid), mojangResp.Name, 24*60*60)
+
+	return mojangResp.Name, nil
+}
+
+func resolvePlayerFromMojang(uuid string) (*models.MowojangResponse, error) {
+	resp, err := HTTPClient.Get(fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
+	if err != nil {
+		return &models.MowojangResponse{}, fmt.Errorf("error making request to Mojang API: %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return &models.MowojangResponse{}, fmt.Errorf("error reading Mojang API response: %v", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return &models.MowojangResponse{
+			Name: "Player not Found",
+			UUID: uuid,
+		}, nil
+	}
+
+	if len(body) == 0 {
+		return &models.MowojangResponse{}, fmt.Errorf("received empty response from Mojang API")
+	}
+
+	var mojangResp struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	err = json.Unmarshal(body, &mojangResp)
+	if err != nil {
+		return &models.MowojangResponse{}, fmt.Errorf("error parsing Mojang API response: %v", err)
+	}
+
+	post := &models.MowojangResponse{
+		Name: mojangResp.Name,
+		UUID: mojangResp.ID,
+	}
+
+	mojangBytes, _ := json.Marshal(mojangResp)
+	_ = redis.Set(fmt.Sprintf("mowojangUUID:%s", uuid), string(mojangBytes), 24*60*60)
+	_ = redis.Set(fmt.Sprintf("mowojangUsername:%s", strings.ToLower(mojangResp.Name)), string(mojangBytes), 24*60*60)
+	_ = redis.Set(fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), mojangResp.ID, 24*60*60)
+	_ = redis.Set(fmt.Sprintf("username:%s", uuid), mojangResp.Name, 24*60*60)
+
+	return post, nil
 }
