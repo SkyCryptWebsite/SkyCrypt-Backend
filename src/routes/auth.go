@@ -2,7 +2,6 @@ package routes
 
 import (
 	"crypto/subtle"
-	"fmt"
 	"os"
 	"strings"
 
@@ -32,8 +31,6 @@ func ServerAPITokenMiddleware(c *fiber.Ctx) error {
 	if providedToken == "" {
 		providedToken = strings.TrimSpace(c.Get("X-API-Token"))
 	}
-
-	fmt.Printf("Received endpoint %s with token: %s\n", c.Path(), providedToken)
 
 	if subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
