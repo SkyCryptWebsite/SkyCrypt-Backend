@@ -98,7 +98,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 
 	output := stats.GetEmbedData(mowojang, player, userProfile, profile, formattedNetworth)
 
-	utility.LogVerbose("Returning /api/embed/%s in %s", profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
 
 	return c.JSON(output)
 }
