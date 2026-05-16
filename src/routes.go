@@ -170,7 +170,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// USERNAME AND UUID RESOLVING
 	api.Get("/uuid/:username", routes.ServerAPITokenMiddleware, routes.UUIDHandler)
-	api.Get("/username/:uuid", routes.ServerAPITokenMiddleware, routes.UsernameHandler)
+	api.Get("/username/:uuid", routes.UsernameHandler)
 
 	// STATS ENDPOINTS
 	api.Get("/stats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.StatsHandler)
