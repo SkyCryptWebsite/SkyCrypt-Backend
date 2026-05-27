@@ -474,7 +474,7 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	if httpErr != nil {
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 }
 
 func generateErrorHash(endpoint, errorStr string) string {
