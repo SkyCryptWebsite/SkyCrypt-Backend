@@ -347,7 +347,7 @@ var ENCHANTMENT_LADDERS = map[string]EnchantmentLadder{
 	},
 	"farmed_cultivating": {
 		Name:   "Cultivating Crops",
-		Ladder: []int{1000, 5000, 25000, 100000, 300000, 1500000, 5000000, 20000000, 100000000},
+		Ladder: []int{1000, 5000, 25000, 100000, 250000, 1000000, 2500000, 10000000, 25000000},
 	},
 	"expertise_kills": {
 		Name:   "Expertise Kills",
