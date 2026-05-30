@@ -65,7 +65,7 @@ func main() {
 
 	app.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
-		StackTraceHandler: func(c *fiber.Ctx, err interface{}) {
+		StackTraceHandler: func(c *fiber.Ctx, err any) {
 			stack := debug.Stack()
 			fmt.Printf("\033[31m\n========== FATAL PANIC ==========\nPANIC: %v\n\nSTACK TRACE:\n%s\n==================================\033[0m\n", err, stack)
 
