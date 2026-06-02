@@ -58,7 +58,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 
 	result, err := computeCombined(uuid, profileId, disabledPacks)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}

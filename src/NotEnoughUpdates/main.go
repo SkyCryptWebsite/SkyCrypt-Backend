@@ -47,13 +47,29 @@ func UpdateNEURepository() error {
 		return nil // Prefork children should not update the repository
 	}
 
-	cmd := exec.Command("git", "pull", "--depth", "1", "origin", "master")
-	cmd.Dir = "NotEnoughUpdates-REPO"
-	output, err := cmd.CombinedOutput()
+	// Get current HEAD commit hash before update
+	beforeCmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	beforeCmd.Dir = "NotEnoughUpdates-REPO"
+	beforeHashBytes, _ := beforeCmd.Output()
+	beforeHash := strings.TrimSpace(string(beforeHashBytes))
+
+	// Fetch latest changes from remote
+	fetchCmd := exec.Command("git", "fetch", "--depth", "1", "origin", "master")
+	fetchCmd.Dir = "NotEnoughUpdates-REPO"
+	output, err := fetchCmd.CombinedOutput()
+
+	if err == nil {
+		// Reset to origin/master to handle divergent branches gracefully
+		resetCmd := exec.Command("git", "reset", "--hard", "origin/master")
+		resetCmd.Dir = "NotEnoughUpdates-REPO"
+		resetOutput, resetErr := resetCmd.CombinedOutput()
+		output = append(output, resetOutput...)
+		err = resetErr
+	}
 
 	if err != nil {
 		outputStr := string(output)
-		fmt.Printf("[NOT-ENOUGH-UPDATES] Pull failed (%v: %s), removing and re-cloning repository...\n", err, outputStr)
+		fmt.Printf("[NOT-ENOUGH-UPDATES] Update failed (%v: %s), removing and re-cloning repository...\n", err, outputStr)
 		if removeErr := os.RemoveAll("NotEnoughUpdates-REPO"); removeErr != nil {
 			return fmt.Errorf("failed to remove corrupted repository: %w", removeErr)
 		}
@@ -66,21 +82,21 @@ func UpdateNEURepository() error {
 		return nil
 	}
 
-	outputStr := string(output)
-	if strings.Contains(outputStr, "Already up to date.") {
+	// Get current HEAD commit hash after update
+	afterCmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	afterCmd.Dir = "NotEnoughUpdates-REPO"
+	afterHashBytes, err := afterCmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+	afterHash := strings.TrimSpace(string(afterHashBytes))
+
+	if beforeHash != "" && beforeHash == afterHash {
 		fmt.Println("[NOT-ENOUGH-UPDATES] Repository is already up to date")
 		return nil
 	}
 
-	// Get current HEAD commit hash
-	hashCmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	hashCmd.Dir = "NotEnoughUpdates-REPO"
-	hashOutput, err := hashCmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to get HEAD: %w", err)
-	}
-
-	fmt.Printf("[NOT-ENOUGH-UPDATES] Updated to commit: %s", string(hashOutput))
+	fmt.Printf("[NOT-ENOUGH-UPDATES] Updated to commit: %s\n", afterHash)
 
 	return nil
 }

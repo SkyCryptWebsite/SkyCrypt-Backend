@@ -40,7 +40,7 @@ func StatsHandler(c *fiber.Ctx) error {
 
 	output, err := computeStats(uuid, profileId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
