@@ -894,8 +894,6 @@ components:
       properties:
         corpses:
           $ref: '#/components/schemas/models.Corpses'
-        fossilDust:
-          type: number
         fossils:
           $ref: '#/components/schemas/models.Fossils'
         mineshaftsEntered:
@@ -1230,7 +1228,7 @@ components:
         amount:
           type: integer
         progress:
-          type: string
+          type: number
         rarity:
           type: string
         total:
@@ -1739,6 +1737,8 @@ components:
           uniqueItems: false
         display_name:
           type: string
+        displayInline:
+          type: boolean
         isInactive:
           type: boolean
         lore:
