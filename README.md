@@ -36,7 +36,7 @@ Originally inspired by [LeaPhant's skyblock-stats](https://github.com/LeaPhant/s
 
 ## Requirements
 
-- Go 1.25.1 or later
+- Go 1.26 or later
 - Redis 7.0 or later
 - MongoDB 6.0 or later
 - Git (for submodule initialization)
