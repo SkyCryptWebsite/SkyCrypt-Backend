@@ -4,22 +4,35 @@ import (
 	"skycrypt/src/models"
 )
 
-func StripItems(items *[]models.ProcessedItem, search ...bool) []models.StrippedItem {
+func StripItems(items *[]models.ProcessedItem, stripOpts ...models.StripOptions) []models.StrippedItem {
+	var opts models.StripOptions
+	if len(stripOpts) > 0 {
+		opts = stripOpts[0]
+	}
+
 	output := make([]models.StrippedItem, len(*items))
 	for i, item := range *items {
-		output[i] = *StripItem(&item, search...)
+		output[i] = *StripItem(&item, opts)
 
 		if len(item.ContainsItems) > 0 {
-			output[i].ContainsItems = StripItems(&item.ContainsItems, search...)
+			output[i].ContainsItems = StripItems(&item.ContainsItems, models.StripOptions{
+				Search: opts.Search,
+				Nested: true, // All nested items should be displayed inline
+			})
 		}
 	}
 
 	return output
 }
 
-func StripItem(item *models.ProcessedItem, search ...bool) *models.StrippedItem {
+func StripItem(item *models.ProcessedItem, stripOpts ...models.StripOptions) *models.StrippedItem {
 	if item == nil {
 		return nil
+	}
+
+	var opts models.StripOptions
+	if len(stripOpts) > 0 {
+		opts = stripOpts[0]
 	}
 
 	output := &models.StrippedItem{
@@ -28,11 +41,10 @@ func StripItem(item *models.ProcessedItem, search ...bool) *models.StrippedItem 
 		Rarity:         item.Rarity,
 		Recombobulated: item.Recombobulated,
 		Texture:        item.Texture,
-		ContainsItems:  make([]models.StrippedItem, len(item.ContainsItems)),
 		Shiny:          item.Shiny,
 	}
 
-	if len(search) > 0 && search[0] {
+	if opts.Search {
 		output.Source = item.Source
 	}
 
@@ -50,6 +62,10 @@ func StripItem(item *models.ProcessedItem, search ...bool) *models.StrippedItem 
 
 	if item.TexturePack != "" {
 		output.TexturePack = item.TexturePack
+	}
+
+	if opts.Nested && item.DisplayName != "" && item.ContainsItems != nil {
+		output.DisplayInline = true
 	}
 
 	return output

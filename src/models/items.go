@@ -57,9 +57,15 @@ type StrippedItem struct {
 	Wiki           *string        `json:"wiki,omitempty"`
 	TexturePack    string         `json:"texture_pack,omitempty"`
 	SourceTab      *SourceTab     `json:"sourceTab,omitempty"`
+	DisplayInline  bool           `json:"displayInline,omitempty"`
 }
 
 type SourceTab struct {
 	Icon string `json:"icon"`
 	Name string `json:"name"`
+}
+
+type StripOptions struct {
+	Search bool
+	Nested bool
 }

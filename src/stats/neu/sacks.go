@@ -10,6 +10,7 @@ func formatSackContents(contents []string) []string {
 	for i, item := range contents {
 		formatted[i] = strings.Replace(item, "-", ":", 1) // SAND-1 -> SAND:1 (NEU internal id)
 	}
+
 	return formatted
 }
 

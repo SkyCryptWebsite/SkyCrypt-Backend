@@ -132,7 +132,9 @@ func InventoryHandler(c *fiber.Ctx) error {
 				Name:           inventoryData.Name,
 				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
 				SeparatorAfter: inventoryData.SeparatorAfter,
-				Items:          statsItems.StripItems(&processedSacks),
+				Items: statsItems.StripItems(&processedSacks, models.StripOptions{
+					Nested: true,
+				}),
 			})
 			continue
 		}
