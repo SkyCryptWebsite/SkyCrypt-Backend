@@ -44,7 +44,6 @@ type CrystalNucleusRuns struct {
 
 type GlaciteTunnels struct {
 	MineshaftsEntered int     `json:"mineshaftsEntered"`
-	FossilDust        float64 `json:"fossilDust"`
 	Corpses           Corpses `json:"corpses"`
 	Fossils           Fossils `json:"fossils"`
 }

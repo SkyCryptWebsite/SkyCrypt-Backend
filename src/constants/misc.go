@@ -42,6 +42,10 @@ var ESSENCE = map[string]essence{
 		Name:    "Crimson",
 		Texture: "/api/head/67c41930f8ff0f2b0430e169ae5f38e984df1244215705c6f173862844543e9d",
 	},
+	"fossil": {
+		Name:    "Fossil",
+		Texture: "/api/head/93a1b830399ab432a5178fdaf3939b24bf25c724a66be947296c503352bc380d",
+	},
 }
 
 var RACE_NAMES = map[string]string{

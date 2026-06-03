@@ -13,10 +13,15 @@ import (
 func getEssence(userProfile *skycrypttypes.Member) []models.MiscEssence {
 	essence := make([]models.MiscEssence, 0, len(constants.ESSENCE))
 	for essenceId, essenceData := range constants.ESSENCE {
+		amount := userProfile.Currencies.Essence[strings.ToUpper(essenceId)].Current
+		if essenceId == "fossil" {
+			amount = int(userProfile.GlaciteTunnels.FossilDust)
+		}
+
 		essenceData := models.MiscEssence{
 			Name:    essenceData.Name,
 			Texture: fmt.Sprintf("%s%s", utility.GetDomain(), essenceData.Texture),
-			Amount:  userProfile.Currencies.Essence[strings.ToUpper(essenceId)].Current,
+			Amount:  amount,
 		}
 
 		essence = append(essence, essenceData)
@@ -152,7 +157,7 @@ func getPetMilestone(typeName string, amount float64) models.MiscPetMilestone {
 		rarity = constants.MILESTONE_RARITIES[lastIndex]
 	}
 	total := int(amount)
-	progress := "0"
+	progress := 0.0
 	if amount > 0 && len(milestones) > 0 {
 		maxMilestone := float64(milestones[len(milestones)-1])
 		if maxMilestone > 0 {
@@ -161,7 +166,7 @@ func getPetMilestone(typeName string, amount float64) models.MiscPetMilestone {
 				p = 100
 			}
 
-			progress = fmt.Sprintf("%.2f%%", p)
+			progress = p
 		}
 	}
 	return models.MiscPetMilestone{

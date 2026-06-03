@@ -19,6 +19,7 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 )
 
 // InventoryHandler godoc
@@ -59,17 +60,46 @@ func InventoryHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 
-	profile, err := api.GetProfile(uuid, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+	var (
+		profiles      *models.HypixelProfilesResponse
+		profile       *skycrypttypes.Profile
+		profileMuseum map[string]*skycrypttypes.Museum
+	)
+
+	isProfileUUID := utility.IsUUID(profileId)
+	g, _ := errgroup.WithContext(c.Context())
+
+	if isProfileUUID {
+		g.Go(func() error {
+			var err error
+			profileMuseum, err = api.GetMuseum(profileId)
+			return err
 		})
 	}
 
-	profileMuseum, err := api.GetMuseum(profileId)
-	if err != nil {
+	g.Go(func() error {
+		var err error
+		profiles, err = api.GetProfiles(uuid)
+		if err != nil {
+			return err
+		}
+
+		profile, err = stats.GetProfile(profiles, profileId)
+		if err != nil {
+			return err
+		}
+
+		if !isProfileUUID {
+			profileMuseum, err = api.GetMuseum(profile.ProfileID)
+			return err
+		}
+
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get museum: %v", err),
+			"error": fmt.Sprintf("Failed to fetch data: %v", err),
 		})
 	}
 

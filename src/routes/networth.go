@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
+	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // NetworthHandler godoc
@@ -37,33 +40,58 @@ func NetworthHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	mowojang, err := api.ResolvePlayer(uuid)
+	var (
+		mowojang      *models.MowojangResponse
+		profiles      *models.HypixelProfilesResponse
+		profile       *skycrypttypes.Profile
+		profileMuseum map[string]*skycrypttypes.Museum
+		err           error
+	)
+
+	isProfileUUID := utility.IsUUID(profileId)
+	g, _ := errgroup.WithContext(c.Context())
+
+	if isProfileUUID {
+		g.Go(func() error {
+			var err error
+			profileMuseum, err = api.GetMuseum(profileId)
+			return err
+		})
+	}
+
+	mowojang, err = api.ResolvePlayer(uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to resolve player: %v", err),
 		})
 	}
 
-	profiles, err := api.GetProfiles(mowojang.UUID)
-	if err != nil {
+	g.Go(func() error {
+		var err error
+		profiles, err = api.GetProfiles(mowojang.UUID)
+		if err != nil {
+			return err
+		}
+
+		profile, err = stats.GetProfile(profiles, profileId)
+		if err != nil {
+			return err
+		}
+
+		if !isProfileUUID {
+			profileMuseum, err = api.GetMuseum(profile.ProfileID)
+			return err
+		}
+
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+			"error": fmt.Sprintf("Failed to fetch data: %v", err),
 		})
 	}
 
-	profile, err := stats.GetProfile(profiles, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
-		})
-	}
-
-	profileMuseum, err := api.GetMuseum(profile.ProfileID)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get museum: %v", err),
-		})
-	}
 	userProfileValue := profile.Members[mowojang.UUID]
 	museum := profileMuseum[mowojang.UUID]
 	userProfile := &userProfileValue

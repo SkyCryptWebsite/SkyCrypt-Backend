@@ -53,10 +53,10 @@ type MiscMythologicalEvent struct {
 }
 
 type MiscPetMilestone struct {
-	Amount   int    `json:"amount"`
-	Rarity   string `json:"rarity"`
-	Total    int    `json:"total"`
-	Progress string `json:"progress"`
+	Amount   int     `json:"amount"`
+	Rarity   string  `json:"rarity"`
+	Total    int     `json:"total"`
+	Progress float64 `json:"progress"`
 }
 
 type MiscDamage struct {

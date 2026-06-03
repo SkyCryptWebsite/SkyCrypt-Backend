@@ -205,7 +205,6 @@ func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels 
 
 	output := models.GlaciteTunnels{
 		MineshaftsEntered: userProfile.GlaciteTunnels.MineshaftsEntered,
-		FossilDust:        userProfile.GlaciteTunnels.FossilDust,
 		Corpses:           models.Corpses{},
 		Fossils:           models.Fossils{},
 	}

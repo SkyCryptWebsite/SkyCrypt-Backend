@@ -1,15 +1,17 @@
 package routes
 
 import (
-	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/forensics"
+	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"time"
 
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 // GardenHandler godoc
@@ -34,21 +36,50 @@ func GardenHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 
-	profile, err := api.GetProfile(uuid, profileId)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
+	var (
+		profiles *models.HypixelProfilesResponse
+		profile  *skycrypttypes.Profile
+		garden   *skycrypttypes.Garden
+	)
+
+	isProfileUUID := utility.IsUUID(profileId)
+	g, _ := errgroup.WithContext(c.Context())
+
+	if isProfileUUID {
+		g.Go(func() error {
+			var err error
+			garden, err = api.GetGarden(profileId)
+			return err
 		})
+	}
+
+	g.Go(func() error {
+		var err error
+		profiles, err = api.GetProfiles(uuid)
+		if err != nil {
+			return err
+		}
+
+		profile, err = stats.GetProfile(profiles, profileId)
+		if err != nil {
+			return err
+		}
+
+		if !isProfileUUID {
+			garden, err = api.GetGarden(profile.ProfileID)
+			return err
+		}
+
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		c.Status(400)
+		return c.JSON(constants.InvalidUserError)
 	}
 
 	userProfileValue := profile.Members[uuid]
 	userProfile := &userProfileValue
-
-	garden, err := api.GetGarden(profileId)
-	if err != nil {
-		c.Status(400)
-		return c.JSON(constants.InvalidUserError)
-	}
 
 	output := stats.GetGarden(userProfile, garden)
 
