@@ -1776,6 +1776,8 @@ components:
             type: string
           type: array
           uniqueItems: false
+        maxLevel:
+          type: integer
         rarity:
           type: string
         stats:

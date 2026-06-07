@@ -17,6 +17,7 @@ type ProcessedPet struct {
 type PetLevel struct {
 	Experience            int     `json:"xp,omitempty"`
 	Level                 int     `json:"level,omitempty"`
+	MaxLevel              int     `json:"maxLevel,omitempty"`
 	CurrentExperience     int     `json:"currentXp,omitempty"`
 	ExperienceForNext     int     `json:"xpForNext,omitempty"`
 	Progress              float64 `json:"progress,omitempty"`
@@ -51,6 +52,7 @@ type StrippedPet struct {
 	Type        string             `json:"type,omitempty"`
 	Rarity      string             `json:"rarity,omitempty"`
 	Level       int                `json:"level"`
+	MaxLevel    int                `json:"maxLevel,omitempty"`
 	DisplayName string             `json:"display_name"`
 	Texture     string             `json:"texture_path,omitempty"`
 	Lore        []string           `json:"lore,omitempty"`
