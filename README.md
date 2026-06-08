@@ -17,22 +17,9 @@ A high-performance Go backend API for [SkyCrypt](https://github.com/SkyCryptWebs
 
 Originally inspired by [LeaPhant's skyblock-stats](https://github.com/LeaPhant/skyblock-stats).
 
-**Website**: https://sky.shiiyu.moe \
-**Development Website**: https://cupcake.shiiyu.moe
-
-**Frontend**: [SkyCrypt-Frontend](https://github.com/SkyCryptWebsite/SkyCrypt-Frontend)
-
-## Table of Contents
-
-- [Requirements](#requirements)
-- [Installation](#installation)
-  - [System Dependencies](#system-dependencies)
-  - [Go Installation](#go-installation)
-  - [Redis Installation](#redis-installation)
-  - [MongoDB Installation](#mongodb-installation)
-- [Configuration](#configuration)
-- [Development](#development)
-- [Common Issues](#common-issues)
+- **Website**: https://sky.shiiyu.moe
+- **Development Website**: https://cupcake.shiiyu.moe
+- **Frontend**: [SkyCrypt-Frontend](https://github.com/SkyCryptWebsite/SkyCrypt-Frontend)
 
 ## Requirements
 
@@ -41,160 +28,15 @@ Originally inspired by [LeaPhant's skyblock-stats](https://github.com/LeaPhant/s
 - MongoDB 6.0 or later
 - Git (for submodule initialization)
 
-## Installation
+## Contributing
 
-The following instructions are written for Arch Linux. Adjust package manager commands accordingly for other distributions.
+You are free to report bugs or contribute to this project. Just open <a href="../../issues">Issues</a> or <a href="../../pulls">Pull Requests</a> and the team will look into them.
 
-### System Dependencies
+Refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information on how to contribute.
 
-Update your system and install essential build tools:
+> [!TIP]
+> Contributions are not limited to code. Making suggestions, reporting bugs, and sharing the project with others are all forms of contribution that are highly appreciated.
 
-```bash
-sudo pacman -Syu
-sudo pacman -S base-devel git
-```
+## Credits
 
-### Go Installation
-
-Install Go from the official Arch Linux repositories:
-
-```bash
-sudo pacman -S go
-```
-
-Verify the installation:
-
-```bash
-go version
-```
-
-### Redis Installation
-
-Install Redis:
-
-```bash
-sudo pacman -S redis
-```
-
-Enable and start the Redis service:
-
-```bash
-sudo systemctl enable redis
-sudo systemctl start redis
-```
-
-Verify Redis is running:
-
-```bash
-redis-cli ping
-```
-
-Expected output: `PONG`
-
-### MongoDB Installation
-
-Install MongoDB from the AUR. Using an AUR helper such as `yay`:
-
-```bash
-yay -S mongodb-bin
-```
-
-Alternatively, build from source:
-
-```bash
-git clone https://aur.archlinux.org/mongodb-bin.git
-cd mongodb-bin
-makepkg -si
-```
-
-Enable and start the MongoDB service:
-
-```bash
-sudo systemctl enable mongodb
-sudo systemctl start mongodb
-```
-
-Verify MongoDB is running:
-
-```bash
-mongosh --eval "db.runCommand({ ping: 1 })"
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root directory. Use `.env.example` as a template:
-
-```bash
-cp .env.example .env
-```
-
-Edit the `.env` file with your configuration:
-
-```dotenv
-HYPIXEL_API_KEY=""
-DISCORD_WEBHOOK=""
-DEV="true"
-ENABLE_ARMOR_HEX="false"
-MONGO_URI="mongodb://localhost:27017"
-MONGO_DB_NAME="SkyCrypt"
-```
-
-### Environment Variable Reference
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `HYPIXEL_API_KEY` | Your Hypixel API key. Obtain from [Hypixel Developer Portal](https://developer.hypixel.net/) | - | Yes |
-| `DISCORD_WEBHOOK` | Discord webhook URL for error notifications and startup messages | - | No |
-| `DEV` | Enable development mode. Set to `true` for local development | `false` | No |
-| `ENABLE_ARMOR_HEX` | Enable hexadecimal armor color support | `false` | No |
-| `MONGO_URI` | MongoDB connection URI | `mongodb://localhost:27017` | No |
-| `MONGO_DB_NAME` | MongoDB database name | `SkyCrypt` | No |
-| `REDIS_HOST` | Redis server hostname | `localhost` | No |
-| `REDIS_PORT` | Redis server port | `6379` | No |
-| `REDIS_PASSWORD` | Redis authentication password | - | No |
-
-## Development
-
-Clone the repository with submodules:
-
-```bash
-git clone --recurse-submodules https://github.com/SkyCryptWebsite/SkyCrypt-Backend.git
-cd SkyCrypt-Backend
-```
-
-If you have already cloned the repository without submodules:
-
-```bash
-git submodule update --init --recursive
-```
-
-Enable the repository git hooks so `swag init` runs automatically before each push:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-Download Go dependencies:
-
-```bash
-go mod download
-```
-
-Run the application:
-
-```bash
-go run main.go
-```
-
-## Common Issues
-
-### Submodule Not Initialized
-
-If the `NotEnoughUpdates-REPO` directory is empty:
-
-```bash
-git submodule update --init --recursive
-```
-
+Original Site: [sky.lea.moe](https://sky.lea.moe/) by LeaPhant
