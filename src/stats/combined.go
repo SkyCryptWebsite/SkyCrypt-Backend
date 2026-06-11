@@ -2,7 +2,9 @@ package stats
 
 import (
 	"fmt"
+	"strings"
 
+	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
 
@@ -32,7 +34,6 @@ func GetCombined(
 	specifiedInventories := make(skyhelpernetworthgo.SpecifiedInventory, 8+len(member.Inventory.Backpack))
 	specifiedInventories["armor"] = member.Inventory.Armor
 	specifiedInventories["equipment"] = member.Inventory.Equipment
-	specifiedInventories["wardrobe"] = member.Inventory.Wardrobe
 	specifiedInventories["inventory"] = member.Inventory.Inventory
 	specifiedInventories["enderchest"] = member.Inventory.Enderchest
 	specifiedInventories["talisman_bag"] = member.Inventory.BagContents.TalismanBag
@@ -40,6 +41,15 @@ func GetCombined(
 	specifiedInventories["rift_equipment"] = member.Rift.Inventory.Equipment
 	for backpackId, backpackData := range member.Inventory.Backpack {
 		specifiedInventories["backpack_"+backpackId] = backpackData
+	}
+
+	for index, layout := range member.Loadout.Armor {
+		inventoryId := fmt.Sprintf("wardrobe_%d", index)
+
+		specifiedInventories[fmt.Sprintf("%s_helmet", inventoryId)] = layout.Helmet
+		specifiedInventories[fmt.Sprintf("%s_chestplate", inventoryId)] = layout.Chestplate
+		specifiedInventories[fmt.Sprintf("%s_leggings", inventoryId)] = layout.Leggings
+		specifiedInventories[fmt.Sprintf("%s_boots", inventoryId)] = layout.Boots
 	}
 
 	decodedItems, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(specifiedInventories,
@@ -68,6 +78,23 @@ func GetCombined(
 	processedItems := make(map[string][]models.ProcessedItem, len(specifiedInventories))
 	allItems := make([]models.ProcessedItem, 0, totalCap)
 
+	maxWardrobeIndex := -1
+	for inventoryId := range specifiedInventories {
+		if strings.HasPrefix(inventoryId, "wardrobe_") {
+			parts := strings.Split(inventoryId, "_")
+			if len(parts) >= 2 {
+				index := 0
+				if _, err := fmt.Sscanf(parts[1], "%d", &index); err == nil {
+					if index > maxWardrobeIndex {
+						maxWardrobeIndex = index
+					}
+				}
+			}
+		}
+	}
+
+	wardrobeSlice := make([]models.ProcessedItem, (maxWardrobeIndex+1)*4)
+
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
 		if invType == nil || len(invType.Items) == 0 {
@@ -84,15 +111,32 @@ func GetCombined(
 		}
 
 		processed := statsItems.ProcessItems(buf, inventoryId, disabledPacks)
-		processedItems[inventoryId] = processed
+
+		if strings.HasPrefix(inventoryId, "wardrobe_") {
+			parts := strings.Split(inventoryId, "_")
+			if len(parts) == 3 {
+				index := 0
+				if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+					continue
+				}
+				part := parts[2]
+				if offset, ok := constants.WARDROBE_SLOT_OFFSET[part]; ok && len(processed) > 0 {
+					wardrobeSlice[index*4+offset] = processed[0]
+				}
+			}
+		} else {
+			processedItems[inventoryId] = processed
+		}
 
 		allItems = append(allItems, processed...)
 	}
 
+	processedItems["wardrobe"] = wardrobeSlice
+
 	return &models.CombinedOutput{
-		Gear:         GetGear(processedItems, allItems),
-		Accesssories: GetAccessories(userProfile, processedItems, disabledPacks),
-		Pets:         GetPets(userProfile, profile),
+		Gear:        GetGear(processedItems, allItems),
+		Accessories: GetAccessories(userProfile, processedItems, disabledPacks),
+		Pets:        GetPets(userProfile, profile),
 		Skills: &models.SkillsOutput{
 			Mining:     GetMining(userProfile, player, allItems),
 			Foraging:   GetForaging(userProfile, player, allItems),

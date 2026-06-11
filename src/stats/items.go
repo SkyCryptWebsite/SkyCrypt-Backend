@@ -23,7 +23,7 @@ func GetRawInventory(userProfile *skycrypttypes.Member, inventoryId string) stri
 	case "personal_vault":
 		return userProfile.Inventory.PersonalVault.Data
 	case "wardrobe":
-		return userProfile.Inventory.Wardrobe.Data
+		panic("wardrobe should be handled separately in GetInventory, not here")
 	case "sacks":
 		return userProfile.Inventory.BagContents.SacksBag.Data
 
@@ -203,7 +203,6 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID str
 		"armor":          &useProfile.Inventory.Armor.Data,
 		"equipment":      &useProfile.Inventory.Equipment.Data,
 		"personal_vault": &useProfile.Inventory.PersonalVault.Data,
-		"wardrobe":       &useProfile.Inventory.Wardrobe.Data,
 
 		// rift
 		"rift_inventory":  &useProfile.Rift.Inventory.Inventory.Data,
@@ -225,6 +224,15 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID str
 
 	for backpackIconId, backpackIconData := range useProfile.Inventory.BackpackIcons {
 		encodedInventories[fmt.Sprintf("backpack_icon_%s", backpackIconId)] = &backpackIconData.Data
+	}
+
+	for index, layout := range useProfile.Loadout.Armor {
+		inventoryId := fmt.Sprintf("wardrobe_%d", index)
+
+		encodedInventories[fmt.Sprintf("%s_helmet", inventoryId)] = &layout.Helmet.Data
+		encodedInventories[fmt.Sprintf("%s_chestplate", inventoryId)] = &layout.Chestplate.Data
+		encodedInventories[fmt.Sprintf("%s_leggings", inventoryId)] = &layout.Leggings.Data
+		encodedInventories[fmt.Sprintf("%s_boots", inventoryId)] = &layout.Boots.Data
 	}
 
 	type result struct {
