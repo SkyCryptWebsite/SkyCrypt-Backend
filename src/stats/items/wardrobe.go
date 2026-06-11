@@ -9,19 +9,17 @@ func GetWardrobe(wardrobeInventory []models.ProcessedItem) [][]*models.StrippedI
 
 	var wardrobe [][]*models.StrippedItem
 	for i := range wardrobeColumns {
-		page := i / 9
 
 		var wardrobeSlot []*models.StrippedItem
 		for j := range 4 {
-			index := 36*page + (i % 9) + j*9
+			index := i*4 + j
 
-			if len(GetId(wardrobeInventory[index])) > 0 {
+			if index < len(wardrobeInventory) && len(GetId(wardrobeInventory[index])) > 0 {
 				strippedItems := StripItems(&[]models.ProcessedItem{wardrobeInventory[index]})
 				wardrobeSlot = append(wardrobeSlot, &strippedItems[0])
 			} else {
 				wardrobeSlot = append(wardrobeSlot, nil)
 			}
-
 		}
 
 		hasItems := false

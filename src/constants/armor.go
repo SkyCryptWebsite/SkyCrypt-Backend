@@ -43,3 +43,10 @@ var SPECIAL_SETS = []armorSet{
 		Name:   "Lava Sea Creature Armor",
 	},
 }
+
+var WARDROBE_SLOT_OFFSET = map[string]int{
+	"helmet":     0,
+	"chestplate": 1,
+	"leggings":   2,
+	"boots":      3,
+}

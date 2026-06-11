@@ -86,6 +86,7 @@ func StripPet(pet models.ProcessedPet) models.StrippedPet {
 		Type:        pet.Type,
 		Rarity:      pet.Rarity,
 		Level:       pet.Level.Level,
+		MaxLevel:    pet.Level.MaxLevel,
 		DisplayName: pet.Name,
 		Texture:     pet.Texture,
 		Lore:        pet.Lore,

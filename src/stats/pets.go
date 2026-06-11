@@ -69,10 +69,7 @@ func getPetLevel(pet skycrypttypes.Pet) models.PetLevel {
 		maxLevel = 100
 	}
 
-	endIndex := *rarityOffset + maxLevel - 1
-	if endIndex > len(petData.PetLevels) {
-		endIndex = len(petData.PetLevels)
-	}
+	endIndex := min(*rarityOffset+maxLevel-1, len(petData.PetLevels))
 	if *rarityOffset >= len(petData.PetLevels) {
 		return models.PetLevel{}
 	}
@@ -109,6 +106,7 @@ func getPetLevel(pet skycrypttypes.Pet) models.PetLevel {
 	return models.PetLevel{
 		Experience:            int(pet.Experience),
 		Level:                 level,
+		MaxLevel:              maxLevel,
 		CurrentExperience:     currentXp,
 		ExperienceForNext:     xpForNext,
 		Progress:              progress,
