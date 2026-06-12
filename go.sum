@@ -2,8 +2,8 @@ github.com/DuckySoLucky/SkyCrypt-Types v0.1.20 h1:euO9/eadAtx+3i3jGpuDdXy8eBLNJo
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.20/go.mod h1:5tR65bmeXxmxzcWoM+8zQeN/1sC0NuA7//mxW2UlI5k=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.16 h1:R/HVbC5fbmKx4de1Qy9WS2e54u0aUgChYbZF/lDezb4=
-github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.16/go.mod h1:yO7X7nwogtxCGo9rtEHM9bYYbnLfJof4n6vJGvPMpwY=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18 h1:Bcrdnip4ZXRWFDNAGOGQgixMx48bj3N8fIu5cHd5mjI=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18/go.mod h1:yO7X7nwogtxCGo9rtEHM9bYYbnLfJof4n6vJGvPMpwY=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
 github.com/Tnze/go-mc v1.20.2/go.mod h1:geoRj2HsXSkB3FJBuhr7wCzXegRlzWsVXd7h7jiJ6aQ=
 github.com/andybalholm/brotli v1.2.1 h1:R+f5xP285VArJDRgowrfb9DqL18yVK0gKAW/F+eTWro=

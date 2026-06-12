@@ -128,7 +128,7 @@ func SetupRoutes(app *fiber.App) {
 
 	if os.Getenv("DEV") != "true" {
 		if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-			fmt.Println("[ENVIROMENT] Running in production mode")
+			fmt.Println("[ENVIROMENT] Running in production mode.")
 		}
 
 		app.Use(etag.New())
