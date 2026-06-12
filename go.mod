@@ -4,7 +4,7 @@ go 1.25.1
 
 require (
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.20
-	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.16
+	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/joho/godotenv v1.5.1
 	github.com/swaggo/swag/v2 v2.0.0-rc5
