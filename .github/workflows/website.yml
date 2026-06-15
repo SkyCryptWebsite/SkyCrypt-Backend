@@ -86,6 +86,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v3

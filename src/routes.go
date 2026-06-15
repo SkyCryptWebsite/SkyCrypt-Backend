@@ -142,6 +142,8 @@ func SetupRoutes(app *fiber.App) {
 
 	api := app.Group("/api")
 
+	api.Get("/source", routes.SourceHandler)
+
 	// Forensic dashboard (live in-memory report)
 	if utility.IsForensicsEnabled() {
 		api.Get("/forensics", forensics.DashboardHandler())
