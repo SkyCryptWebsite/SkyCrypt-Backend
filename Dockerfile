@@ -51,6 +51,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM alpine:latest
 
+ARG SOURCE_COMMIT=""
+
 # Runtime dependencies only:
 #   tini            PID 1 init process — forwards SIGTERM/SIGINT to Fiber so graceful
 #                   shutdown actually runs. Without it Docker sends SIGTERM to a shell
@@ -89,7 +91,8 @@ RUN mkdir -p logs cache
 #             Forces the pure-Go DNS resolver, bypassing the cgo libc resolver.
 #             No /etc/nsswitch.conf quirks, marginally faster for high-QPS outbound.
 #
-ENV GOMEMLIMIT=7GiB \
+ENV SOURCE_COMMIT=$SOURCE_COMMIT \
+    GOMEMLIMIT=7GiB \
     GOGC=300 \
     GODEBUG=netdns=go
 

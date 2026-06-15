@@ -1,0 +1,11 @@
+Minecraft Asset Notice
+
+This notice applies to Minecraft/Mojang-derived assets and closely derived
+rendering helper assets identified in REUSE.toml.
+
+Minecraft and related game assets are owned by Mojang/Microsoft or their
+respective rights holders.
+
+SkyCrypt does not relicense these files under GNU AGPLv3. These files remain
+subject to their upstream rights and permissions. Do not treat this notice as a
+new copyright license grant from SkyCrypt.

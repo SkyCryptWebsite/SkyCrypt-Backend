@@ -1,0 +1,44 @@
+version = 1
+
+[[annotations]]
+path = [
+  "*",
+  "**/*"
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "2025-present SkyCrypt Team"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+  "assets/resourcepacks/FurfSky/**"
+]
+precedence = "override"
+SPDX-FileCopyrightText = "The Reborn Team and FurfSky Reborn contributors"
+SPDX-License-Identifier = "LicenseRef-FurfSky-Reborn"
+
+[[annotations]]
+path = [
+  "assets/resourcepacks/Hypixel_Plus/**"
+]
+precedence = "override"
+SPDX-FileCopyrightText = "ic22487 and Hypixel Plus contributors"
+SPDX-License-Identifier = "CC-BY-NC-ND-4.0"
+
+[[annotations]]
+path = [
+  "assets/resourcepacks/Vanilla/**",
+  "assets/static/armor/**",
+  "assets/static/potions/**"
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Mojang/Microsoft and respective rights holders"
+SPDX-License-Identifier = "LicenseRef-Minecraft-Assets"
+
+[[annotations]]
+path = [
+  "assets/static/sea_creatures/**"
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Respective asset rights holders"
+SPDX-License-Identifier = "LicenseRef-Asset-Provenance-Review"

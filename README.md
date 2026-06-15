@@ -188,6 +188,21 @@ Run the application:
 go run main.go
 ```
 
+## Licensing
+
+SkyCrypt Backend uses a split license model:
+
+| Material | License | Notes |
+| --- | --- | --- |
+| SkyCrypt-owned source code, documentation, configuration, generated API docs, and build scripts introduced or modified from the June 2026 license-change commit onward | [GNU AGPLv3](./LICENSE) | Network use of modified versions must provide users access to the corresponding source code. |
+| Third-party Go dependencies | Their respective licenses | See upstream module metadata and `go.sum`. |
+| FurfSky Reborn resource-pack assets | Upstream FurfSky Reborn terms | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
+| Hypixel Plus resource-pack assets | CC-BY-NC-ND-4.0 | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
+| Minecraft/Mojang-derived assets and rendering helper assets | Upstream Mojang/Microsoft terms | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
+| Asset files pending provenance review | Their respective rights holders | These assets are not relicensed under GNU AGPLv3 by default. |
+
+The public API exposes source and license metadata at `/api/source`.
+
 ## Common Issues
 
 ### Submodule Not Initialized
@@ -197,4 +212,3 @@ If the `NotEnoughUpdates-REPO` directory is empty:
 ```bash
 git submodule update --init --recursive
 ```
-

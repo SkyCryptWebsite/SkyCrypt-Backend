@@ -1,0 +1,41 @@
+SkyCrypt Backend Licensing Notice
+
+SkyCrypt Backend is primarily licensed under the GNU Affero General Public
+License version 3 (GNU AGPLv3).
+
+Unless a more specific license notice applies, SkyCrypt-owned source code,
+documentation, configuration, build scripts, generated API documentation, and
+other original backend materials introduced or modified by SkyCrypt contributors
+from the June 2026 license-change commit onward are licensed under GNU AGPLv3.
+
+This repository did not contain a root MIT license at the time this notice was
+added. This license transition does not revoke, replace, or limit any rights
+that may have been granted for earlier versions, files, or contributions under
+their original terms.
+
+Third-party libraries, APIs, resource packs, Minecraft/Mojang-derived assets,
+NotEnoughUpdates data, SkyHelper data, and other external resources remain under
+their respective licenses and terms. Their inclusion in this repository, in the
+runtime service, or in built output does not relicense them under GNU AGPLv3.
+
+The following asset groups are not offered under the repository's GNU AGPLv3
+default:
+
+- assets/resourcepacks/FurfSky/**
+- assets/resourcepacks/Hypixel_Plus/**
+- assets/resourcepacks/Vanilla/**
+- assets/static/armor/**
+- assets/static/potions/**
+- assets/static/sea_creatures/**
+- NotEnoughUpdates-REPO/**
+
+The NotEnoughUpdates-REPO directory is a git submodule and is a separate
+project with its own upstream license and notices.
+
+Built output generated from SkyCrypt-owned AGPL-covered source is covered by
+GNU AGPLv3, except for third-party components and assets, which retain their
+own license notices.
+
+SkyCrypt names, service names, and branding references are not licensed for use
+in a way that is confusing, misleading, or suggests endorsement by the SkyCrypt
+project.

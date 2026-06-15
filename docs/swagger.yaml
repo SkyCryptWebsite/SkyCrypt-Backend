@@ -1659,6 +1659,23 @@ components:
         totalSlayerExp:
           type: integer
       type: object
+    models.SourceInfo:
+      properties:
+        commit:
+          type: string
+        license:
+          type: string
+        license_spdx:
+          type: string
+        name:
+          type: string
+        notice:
+          type: string
+        repository:
+          type: string
+        source:
+          type: string
+      type: object
     models.SourceTab:
       properties:
         icon:
@@ -2616,6 +2633,20 @@ paths:
       summary: Get list of resource packs
       tags:
       - resourcepacks
+  /api/source:
+    get:
+      description: Returns source and license information for the running SkyCrypt
+        Backend service.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.SourceInfo'
+          description: OK
+      summary: Get source and license information
+      tags:
+      - source
   /api/stats/{uuid}/{profileId}:
     get:
       description: Returns stats for the given user and profile ID
