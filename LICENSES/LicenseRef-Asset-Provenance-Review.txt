@@ -1,0 +1,9 @@
+Asset Provenance Review Notice
+
+This notice applies to asset files whose provenance should be reviewed before
+they are treated as SkyCrypt-owned original assets.
+
+SkyCrypt does not relicense these files under GNU AGPLv3 by default. These files
+remain subject to the rights and permissions of their respective copyright
+holders. Do not treat this notice as a new copyright license grant from
+SkyCrypt.

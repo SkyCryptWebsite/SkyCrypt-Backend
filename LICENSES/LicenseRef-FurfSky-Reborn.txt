@@ -1,0 +1,15 @@
+FurfSky Reborn Asset Notice
+
+This notice applies to files under:
+
+assets/resourcepacks/FurfSky/**
+
+These files are third-party resource-pack assets from FurfSky Reborn by The
+Reborn Team.
+
+Upstream project: https://modrinth.com/resourcepack/furfsky-reborn
+Local attribution file: assets/resourcepacks/FurfSky/credits.txt
+
+SkyCrypt does not relicense these files under GNU AGPLv3. These files remain
+subject to their upstream rights and permissions. Do not treat this notice as a
+new copyright license grant from SkyCrypt.
