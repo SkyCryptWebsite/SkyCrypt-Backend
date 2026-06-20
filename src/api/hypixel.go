@@ -34,10 +34,10 @@ const (
 )
 
 var (
-	playerLocalCache   = localcache.NewLocalCache[*skycrypttypes.Player](512)
-	profilesLocalCache = localcache.NewLocalCache[*models.HypixelProfilesResponse](512)
-	museumLocalCache   = localcache.NewLocalCache[map[string]*skycrypttypes.Museum](512)
-	gardenLocalCache   = localcache.NewLocalCache[*skycrypttypes.Garden](512)
+	playerLocalCache   = localcache.NewLocalCache[*skycrypttypes.Player](128)
+	profilesLocalCache = localcache.NewLocalCache[*models.HypixelProfilesResponse](64)
+	museumLocalCache   = localcache.NewLocalCache[map[string]*skycrypttypes.Museum](64)
+	gardenLocalCache   = localcache.NewLocalCache[*skycrypttypes.Garden](64)
 )
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {

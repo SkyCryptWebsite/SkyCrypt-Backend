@@ -29,8 +29,13 @@ func UUIDHandler(c *fiber.Ctx) error {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
 	}
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("uuid", username)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
-	uuid, err := api.GetUUIDContext(c.UserContext(), username)
+	uuid, err := api.GetUUIDContext(reqCtx, username)
 	if err != nil {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
@@ -38,8 +43,8 @@ func UUIDHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/username/%s in %s\n", username, time.Since(timeNow))
 
-	return c.JSON(fiber.Map{
+	return sendAndCacheJSON(c, reqCtx, cacheKey, fiber.Map{
 		"username": username,
 		"uuid":     uuid,
-	})
+	}, 24*60*60)
 }

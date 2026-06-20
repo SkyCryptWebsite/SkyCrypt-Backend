@@ -1,6 +1,9 @@
 package localcache
 
 import (
+	"os"
+	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -14,6 +17,7 @@ type entry[T any] struct {
 type LocalCache[T any] struct {
 	mu         sync.RWMutex
 	values     map[string]entry[T]
+	order      []string
 	refreshing map[string]struct{}
 	maxEntries int
 }
@@ -25,6 +29,7 @@ func NewLocalCache[T any](maxEntries ...int) *LocalCache[T] {
 	}
 	return &LocalCache[T]{
 		values:     make(map[string]entry[T]),
+		order:      make([]string, 0, max),
 		refreshing: make(map[string]struct{}),
 		maxEntries: max,
 	}
@@ -60,8 +65,15 @@ func (c *LocalCache[T]) Set(key string, value T, ttl time.Duration, refreshAfter
 	}
 
 	c.mu.Lock()
-	if _, exists := c.values[key]; !exists && c.maxEntries > 0 && len(c.values) >= c.maxEntries {
+	_, exists := c.values[key]
+	if memoryPressure() {
+		c.pruneToLocked(c.maxEntries / 2)
+	}
+	if !exists && c.maxEntries > 0 && len(c.values) >= c.maxEntries {
 		c.pruneLocked(now)
+	}
+	if !exists {
+		c.order = append(c.order, key)
 	}
 	c.values[key] = entry[T]{
 		value:        value,
@@ -93,10 +105,54 @@ func (c *LocalCache[T]) pruneLocked(now time.Time) {
 			delete(c.values, key)
 		}
 	}
-	for len(c.values) >= c.maxEntries {
-		for key := range c.values {
+	c.pruneToLocked(c.maxEntries - 1)
+}
+
+func (c *LocalCache[T]) pruneToLocked(target int) {
+	if target < 0 {
+		target = 0
+	}
+	for len(c.values) > target && len(c.order) > 0 {
+		key := c.order[0]
+		c.order = c.order[1:]
+		if _, exists := c.values[key]; exists {
 			delete(c.values, key)
+		}
+	}
+	if len(c.values) <= target {
+		return
+	}
+	for key := range c.values {
+		delete(c.values, key)
+		if len(c.values) <= target {
 			break
 		}
 	}
+}
+
+func memoryPressure() bool {
+	limitMB := localCacheHeapLimitMB()
+	if limitMB <= 0 {
+		return false
+	}
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.HeapAlloc > uint64(limitMB)*1024*1024
+}
+
+var (
+	heapLimitOnce sync.Once
+	heapLimitMB   int
+)
+
+func localCacheHeapLimitMB() int {
+	heapLimitOnce.Do(func() {
+		heapLimitMB = 512
+		if raw := os.Getenv("LOCAL_CACHE_HEAP_LIMIT_MB"); raw != "" {
+			if value, err := strconv.Atoi(raw); err == nil {
+				heapLimitMB = value
+			}
+		}
+	})
+	return heapLimitMB
 }
