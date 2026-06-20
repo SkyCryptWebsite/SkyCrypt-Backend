@@ -43,6 +43,11 @@ func NetworthHandler(c *fiber.Ctx) error {
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("networth", uuid, profileId)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
 	var (
 		mowojang      *models.MowojangResponse
@@ -53,8 +58,13 @@ func NetworthHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	reqCtx := c.UserContext()
 	g, groupCtx := errgroup.WithContext(reqCtx)
+	type museumResult struct {
+		profileID string
+		museum    map[string]*skycrypttypes.Museum
+		err       error
+	}
+	var selectedMuseumCh chan museumResult
 
 	if isProfileUUID {
 		g.Go(func() error {
@@ -71,6 +81,17 @@ func NetworthHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	if profileId == "" {
+		if cachedProfileID := getCachedSelectedProfileID(reqCtx, mowojang.UUID); cachedProfileID != "" {
+			selectedMuseumCh = make(chan museumResult, 1)
+			g.Go(func() error {
+				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
+				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
+				return nil
+			})
+		}
+	}
+
 	g.Go(func() error {
 		var err error
 		profiles, err = api.GetProfilesContext(groupCtx, mowojang.UUID)
@@ -82,8 +103,18 @@ func NetworthHandler(c *fiber.Ctx) error {
 		if err != nil {
 			return err
 		}
+		if profileId == "" {
+			cacheSelectedProfileID(groupCtx, mowojang.UUID, profile.ProfileID)
+		}
 
 		if !isProfileUUID {
+			if selectedMuseumCh != nil {
+				result := <-selectedMuseumCh
+				if result.err == nil && result.profileID == profile.ProfileID {
+					profileMuseum = result.museum
+					return nil
+				}
+			}
 			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}
@@ -120,8 +151,8 @@ func NetworthHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
 
-	return c.JSON(fiber.Map{
+	return sendAndCacheJSON(c, reqCtx, cacheKey, fiber.Map{
 		"normal":      networth,
 		"nonCosmetic": nonCosmeticNetworth,
-	})
+	}, 5*60)
 }

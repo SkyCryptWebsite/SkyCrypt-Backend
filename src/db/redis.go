@@ -6,6 +6,7 @@ import (
 	"os"
 	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,14 +34,18 @@ func InitRedis(addr string, password string, db int) error {
 	redisDB = db
 
 	// Don't use sync.Once with prefork mode - each process needs its own connection
+	poolSize := redisOptionInt("REDIS_POOL_SIZE", 25)
+	minIdleConns := redisOptionInt("REDIS_MIN_IDLE_CONNS", 10)
+	poolTimeoutSeconds := redisOptionInt("REDIS_POOL_TIMEOUT_SECONDS", 2)
+
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,
 		DB:           db,
-		PoolSize:     10,
-		MinIdleConns: 5,
+		PoolSize:     poolSize,
+		MinIdleConns: minIdleConns,
 		MaxRetries:   3,
-		PoolTimeout:  time.Second * 4,
+		PoolTimeout:  time.Duration(poolTimeoutSeconds) * time.Second,
 		IdleTimeout:  time.Minute * 5,
 		DialTimeout:  time.Second * 5,
 		ReadTimeout:  time.Second * 3,
@@ -235,14 +240,18 @@ func getRedisClient() (*redis.Client, error) {
 }
 
 func NewRedisClient(addr string, password string, db int) *RedisClient {
+	poolSize := redisOptionInt("REDIS_POOL_SIZE", 25)
+	minIdleConns := redisOptionInt("REDIS_MIN_IDLE_CONNS", 10)
+	poolTimeoutSeconds := redisOptionInt("REDIS_POOL_TIMEOUT_SECONDS", 2)
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,
 		DB:           db,
-		PoolSize:     10,
-		MinIdleConns: 5,
+		PoolSize:     poolSize,
+		MinIdleConns: minIdleConns,
 		MaxRetries:   3,
-		PoolTimeout:  time.Second * 4,
+		PoolTimeout:  time.Duration(poolTimeoutSeconds) * time.Second,
 		IdleTimeout:  time.Minute * 5,
 		DialTimeout:  time.Second * 5,
 		ReadTimeout:  time.Second * 3,
@@ -259,6 +268,18 @@ func NewRedisClient(addr string, password string, db int) *RedisClient {
 	}
 
 	return &RedisClient{client: rdb}
+}
+
+func redisOptionInt(name string, fallback int) int {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func Set(key string, value interface{}, expirationSeconds int) error {

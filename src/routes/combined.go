@@ -61,7 +61,13 @@ func CombinedHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	result, err := computeCombinedContext(c.UserContext(), uuid, profileId, disabledPacks)
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("combined", uuid, profileId, disabledPacksCachePart(disabledPacks))
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
+
+	result, err := computeCombinedContext(reqCtx, uuid, profileId, disabledPacks)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -69,7 +75,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/combined/%s in %s", uuid, time.Since(timeNow))
-	return c.JSON(result)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, result, 5*60)
 }
 
 func computeCombinedContext(ctx context.Context, uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
@@ -84,6 +90,12 @@ func computeCombinedContext(ctx context.Context, uuid string, profileId string, 
 
 	isProfileUUID := utility.IsUUID(profileId)
 	g, groupCtx := errgroup.WithContext(ctx)
+	type museumResult struct {
+		profileID string
+		museum    map[string]*skycrypttypes.Museum
+		err       error
+	}
+	var selectedMuseumCh chan museumResult
 
 	if isProfileUUID {
 		g.Go(func() error {
@@ -99,6 +111,17 @@ func computeCombinedContext(ctx context.Context, uuid string, profileId string, 
 	}
 
 	uuid = mowojang.UUID
+
+	if profileId == "" {
+		if cachedProfileID := getCachedSelectedProfileID(ctx, uuid); cachedProfileID != "" {
+			selectedMuseumCh = make(chan museumResult, 1)
+			g.Go(func() error {
+				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
+				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
+				return nil
+			})
+		}
+	}
 
 	g.Go(func() error {
 		var err error
@@ -117,8 +140,18 @@ func computeCombinedContext(ctx context.Context, uuid string, profileId string, 
 		if err != nil {
 			return err
 		}
+		if profileId == "" {
+			cacheSelectedProfileID(groupCtx, uuid, profile.ProfileID)
+		}
 
 		if !isProfileUUID {
+			if selectedMuseumCh != nil {
+				result := <-selectedMuseumCh
+				if result.err == nil && result.profileID == profile.ProfileID {
+					profileMuseum = result.museum
+					return nil
+				}
+			}
 			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}

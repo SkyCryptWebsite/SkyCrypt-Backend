@@ -581,6 +581,22 @@ func buildLatencyEntries(latency map[string]*latencyAgg) []cacheLatencyEntry {
 }
 
 func addSlowest(slowest *[]slowRequestEntry, slowestMinMs *int64, req slowRequestEntry) {
+	if req.RequestID != "" {
+		for i := range *slowest {
+			if (*slowest)[i].RequestID == req.RequestID {
+				if req.DurationMs > (*slowest)[i].DurationMs {
+					(*slowest)[i] = req
+					sort.Slice(*slowest, func(i, j int) bool {
+						return (*slowest)[i].DurationMs > (*slowest)[j].DurationMs
+					})
+					if len(*slowest) == 25 {
+						*slowestMinMs = (*slowest)[24].DurationMs
+					}
+				}
+				return
+			}
+		}
+	}
 	if len(*slowest) < 25 || req.DurationMs > *slowestMinMs {
 		*slowest = append(*slowest, req)
 		sort.Slice(*slowest, func(i, j int) bool {

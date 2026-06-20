@@ -105,6 +105,7 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 				{Kind: "http", Operation: "GET", Name: "api.hypixel.net/v2/player", Count: 1, TotalMs: 90, AvgMs: 90},
 			},
 		},
+		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "req-2", "method": "GET", "path": "/api/stats/ducky/Kiwi", "status_code": 200, "duration_ms": 120, "response_size": 100},
 		{"level": "info", "timestamp": now, "msg": "span_completed", "span": "api.GetProfiles", "duration_us": 1500},
 		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "legacy", "method": "GET", "path": "/api/legacy", "status_code": 200, "duration_ms": 50, "response_size": 10},
 		{"level": "error", "timestamp": now, "msg": "error_recorded", "error_type": "ignored", "error": "ignored"},
@@ -135,6 +136,15 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 	}
 	if len(report.TopSpans) != 1 || report.TopSpans[0].Operation != "api.GetProfiles" {
 		t.Fatalf("unexpected TopSpans: %+v", report.TopSpans)
+	}
+	seenReq2 := 0
+	for _, req := range report.SlowestRequests {
+		if req.RequestID == "req-2" {
+			seenReq2++
+		}
+	}
+	if seenReq2 != 1 {
+		t.Fatalf("req-2 slowest count = %d, want 1: %+v", seenReq2, report.SlowestRequests)
 	}
 	encoded, err := json.Marshal(report)
 	if err != nil {
