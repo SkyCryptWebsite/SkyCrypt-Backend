@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,20 @@ import (
 )
 
 func GetCombined(
+	mowojang *models.MowojangResponse,
+	profiles *models.HypixelProfilesResponse,
+	profile *skycrypttypes.Profile,
+	player *skycrypttypes.Player,
+	userProfile *skycrypttypes.Member,
+	museum *skycrypttypes.Museum,
+	members []*models.MemberStats,
+	disabledPacks []string,
+) (*models.CombinedOutput, error) {
+	return GetCombinedContext(context.Background(), mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
+}
+
+func GetCombinedContext(
+	ctx context.Context,
 	mowojang *models.MowojangResponse,
 	profiles *models.HypixelProfilesResponse,
 	profile *skycrypttypes.Profile,
@@ -149,7 +164,7 @@ func GetCombined(
 		Slayer:      GetSlayers(userProfile),
 		Minions:     GetMinions(profile),
 		Bestiary:    GetBestiary(userProfile),
-		Collections: GetCollections(userProfile, profile),
+		Collections: GetCollectionsContext(ctx, userProfile, profile),
 		CrimsonIsle: GetCrimsonIsle(userProfile),
 		Rift:        GetRift(userProfile, processedItems),
 		Misc:        GetMisc(userProfile, profile, player),

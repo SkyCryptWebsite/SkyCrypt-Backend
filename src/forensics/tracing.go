@@ -1,6 +1,7 @@
 package forensics
 
 import (
+	"context"
 	"runtime"
 	"time"
 
@@ -13,6 +14,13 @@ func RequestTracingMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		requestID := uuid.New().String()
 		c.Locals("request_id", requestID)
+		requestMetrics := NewRequestMetrics(requestID, c.Method(), c.Path())
+		baseCtx := c.UserContext()
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		metricsCtx := WithRequestMetrics(baseCtx, requestMetrics)
+		c.SetUserContext(metricsCtx)
 
 		start := time.Now()
 		startAlloc := GetAllocBytes()
@@ -32,6 +40,11 @@ func RequestTracingMiddleware() fiber.Handler {
 		duration := time.Since(start)
 		statusCode := c.Response().StatusCode()
 		endAlloc := GetAllocBytes()
+		route := c.Path()
+		if c.Route() != nil && c.Route().Path != "" {
+			route = c.Route().Path
+		}
+		SetRequestRoute(c.UserContext(), route)
 
 		logLevel := zap.InfoLevel
 		if statusCode >= 500 {
@@ -69,6 +82,7 @@ func RequestTracingMiddleware() fiber.Handler {
 		}
 
 		Logger.Log(logLevel, "request_completed", fields...)
+		FinalizeRequestMetrics(c.UserContext(), statusCode, duration, len(c.Response().Body()), allocDelta)
 
 		return err
 	}

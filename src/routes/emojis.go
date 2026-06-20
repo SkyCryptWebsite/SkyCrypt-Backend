@@ -28,20 +28,21 @@ func EmojisHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 
 	emojis := db.GetMongoCollection("emojis")
-	cursor, err := emojis.Find(c.Context(), map[string]interface{}{})
+	ctx := c.UserContext()
+	cursor, err := emojis.Find(ctx, map[string]interface{}{})
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to fetch emojis",
 		})
 	}
 	defer func() {
-		if err := cursor.Close(c.Context()); err != nil {
+		if err := cursor.Close(ctx); err != nil {
 			fmt.Println("Failed to close emoji cursor:", err)
 		}
 	}()
 
 	var results []map[string]interface{}
-	if err := cursor.All(c.Context(), &results); err != nil {
+	if err := cursor.All(ctx, &results); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to parse emojis",
 		})

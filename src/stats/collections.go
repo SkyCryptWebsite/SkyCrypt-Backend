@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
@@ -118,9 +119,13 @@ func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCate
 }
 
 func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) *models.CollectionsOutput {
+	return GetCollectionsContext(context.Background(), userProfile, profile)
+}
+
+func GetCollectionsContext(ctx context.Context, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) *models.CollectionsOutput {
 	usernames := map[string]string{}
 	for memberId := range profile.Members {
-		username, err := api.GetUsername(memberId)
+		username, err := api.GetUsernameContext(ctx, memberId)
 		if err != nil {
 			username = "Unknown"
 		}

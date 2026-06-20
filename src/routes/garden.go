@@ -45,19 +45,20 @@ func GardenHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	g, _ := errgroup.WithContext(c.Context())
+	reqCtx := c.UserContext()
+	g, groupCtx := errgroup.WithContext(reqCtx)
 
 	if isProfileUUID {
 		g.Go(func() error {
 			var err error
-			garden, err = api.GetGarden(profileId)
+			garden, err = api.GetGardenContext(groupCtx, profileId)
 			return err
 		})
 	}
 
 	g.Go(func() error {
 		var err error
-		profiles, err = api.GetProfiles(uuid)
+		profiles, err = api.GetProfilesContext(groupCtx, uuid)
 		if err != nil {
 			return err
 		}
@@ -68,7 +69,7 @@ func GardenHandler(c *fiber.Ctx) error {
 		}
 
 		if !isProfileUUID {
-			garden, err = api.GetGarden(profile.ProfileID)
+			garden, err = api.GetGardenContext(groupCtx, profile.ProfileID)
 			return err
 		}
 

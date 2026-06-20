@@ -30,7 +30,7 @@ func UsernameHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidUserError)
 	}
 
-	username, err := api.GetUsername(uuid)
+	username, err := api.GetUsernameContext(c.UserContext(), uuid)
 	if err != nil {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)

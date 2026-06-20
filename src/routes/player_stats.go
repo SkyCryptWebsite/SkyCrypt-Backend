@@ -37,7 +37,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 
-	resolvedPlayer, err := api.ResolvePlayer(uuid)
+	resolvedPlayer, err := api.ResolvePlayerContext(c.UserContext(), uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to resolve player: %v", err),
@@ -45,7 +45,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	}
 	resolvedUUID := resolvedPlayer.UUID
 
-	profile, err := api.GetProfile(uuid, profileId)
+	profile, err := api.GetProfileContext(c.UserContext(), uuid, profileId)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get profile: %v", err),

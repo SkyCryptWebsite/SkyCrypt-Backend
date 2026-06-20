@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
@@ -64,6 +65,10 @@ type memberResult struct {
 }
 
 func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
+	return FormatMembersContext(context.Background(), profile)
+}
+
+func FormatMembersContext(ctx context.Context, profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
 	results := make(chan memberResult, len(profile.Members))
 	var wg sync.WaitGroup
 
@@ -71,7 +76,7 @@ func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error
 		wg.Add(1)
 		go func(uuid string, data skycrypttypes.Member) {
 			defer wg.Done()
-			mowojang, err := api.ResolvePlayer(uuid)
+			mowojang, err := api.ResolvePlayerContext(ctx, uuid)
 			if err != nil {
 				results <- memberResult{uuid: uuid, err: err}
 				return

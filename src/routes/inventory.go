@@ -69,19 +69,20 @@ func InventoryHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	g, _ := errgroup.WithContext(c.Context())
+	reqCtx := c.UserContext()
+	g, groupCtx := errgroup.WithContext(reqCtx)
 
 	if isProfileUUID {
 		g.Go(func() error {
 			var err error
-			profileMuseum, err = api.GetMuseum(profileId)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
 			return err
 		})
 	}
 
 	g.Go(func() error {
 		var err error
-		profiles, err = api.GetProfiles(uuid)
+		profiles, err = api.GetProfilesContext(groupCtx, uuid)
 		if err != nil {
 			return err
 		}
@@ -92,7 +93,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 
 		if !isProfileUUID {
-			profileMuseum, err = api.GetMuseum(profile.ProfileID)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}
 
