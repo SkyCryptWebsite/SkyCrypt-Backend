@@ -260,11 +260,11 @@ func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*mode
 		}
 	}
 
-	for _, uuid := range uuids {
+	for _, uuid := range uniqueUnresolvedUUIDs(uuids, resolved) {
 		if uuid == "" || resolved[uuid] != nil {
 			continue
 		}
-		mowojang, err := resolvePlayerByUUIDFreshContext(ctx, uuid)
+		mowojang, err := ResolvePlayerContext(ctx, uuid, false)
 		if err == nil && mowojang.UUID != "" {
 			resolved[uuid] = mowojang
 		}
@@ -302,11 +302,11 @@ func GetUsernamesContext(ctx context.Context, uuids []string) map[string]string 
 		}
 	}
 
-	for _, uuid := range uuids {
+	for _, uuid := range uniqueUnresolvedUsernames(uuids, usernames) {
 		if uuid == "" || usernames[uuid] != "" {
 			continue
 		}
-		username, err := getUsernameFreshContext(ctx, uuid, false)
+		username, err := GetUsernameContext(ctx, uuid, false)
 		if err != nil || username == "" {
 			username = "Unknown"
 		}
@@ -314,6 +314,38 @@ func GetUsernamesContext(ctx context.Context, uuids []string) map[string]string 
 	}
 
 	return usernames
+}
+
+func uniqueUnresolvedUUIDs(uuids []string, resolved map[string]*models.MowojangResponse) []string {
+	seen := make(map[string]struct{}, len(uuids))
+	out := make([]string, 0, len(uuids))
+	for _, uuid := range uuids {
+		if uuid == "" || resolved[uuid] != nil {
+			continue
+		}
+		if _, ok := seen[uuid]; ok {
+			continue
+		}
+		seen[uuid] = struct{}{}
+		out = append(out, uuid)
+	}
+	return out
+}
+
+func uniqueUnresolvedUsernames(uuids []string, usernames map[string]string) []string {
+	seen := make(map[string]struct{}, len(uuids))
+	out := make([]string, 0, len(uuids))
+	for _, uuid := range uuids {
+		if uuid == "" || usernames[uuid] != "" {
+			continue
+		}
+		if _, ok := seen[uuid]; ok {
+			continue
+		}
+		seen[uuid] = struct{}{}
+		out = append(out, uuid)
+	}
+	return out
 }
 
 func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
