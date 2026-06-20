@@ -115,9 +115,7 @@ func (c *LocalCache[T]) pruneToLocked(target int) {
 	for len(c.values) > target && len(c.order) > 0 {
 		key := c.order[0]
 		c.order = c.order[1:]
-		if _, exists := c.values[key]; exists {
-			delete(c.values, key)
-		}
+		delete(c.values, key)
 	}
 	if len(c.values) <= target {
 		return
