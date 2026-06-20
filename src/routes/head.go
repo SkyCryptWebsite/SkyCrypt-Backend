@@ -9,14 +9,15 @@ import (
 
 // HeadHandlers godoc
 //
-//	@Summary		Render and return a head image
-//	@Description	Returns a PNG image of a head for the given texture ID
-//	@Tags			head
+//	@Summary		Render a player head
+//	@Description	Renders a Minecraft player head texture as PNG bytes.
+//	@ID				renderHeadImage
+//	@Tags			Rendering
 //	@Produce		png
-//	@Param			textureId	path		string	true	"Texture ID"
-//	@Success		200			{file}		binary	"PNG image of the head"
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{string}	string	"Failed to render head"
+//	@Param			textureId	path		string	true	"Minecraft skin texture identifier"	example(93a1b830399ab432a5178fdaf3939b24bf25c724a66be947296c503352bc380d)
+//	@Success		200			{file}		binary					"PNG image bytes returned successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Texture identifier is missing or invalid."
+//	@Failure		500			{string}	string					"Head image could not be rendered."
 //	@Router			/api/head/{textureId} [get]
 func HeadHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()

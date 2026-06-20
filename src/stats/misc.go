@@ -184,8 +184,12 @@ func getPetMilestones(userProfile *skycrypttypes.Member) map[string]models.MiscP
 	}
 }
 
-func getMythologicalEvent(userProfile *skycrypttypes.Member) models.MiscMythologicalEvent {
-	return models.MiscMythologicalEvent{
+func getMythologicalEvent(userProfile *skycrypttypes.Member) *models.MiscMythologicalEvent {
+	if userProfile.PlayerStats.Mythos.Kills == 0 {
+		return nil
+	}
+
+	return &models.MiscMythologicalEvent{
 		Kills:                 userProfile.PlayerStats.Mythos.Kills,
 		BurrowsDugNext:        userProfile.PlayerStats.Mythos.BurrowsDugNext,
 		BurrowsDugCombat:      userProfile.PlayerStats.Mythos.BurrowsDugCombat,
@@ -268,6 +272,11 @@ func getUncategorized(userProfile *skycrypttypes.Member) map[string]any {
 }
 
 func getClaimedItems(player *skycrypttypes.Player) map[string]int64 {
+	// Not really a great way to do but it is what it is for now
+	if player.ClaimedPotatoTalisman == 0 && player.ClaimedPotatoBasket == 0 && player.ClaimPotatoWarSilverMedal == 0 && player.ClaimPotatoWarCrown == 0 && player.SkyblockFreeCookie == 0 && player.ClaimedCenturyCake == 0 && player.ClaimedCenturyCake200 == 0 {
+		return nil
+	}
+
 	return map[string]int64{
 		"potato_talisman":         player.ClaimedPotatoTalisman,
 		"potato_basket":           player.ClaimedPotatoBasket,

@@ -14,7 +14,7 @@ type MiscOutput struct {
 	EndstoneProtector MiscEndstoneProtector       `json:"endstone_protector"`
 	Damage            MiscDamage                  `json:"damage"`
 	PetMilestones     map[string]MiscPetMilestone `json:"pet_milestones"`
-	MythologicalEvent MiscMythologicalEvent       `json:"mythological_event"`
+	MythologicalEvent *MiscMythologicalEvent      `json:"mythological_event"`
 	ProfileUpgrades   MiscProfileUpgrades         `json:"profile_upgrades"`
 	Auctions          MiscAuctions                `json:"auctions"`
 	ClaimedItems      map[string]int64            `json:"claimed_items"`

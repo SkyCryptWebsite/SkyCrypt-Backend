@@ -5,6 +5,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"sort"
 	"sync"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -98,6 +99,18 @@ func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error
 
 		members = append(members, res.member)
 	}
+
+	sort.SliceStable(members, func(i, j int) bool {
+		if members[i].Removed && !members[j].Removed {
+			return false
+		}
+
+		if !members[i].Removed && members[j].Removed {
+			return true
+		}
+
+		return members[i].Name > members[j].Name
+	})
 
 	return members, nil
 }

@@ -15,7 +15,7 @@ jobs:
       - name: Go Setup
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
@@ -40,7 +40,7 @@ jobs:
       - name: Go Setup
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
 
       - name: Download dependencies
         run: go mod download

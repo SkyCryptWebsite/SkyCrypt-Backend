@@ -18,16 +18,19 @@ import (
 
 // InventorySearchHandler godoc
 //
-//	@Summary		Get searched inventory items for a specified player and search parameter
-//	@Description	Returns inventory items that match the search parameter for the given user and profile ID. Searches across all inventories and returns items that contain the search parameter in their name or lore.
-//	@Tags			inventory
+//	@Summary		Search cached profile inventory
+//	@Description	Searches cached inventory tabs for items whose display name or lore contains the search parameter.
+//	@Description	Call GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.
+//	@ID				searchProfileInventory
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//	@Param			searchParam	path		string	true	"Search parameter to filter inventory items"
-//	@Success		200			{object}	[]models.StrippedItem
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Param			searchParam	path		string	true	"Case-sensitive search text matched against item display names and lore"	example(hyperion)
+//	@Success		200			{array}		models.StrippedItem		"Matching inventory items returned successfully."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500			{object}	models.ProcessingError	"Cached inventory data is missing or could not be parsed."
 //	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
 func InventorySearchHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {

@@ -14,11 +14,14 @@ var RESOURCE_PACKS = []models.ResourcePackConfig{}
 
 // ResourcePackHandler godoc
 //
-//	@Summary		Get list of resource packs
-//	@Description	Returns a list of resource packs
-//	@Tags			resourcepacks
+//	@Summary		List resource packs
+//	@Description	Returns toggleable resource packs available to SkyCrypt clients.
+//	@Description	The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
+//	@ID				listResourcePacks
+//	@Tags			Rendering
 //	@Produce		json
-//	@Success		200	{object}	[]models.ResourcePackConfig
+//	@Success		200	{array}		models.ResourcePackConfig	"Resource packs returned successfully."
+//	@Failure		500	{object}	models.ProcessingError		"Resource pack metadata could not be read."
 //	@Router			/api/resourcepacks [get]
 func ResourcePackHandler(c *fiber.Ctx) error {
 	// timeNow := time.Now()

@@ -45,15 +45,17 @@ func GetFarming(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		UniqueGolds: len(userProfile.JacobsContest.UniqueBrackets["gold"]),
 		Pelts:       userProfile.Quests.TrapperQuest.PeltCount,
 		Copper:      userProfile.Garden.Copper,
-		Medals:      map[string]*models.Medal{},
 		Contests:    map[string]*models.Contest{},
 		Tools:       statsItems.GetSkillTools("farming", items),
 	}
 
-	for _, medal := range constants.FARMING_MEDALS {
-		output.Medals[medal] = &models.Medal{
-			Amount: userProfile.JacobsContest.MedalsInv[medal],
-			Total:  0,
+	if userProfile.JacobsContest.MedalsInv != nil {
+		output.Medals = make(map[string]*models.Medal, len(constants.FARMING_MEDALS))
+		for _, medal := range constants.FARMING_MEDALS {
+			output.Medals[medal] = &models.Medal{
+				Amount: userProfile.JacobsContest.MedalsInv[medal],
+				Total:  0,
+			}
 		}
 	}
 

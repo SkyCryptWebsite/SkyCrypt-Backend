@@ -11,11 +11,12 @@ const sourceRepository = "https://github.com/SkyCryptWebsite/SkyCrypt-Backend"
 
 // SourceHandler godoc
 //
-//	@Summary		Get source and license information
-//	@Description	Returns source and license information for the running SkyCrypt Backend service.
-//	@Tags			source
+//	@Summary		Get source information
+//	@Description	Returns repository, license, commit, and notice information for the running SkyCrypt Backend service.
+//	@ID				getSourceInfo
+//	@Tags			Source
 //	@Produce		json
-//	@Success		200	{object}	models.SourceInfo
+//	@Success		200	{object}	models.SourceInfo	"Source and license information returned successfully."
 //	@Router			/api/source [get]
 func SourceHandler(c *fiber.Ctx) error {
 	commit := os.Getenv("SOURCE_COMMIT")

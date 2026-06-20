@@ -57,7 +57,7 @@ func getSlayersForEmbed(slayers *models.SlayersOutput) models.EmbedDataSlayers {
 }
 
 func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, networth map[string]float64) *models.EmbedData {
-	skills := GetSkills(userProfile, profile, &skycrypttypes.Player{})
+	skills := GetSkills(userProfile, profile, player)
 	dungeons := GetDungeons(userProfile)
 	slayers := GetSlayers(userProfile)
 

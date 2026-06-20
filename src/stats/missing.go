@@ -21,7 +21,12 @@ func hasAccessory(accessories *[]models.InsertAccessory, id string, rarity strin
 				return true
 			}
 
-			if slices.Index(constants.RARITIES, accessory.Rarity) >= slices.Index(constants.RARITIES, rarity) {
+			itemRarity := slices.Index(constants.RARITIES, accessory.Rarity)
+			if accessory.Recombobulated {
+				itemRarity--
+			}
+
+			if itemRarity >= slices.Index(constants.RARITIES, rarity) {
 				return true
 			}
 		}

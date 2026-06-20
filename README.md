@@ -133,12 +133,39 @@ cp .env.example .env
 Edit the `.env` file with your configuration:
 
 ```dotenv
+# Hypixel API key for fetching player, profile, museum, and Garden data.
 HYPIXEL_API_KEY=""
+
+# Optional Discord webhook for startup and error notifications.
 DISCORD_WEBHOOK=""
+
+# Local development mode. Production deployments should leave this false.
 DEV="true"
+
+# Rendering and diagnostics.
 ENABLE_ARMOR_HEX="false"
+VERBOSE_LOGGING="true"
+FORENSICS_ENABLED="true"
+LOG_STDOUT="0"
+
+# Public backend origin used when building rendered asset URLs.
+DOMAIN="http://localhost:8080"
+
+# Commit hash exposed by /api/source. Docker builds set this automatically.
+SOURCE_COMMIT=""
+
+# MongoDB connection.
 MONGO_URI="mongodb://localhost:27017"
 MONGO_DB_NAME="SkyCrypt"
+
+# Redis connection.
+REDIS_HOST="localhost"
+REDIS_PORT="6379"
+REDIS_PASSWORD=""
+
+# Server-to-server API protection for private API routes.
+SERVER_API_TOKEN="DuckySoLuckyWasHere"
+DISABLE_SERVER_API_AUTH="true"
 ```
 
 ### Environment Variable Reference
@@ -149,11 +176,20 @@ MONGO_DB_NAME="SkyCrypt"
 | `DISCORD_WEBHOOK` | Discord webhook URL for error notifications and startup messages | - | No |
 | `DEV` | Enable development mode. Set to `true` for local development | `false` | No |
 | `ENABLE_ARMOR_HEX` | Enable hexadecimal armor color support | `false` | No |
+| `VERBOSE_LOGGING` | Enable extra debug logging from utility helpers | `false` | No |
+| `FORENSICS_ENABLED` | Enable forensic request/performance logging and `/api/forensics` endpoints | `false` | No |
+| `LOG_STDOUT` | Also write forensic JSON logs to stdout when set to `1` | `0` | No |
+| `DOMAIN` | Public backend origin used for generated image/resource URLs | `https://sky.shiiyu.moe` | No |
+| `SOURCE_COMMIT` | Git commit hash exposed by `/api/source`; normally injected by Docker builds | - | No |
 | `MONGO_URI` | MongoDB connection URI | `mongodb://localhost:27017` | No |
 | `MONGO_DB_NAME` | MongoDB database name | `SkyCrypt` | No |
 | `REDIS_HOST` | Redis server hostname | `localhost` | No |
 | `REDIS_PORT` | Redis server port | `6379` | No |
 | `REDIS_PASSWORD` | Redis authentication password | - | No |
+| `SERVER_API_TOKEN` | Shared token required by protected API routes through the `X-API-Token` header | - | Yes in production |
+| `DISABLE_SERVER_API_AUTH` | Disable `X-API-Token` checks for local development only | `false` | No |
+
+Protected API routes return `401 Unauthorized` unless the request includes `X-API-Token: <SERVER_API_TOKEN>`. Keep `DISABLE_SERVER_API_AUTH` unset or `false` outside local development.
 
 ## Development
 

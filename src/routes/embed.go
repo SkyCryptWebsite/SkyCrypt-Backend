@@ -17,16 +17,20 @@ import (
 
 // EmbedHandler godoc
 //
-//	@Summary		Get embed data for a specified player
-//	@Description	Returns embed data for the given user (UUID or username) and optional profile ID
-//	@Tags			embed
+//	@Summary		Get profile embed data
+//	@Description	Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.
+//	@Description	The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+//	@ID				getProfileEmbed
+//	@Tags			Discord Embed
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID or username"
-//	@Param			profileId	query		string	false	"Profile ID (optional, defaults to selected profile)"
-//	@Success		200			{object}	models.EmbedData
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{object}	models.ProcessingError
-//	@Router			/api/embed/{uuid} [get]
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{object}	models.EmbedData		"Profile embed data returned successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Player, profile, or museum data could not be resolved."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500			{object}	models.ProcessingError	"Networth calculation failed."
+//	@Router			/api/embed/{uuid}/{profileId} [get]
 func EmbedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Embed")()
@@ -129,4 +133,23 @@ func EmbedHandler(c *fiber.Ctx) error {
 	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
 
 	return c.JSON(output)
+}
+
+// SelectedProfileEmbedHandler godoc
+//
+//	@Summary		Get selected profile embed data
+//	@Description	Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.
+//	@Description	If Hypixel does not mark a selected profile, the first available profile is used.
+//	@ID				getSelectedProfileEmbed
+//	@Tags			Discord Embed
+//	@Produce		json
+//	@Security		ApiTokenHeader
+//	@Param			uuid	path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Success		200		{object}	models.EmbedData		"Selected profile embed data returned successfully."
+//	@Failure		400		{object}	models.ProcessingError	"Player, profile, or museum data could not be resolved."
+//	@Failure		401		{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500		{object}	models.ProcessingError	"Networth calculation failed."
+//	@Router			/api/embed/{uuid} [get]
+func SelectedProfileEmbedHandler(c *fiber.Ctx) error {
+	return EmbedHandler(c)
 }

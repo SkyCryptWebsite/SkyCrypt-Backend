@@ -338,17 +338,7 @@ func ReplaceVariables(template string, variables map[string]float64) string {
 		}
 
 		// fmt.Printf("Replacing variable %s with value %.2f\n", name, value)
-		if _, err := strconv.ParseFloat(name, 64); err != nil {
-			if intValue, err := strconv.Atoi(fmt.Sprintf("%.0f", value)); err == nil && intValue > 0 {
-				if strings.Contains(match, "+") {
-					return "+" + strconv.Itoa(intValue)
-				}
-
-				return "+" + fmt.Sprintf("%.0f", value)
-			}
-		}
-
-		return fmt.Sprintf("%.0f", math.Abs(value))
+		return fmt.Sprintf("%.0f", value)
 	})
 }
 

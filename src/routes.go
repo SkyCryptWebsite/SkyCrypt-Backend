@@ -176,7 +176,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// STATS ENDPOINTS
 	api.Get("/stats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.StatsHandler)
-	api.Get("/stats/:uuid", routes.ServerAPITokenMiddleware, routes.StatsHandler)
+	api.Get("/stats/:uuid", routes.ServerAPITokenMiddleware, routes.SelectedProfileStatsHandler)
 
 	api.Get("/playerStats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.PlayerStatsHandler)
 
@@ -190,7 +190,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/garden/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.GardenHandler)
 
 	api.Get("/embed/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.EmbedHandler)
-	api.Get("/embed/:uuid", routes.ServerAPITokenMiddleware, routes.EmbedHandler)
+	api.Get("/embed/:uuid", routes.ServerAPITokenMiddleware, routes.SelectedProfileEmbedHandler)
 
 	// RENDERING ENDPOINTS
 	api.Get("/head/:textureId", routes.HeadHandlers)

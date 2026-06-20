@@ -10,15 +10,16 @@ import (
 
 // LeatherHandlers godoc
 //
-//	@Summary		Render and return a leather armor image
-//	@Description	Returns a PNG image of leather armor for the given type and color
-//	@Tags			leather
+//	@Summary		Render leather armor
+//	@Description	Renders a dyed leather armor piece as PNG bytes for the requested armor piece and color.
+//	@ID				renderLeatherArmorImage
+//	@Tags			Rendering
 //	@Produce		png
-//	@Param			type	path		string	true	"Armor Type"
-//	@Param			color	path		string	true	"Armor Color"
-//	@Success		200		{file}		binary	"PNG image of the leather armor"
-//	@Failure		400		{object}	models.ProcessingError
-//	@Failure		500		{object}	models.ProcessingError
+//	@Param			type	path		string	true	"Leather armor piece identifier"	example(helmet)
+//	@Param			color	path		string	true	"Armor color value"				example(ff0000)
+//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
+//	@Failure		400		{object}	models.ProcessingError	"Armor type or color is missing or invalid."
+//	@Failure		500		{object}	models.ProcessingError	"Leather armor image could not be rendered."
 //	@Router			/api/leather/{type}/{color} [get]
 func LeatherHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()

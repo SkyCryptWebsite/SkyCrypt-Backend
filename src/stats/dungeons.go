@@ -130,6 +130,10 @@ func formatCatacombsFloor(data *skycrypttypes.DungeonData, dungeonType string) [
 
 	floorData := constants.DUNGEONS.Floors[dungeonType]
 	for _, f := range floorData {
+		if data.TimesPlayed[f.ID] == 0 && data.TierCompletions[f.ID] == 0 && data.MilestoneCompletions[f.ID] == 0 {
+			continue
+		}
+
 		stats := models.DungeonFloorStats{
 			TimesPlayed:          data.TimesPlayed[f.ID],
 			TierCompletions:      data.TierCompletions[f.ID],

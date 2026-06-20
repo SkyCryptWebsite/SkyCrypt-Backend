@@ -20,18 +20,7 @@ func ServerAPITokenMiddleware(c *fiber.Ctx) error {
 		})
 	}
 
-	providedToken := strings.TrimSpace(c.Get("Authorization"))
-	if strings.HasPrefix(strings.ToLower(providedToken), "bearer ") {
-		providedToken = strings.TrimSpace(providedToken[len("Bearer "):])
-	}
-
-	if providedToken == "" {
-		providedToken = strings.TrimSpace(c.Get("X-Server-Api-Token"))
-	}
-	if providedToken == "" {
-		providedToken = strings.TrimSpace(c.Get("X-API-Token"))
-	}
-
+	providedToken := strings.TrimSpace(c.Get("X-API-Token"))
 	if subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Unauthorized: Invalid API token",
