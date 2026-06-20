@@ -66,6 +66,10 @@ func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Playe
 		bank = *profile.Banking.Balance
 	}
 
+	if userProfile.Profile != nil {
+		bank += userProfile.Profile.BankAccount
+	}
+
 	formattedNetworth := models.EmbedNetworth{
 		Normal:      RoundToOneDecimal(networth["normal"]),
 		NonCosmetic: RoundToOneDecimal(networth["nonCosmetic"]),
