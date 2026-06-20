@@ -1,6 +1,6 @@
 module skycrypt
 
-go 1.25.1
+go 1.26.4
 
 require (
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.20

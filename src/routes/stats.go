@@ -15,15 +15,18 @@ import (
 
 // StatsHandler godoc
 //
-//	@Summary		Get stats of a specified player
-//	@Description	Returns stats for the given user and profile ID
-//	@Tags			stats
+//	@Summary		Get profile stats
+//	@Description	Returns the complete SkyCrypt stats payload for a player on a specific SkyBlock profile.
+//	@Description	The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+//	@ID				getProfileStats
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//	@Success		200			{object}	models.StatsOutput
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{object}	models.StatsOutput		"Profile stats returned successfully."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
 //	@Router			/api/stats/{uuid}/{profileId} [get]
 func StatsHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -48,6 +51,22 @@ func StatsHandler(c *fiber.Ctx) error {
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
 	return c.JSON(output)
 }
+
+// selectedProfileStatsDocs godoc
+//
+//	@Summary		Get selected profile stats
+//	@Description	Returns the complete SkyCrypt stats payload for a player's selected SkyBlock profile.
+//	@Description	If Hypixel does not mark a selected profile, the first available profile is used.
+//	@ID				getSelectedProfileStats
+//	@Tags			Stats
+//	@Produce		json
+//	@Security		ApiTokenHeader
+//	@Param			uuid	path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Success		200		{object}	models.StatsOutput		"Selected profile stats returned successfully."
+//	@Failure		401		{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500		{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
+//	@Router			/api/stats/{uuid} [get]
+func selectedProfileStatsDocs() {}
 
 func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
 	var mowojang *models.MowojangResponse

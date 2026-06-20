@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.4-alpine AS builder
 
 # NOTE: build-base (gcc/musl) intentionally omitted — CGO_ENABLED=0 produces a
 #       pure-Go static binary with zero C-compiler dependency.

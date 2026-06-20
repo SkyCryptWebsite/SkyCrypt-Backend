@@ -12,13 +12,14 @@ import (
 
 // UsernameHandler godoc
 //
-//	@Summary		Get username for a specified UUID
-//	@Description	Returns the username associated with the given UUID
-//	@Tags			username
+//	@Summary		Resolve username by UUID
+//	@Description	Resolves a Minecraft UUID to the current username and display name known to SkyCrypt.
+//	@ID				resolveUsernameByUuid
+//	@Tags			Mojang
 //	@Produce		json
-//	@Param			uuid	path		string	true	"UUID"
-//	@Success		200		{object}	models.PlayerResolve
-//	@Failure		400		{object}	models.ProcessingError
+//	@Param			uuid	path		string	true	"Minecraft UUID"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Success		200		{object}	models.PlayerResolve		"Username resolved successfully."
+//	@Failure		400		{object}	models.ProcessingError	"UUID is invalid or the player could not be found."
 //	@Router			/api/username/{uuid} [get]
 func UsernameHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()

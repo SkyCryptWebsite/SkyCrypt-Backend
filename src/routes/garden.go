@@ -16,16 +16,18 @@ import (
 
 // GardenHandler godoc
 //
-//	@Summary		Get garden stats of a specified profile
-//	@Description	Returns garden data for the given profile ID
-//	@Tags			garden
+//	@Summary		Get garden stats
+//	@Description	Returns Garden progression, visitors, crop milestones, composter data, plots, upgrades, and related Garden state for a specific SkyBlock profile.
+//	@ID				getGardenStats
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//
-// @Success		200			{object}	models.Garden
-// @Failure		400			{object}	models.ProcessingError
-// @Router			/api/garden/{uuid}/{profileId} [get]
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{object}	models.Garden			"Garden stats returned successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Player, profile, or Garden data could not be loaded."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Router			/api/garden/{uuid}/{profileId} [get]
 func GardenHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Garden")()

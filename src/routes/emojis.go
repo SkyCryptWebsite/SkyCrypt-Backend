@@ -12,12 +12,13 @@ import (
 
 // EmojisHandler godoc
 //
-//	@Summary		Get all emojis
-//	@Description	Retrieves all emojis from the database
-//	@Tags			emojis
+//	@Summary		List emojis
+//	@Description	Returns emoji documents stored by SkyCrypt along with a Unix timestamp indicating when the response was generated.
+//	@ID				listEmojis
+//	@Tags			Emojis
 //	@Produce		json
-//	@Success		200	{object}	map[string]interface{}	"Returns fetched_at timestamp and array of emojis"
-//	@Failure		500	{object}	fiber.Map				"Failed to fetch or parse emojis"
+//	@Success		200	{object}	models.EmojisResponse	"Emojis returned successfully."
+//	@Failure		500	{object}	models.ProcessingError	"Emoji data could not be fetched or parsed."
 //	@Router			/api/emojis [get]
 func EmojisHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {

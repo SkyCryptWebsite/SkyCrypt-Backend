@@ -17,10 +17,14 @@ import (
 )
 
 // @title			SkyCrypt API
-// @version		1.0
-// @description	API for SkyCrypt - A Hypixel SkyBlock Stats Viewer
-// @host			localhost:8080
-// @BasePath		/
+// @version		3.0
+// @description	SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, emoji data, and source/license information used by SkyCrypt clients.
+// @servers.url		https://sky.shiiyu.moe/
+// @servers.description	SkyCrypt production API
+
+// @securityDefinitions.apikey ApiTokenHeader
+// @in header
+// @name X-API-Token
 func main() {
 	if utility.IsForensicsEnabled() {
 		// ========== FORENSIC LOGGING INIT (MUST BE FIRST) ==========

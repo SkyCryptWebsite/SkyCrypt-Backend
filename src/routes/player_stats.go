@@ -14,14 +14,18 @@ import (
 
 // PlayerStatsHandler godoc
 //
-//	@Summary		Get player stats of a specified player
-//	@Description	Returns player stats for the given user and profile ID
-//	@Tags			playerStats
+//	@Summary		Get raw player stats
+//	@Description	Returns normalized player statistics for a specific SkyBlock profile.
+//	@Description	The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+//	@ID				getPlayerStats
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//	@Success		200			{object}	models.Stats
-//	@Failure		400			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{object}	models.Stats			"Player stats returned successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Player or profile could not be resolved."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
 //	@Router			/api/playerStats/{uuid}/{profileId} [get]
 func PlayerStatsHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {

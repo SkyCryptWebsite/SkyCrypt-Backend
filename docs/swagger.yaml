@@ -1,8 +1,5 @@
 components:
   schemas:
-    fiber.Map:
-      additionalProperties: {}
-      type: object
     models.ArmorResult:
       properties:
         armor:
@@ -548,6 +545,17 @@ components:
           type: number
         normal:
           type: number
+      type: object
+    models.EmojisResponse:
+      properties:
+        emojis:
+          items:
+            additionalProperties: {}
+            type: object
+          type: array
+          uniqueItems: false
+        fetched_at:
+          type: integer
       type: object
     models.EnchantingGame:
       properties:
@@ -2162,26 +2170,38 @@ components:
         Value:
           type: string
       type: object
+  securitySchemes:
+    ApiTokenHeader:
+      in: header
+      name: X-API-Token
+      type: apiKey
 externalDocs:
   description: ""
   url: ""
 info:
-  description: API for SkyCrypt - A Hypixel SkyBlock Stats Viewer
+  description: SkyCrypt API provides Hypixel SkyBlock profile data, player statistics,
+    networth calculations, inventory views, rendered Minecraft item assets, resource
+    pack metadata, emoji data, and source/license information used by SkyCrypt clients.
   title: SkyCrypt API
-  version: "1.0"
+  version: "3.0"
 openapi: 3.1.0
 paths:
   /api/combined/{uuid}/{profileId}:
     get:
-      description: Returns combined  stats for the given user and profile ID
+      description: |-
+        Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
+        Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
+      operationId: getCombinedProfileStats
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
@@ -2193,36 +2213,36 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.CombinedOutput'
-          description: OK
-        "400":
+          description: Combined profile data returned successfully.
+        "401":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: X-API-Token is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get combined stats of a specified player
+          description: Player, profile, museum, or combined data could not be loaded.
+      security:
+      - ApiTokenHeader: []
+      summary: Get combined profile data
       tags:
-      - combinedStats
+      - Stats
   /api/embed/{uuid}:
     get:
-      description: Returns embed data for the given user (UUID or username) and optional
-        profile ID
+      description: |-
+        Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.
+        If Hypixel does not mark a selected profile, the first available profile is used.
+      operationId: getSelectedProfileEmbed
       parameters:
-      - description: User UUID or username
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
-        schema:
-          type: string
-      - description: Profile ID (optional, defaults to selected profile)
-        in: query
-        name: profileId
         schema:
           type: string
       responses:
@@ -2231,53 +2251,117 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.EmbedData'
-          description: OK
+          description: Selected profile embed data returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Player, profile, or museum data could not be resolved.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get embed data for a specified player
+          description: Networth calculation failed.
+      security:
+      - ApiTokenHeader: []
+      summary: Get selected profile embed data
       tags:
-      - embed
-  /api/emojis:
+      - Discord Embed
+  /api/embed/{uuid}/{profileId}:
     get:
-      description: Retrieves all emojis from the database
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                additionalProperties: {}
-                type: object
-          description: Returns fetched_at timestamp and array of emojis
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/fiber.Map'
-          description: Failed to fetch or parse emojis
-      summary: Get all emojis
-      tags:
-      - emojis
-  /api/garden/{uuid}/{profileId}:
-    get:
-      description: Returns garden data for the given profile ID
+      description: |-
+        Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.
+        The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+      operationId: getProfileEmbed
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
+        in: path
+        name: profileId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.EmbedData'
+          description: Profile embed data returned successfully.
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Player, profile, or museum data could not be resolved.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Networth calculation failed.
+      security:
+      - ApiTokenHeader: []
+      summary: Get profile embed data
+      tags:
+      - Discord Embed
+  /api/emojis:
+    get:
+      description: Returns emoji documents stored by SkyCrypt along with a Unix timestamp
+        indicating when the response was generated.
+      operationId: listEmojis
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.EmojisResponse'
+          description: Emojis returned successfully.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Emoji data could not be fetched or parsed.
+      summary: List emojis
+      tags:
+      - Emojis
+  /api/garden/{uuid}/{profileId}:
+    get:
+      description: Returns Garden progression, visitors, crop milestones, composter
+        data, plots, upgrades, and related Garden state for a specific SkyBlock profile.
+      operationId: getGardenStats
+      parameters:
+      - description: Minecraft UUID of the profile member
+        example: 4855c53ee4fb4100997600a92fc50984
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
@@ -2289,21 +2373,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.Garden'
-          description: OK
+          description: Garden stats returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get garden stats of a specified profile
+          description: Player, profile, or Garden data could not be loaded.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
+      security:
+      - ApiTokenHeader: []
+      summary: Get garden stats
       tags:
-      - garden
+      - Stats
   /api/head/{textureId}:
     get:
-      description: Returns a PNG image of a head for the given texture ID
+      description: Renders a Minecraft player head texture as PNG bytes.
+      operationId: renderHeadImage
       parameters:
-      - description: Texture ID
+      - description: Minecraft skin texture identifier
+        example: 93a1b830399ab432a5178fdaf3939b24bf25c724a66be947296c503352bc380d
         in: path
         name: textureId
         required: true
@@ -2319,41 +2413,41 @@ paths:
               schema:
                 format: binary
                 type: string
-          description: PNG image of the head
+          description: PNG image bytes returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Texture identifier is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 type: string
-          description: Failed to render head
-      summary: Render and return a head image
+          description: Head image could not be rendered.
+      summary: Render a player head
       tags:
-      - head
+      - Rendering
   /api/inventory/{uuid}/{profileId}:
     get:
-      description: Returns inventory items for the given user, profile ID
+      description: |-
+        Returns rendered inventory tabs and stripped item data for a specific SkyBlock profile.
+        This endpoint refreshes the short-lived cache used by the inventory search endpoint. Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
+      operationId: getProfileInventory
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID of the profile member
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
-        schema:
-          type: string
-      - description: Search query (required when inventoryId is 'search')
-        in: query
-        name: query
         schema:
           type: string
       responses:
@@ -2364,41 +2458,48 @@ paths:
                 items:
                   $ref: '#/components/schemas/models.Inventory'
                 type: array
-          description: OK
+          description: Profile inventory returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-        "500":
+          description: Profile, museum, or inventory data could not be loaded.
+        "401":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get inventory items for a specified player
+          description: X-API-Token is missing or invalid.
+      security:
+      - ApiTokenHeader: []
+      summary: Get profile inventory
       tags:
-      - inventory
+      - Stats
   /api/inventory/search/{uuid}/{profileId}/{searchParam}:
     get:
-      description: Returns inventory items that match the search parameter for the
-        given user and profile ID. Searches across all inventories and returns items
-        that contain the search parameter in their name or lore.
+      description: |-
+        Searches cached inventory tabs for items whose display name or lore contains the search parameter.
+        Call GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.
+      operationId: searchProfileInventory
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID of the profile member
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
         schema:
           type: string
-      - description: Search parameter to filter inventory items
+      - description: Case-sensitive search text matched against item display names
+          and lore
+        example: hyperion
         in: path
         name: searchParam
         required: true
@@ -2412,27 +2513,33 @@ paths:
                 items:
                   $ref: '#/components/schemas/models.StrippedItem'
                 type: array
-          description: OK
-        "400":
+          description: Matching inventory items returned successfully.
+        "401":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: X-API-Token is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get searched inventory items for a specified player and search parameter
+          description: Cached inventory data is missing or could not be parsed.
+      security:
+      - ApiTokenHeader: []
+      summary: Search cached profile inventory
       tags:
-      - inventory
+      - Stats
   /api/item/{itemId}:
     get:
-      description: Returns a PNG image of an item for the given texture ID
+      description: |-
+        Renders a SkyBlock or Minecraft item as PNG bytes.
+        Resource pack preferences supplied by cookie can affect which texture is rendered. Some renderer results redirect to a canonical asset URL.
+      operationId: renderItemImage
       parameters:
-      - description: Item ID
+      - description: SkyBlock item ID or Minecraft item identifier
+        example: ASPECT_OF_THE_END
         in: path
         name: itemId
         required: true
@@ -2448,33 +2555,48 @@ paths:
               schema:
                 format: binary
                 type: string
-          description: PNG image of the item
+          description: PNG image bytes returned successfully.
+        "302":
+          content:
+            application/json:
+              schema:
+                type: string
+          description: Redirects to a canonical rendered asset URL.
+          headers:
+            Location:
+              description: Redirect target URL.
+              schema:
+                type: string
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Item identifier is missing or invalid.
         "500":
           content:
             application/json:
               schema:
-                type: string
-          description: Failed to render item
-      summary: Render and return an item image
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Item image could not be rendered.
+      summary: Render an item
       tags:
-      - item
+      - Rendering
   /api/leather/{type}/{color}:
     get:
-      description: Returns a PNG image of leather armor for the given type and color
+      description: Renders a dyed leather armor piece as PNG bytes for the requested
+        armor piece and color.
+      operationId: renderLeatherArmorImage
       parameters:
-      - description: Armor Type
+      - description: Leather armor piece identifier
+        example: helmet
         in: path
         name: type
         required: true
         schema:
           type: string
-      - description: Armor Color
+      - description: Armor color value
+        example: ff0000
         in: path
         name: color
         required: true
@@ -2490,33 +2612,38 @@ paths:
               schema:
                 format: binary
                 type: string
-          description: PNG image of the leather armor
+          description: PNG image bytes returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Armor type or color is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Render and return a leather armor image
+          description: Leather armor image could not be rendered.
+      summary: Render leather armor
       tags:
-      - leather
+      - Rendering
   /api/networth/{uuid}/{profileId}:
     get:
-      description: Returns networth for the given user and profile ID
+      description: |-
+        Calculates normal and non-cosmetic networth for a player's SkyBlock profile.
+        The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+      operationId: getProfileNetworth
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
@@ -2528,33 +2655,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.Networth'
-          description: OK
+          description: Profile networth returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Player, profile, or museum data could not be resolved.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get networth of a specified player
+          description: Networth calculation failed.
+      security:
+      - ApiTokenHeader: []
+      summary: Get profile networth
       tags:
-      - networth
+      - Stats
   /api/playerStats/{uuid}/{profileId}:
     get:
-      description: Returns player stats for the given user and profile ID
+      description: |-
+        Returns normalized player statistics for a specific SkyBlock profile.
+        The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+      operationId: getPlayerStats
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
@@ -2566,27 +2706,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.Stats'
-          description: OK
+          description: Player stats returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get player stats of a specified player
+          description: Player or profile could not be resolved.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
+      security:
+      - ApiTokenHeader: []
+      summary: Get raw player stats
       tags:
-      - playerStats
+      - Stats
   /api/potion/{type}/{color}:
     get:
-      description: Returns a PNG image of a potion for the given type and color
+      description: Renders a potion image for the requested potion type and color.
+      operationId: renderPotionImage
       parameters:
-      - description: Potion Type
+      - description: Potion type identifier
+        example: splash
         in: path
         name: type
         required: true
         schema:
           type: string
-      - description: Potion Color
+      - description: Potion color value
+        example: ff0000
         in: path
         name: color
         required: true
@@ -2602,25 +2753,28 @@ paths:
               schema:
                 format: binary
                 type: string
-          description: PNG image of the potion
+          description: PNG image bytes returned successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: Potion type or color is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Render and return a potion image
+          description: Potion image could not be rendered.
+      summary: Render a potion
       tags:
-      - potion
+      - Rendering
   /api/resourcepacks:
     get:
-      description: Returns a list of resource packs
+      description: |-
+        Returns toggleable resource packs available to SkyCrypt clients.
+        The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
+      operationId: listResourcePacks
       responses:
         "200":
           content:
@@ -2629,35 +2783,85 @@ paths:
                 items:
                   $ref: '#/components/schemas/models.ResourcePackConfig'
                 type: array
-          description: OK
-      summary: Get list of resource packs
+          description: Resource packs returned successfully.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Resource pack metadata could not be read.
+      summary: List resource packs
       tags:
-      - resourcepacks
+      - Rendering
   /api/source:
     get:
-      description: Returns source and license information for the running SkyCrypt
-        Backend service.
+      description: Returns repository, license, commit, and notice information for
+        the running SkyCrypt Backend service.
+      operationId: getSourceInfo
       responses:
         "200":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.SourceInfo'
-          description: OK
-      summary: Get source and license information
+          description: Source and license information returned successfully.
+      summary: Get source information
       tags:
-      - source
-  /api/stats/{uuid}/{profileId}:
+      - Source
+  /api/stats/{uuid}:
     get:
-      description: Returns stats for the given user and profile ID
+      description: |-
+        Returns the complete SkyCrypt stats payload for a player's selected SkyBlock profile.
+        If Hypixel does not mark a selected profile, the first available profile is used.
+      operationId: getSelectedProfileStats
       parameters:
-      - description: User UUID
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
         schema:
           type: string
-      - description: Profile ID
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.StatsOutput'
+          description: Selected profile stats returned successfully.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Player, profile, museum, or stats data could not be loaded.
+      security:
+      - ApiTokenHeader: []
+      summary: Get selected profile stats
+      tags:
+      - Stats
+  /api/stats/{uuid}/{profileId}:
+    get:
+      description: |-
+        Returns the complete SkyCrypt stats payload for a player on a specific SkyBlock profile.
+        The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
+      operationId: getProfileStats
+      parameters:
+      - description: Minecraft UUID or username
+        example: 4855c53ee4fb4100997600a92fc50984
+        in: path
+        name: uuid
+        required: true
+        schema:
+          type: string
+      - description: Hypixel SkyBlock profile UUID or cute name
+        example: 00912956-3fd6-42ee-a166-3f649ceaf559
         in: path
         name: profileId
         required: true
@@ -2669,27 +2873,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.StatsOutput'
-          description: OK
-        "400":
+          description: Profile stats returned successfully.
+        "401":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
+          description: X-API-Token is missing or invalid.
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Internal Server Error
-      summary: Get stats of a specified player
+          description: Player, profile, museum, or stats data could not be loaded.
+      security:
+      - ApiTokenHeader: []
+      summary: Get profile stats
       tags:
-      - stats
+      - Stats
   /api/username/{uuid}:
     get:
-      description: Returns the username associated with the given UUID
+      description: Resolves a Minecraft UUID to the current username and display name
+        known to SkyCrypt.
+      operationId: resolveUsernameByUuid
       parameters:
-      - description: UUID
+      - description: Minecraft UUID
+        example: 4855c53ee4fb4100997600a92fc50984
         in: path
         name: uuid
         required: true
@@ -2701,25 +2910,30 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.PlayerResolve'
-          description: OK
+          description: Username resolved successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get username for a specified UUID
+          description: UUID is invalid or the player could not be found.
+      summary: Resolve username by UUID
       tags:
-      - username
+      - Mojang
   /api/uuid/{username}:
     get:
-      description: Returns the UUID associated with the given username
+      description: Resolves a Minecraft username to its UUID and returns the normalized
+        player identity payload.
+      operationId: resolveUuidByUsername
       parameters:
-      - description: Username
+      - description: Minecraft username
+        example: duckysolucky
         in: path
         name: username
         required: true
         schema:
+          maxLength: 16
+          minLength: 3
           type: string
       responses:
         "200":
@@ -2727,15 +2941,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.PlayerResolve'
-          description: OK
+          description: UUID resolved successfully.
         "400":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Bad Request
-      summary: Get UUID for a specified username
+          description: Username is invalid or the player could not be found.
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: X-API-Token is missing or invalid.
+      security:
+      - ApiTokenHeader: []
+      summary: Resolve UUID by username
       tags:
-      - uuid
+      - Mojang
 servers:
-- url: localhost:8080/
+- description: SkyCrypt production API
+  url: https://sky.shiiyu.moe/

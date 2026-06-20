@@ -12,14 +12,18 @@ import (
 
 // ItemHandlers godoc
 //
-//	@Summary		Render and return an item image
-//	@Description	Returns a PNG image of an item for the given texture ID
-//	@Tags			item
+//	@Summary		Render an item
+//	@Description	Renders a SkyBlock or Minecraft item as PNG bytes.
+//	@Description	Resource pack preferences supplied by cookie can affect which texture is rendered. Some renderer results redirect to a canonical asset URL.
+//	@ID				renderItemImage
+//	@Tags			Rendering
 //	@Produce		png
-//	@Param			itemId	path		string	true	"Item ID"
-//	@Success		200		{file}		binary	"PNG image of the item"
-//	@Failure		400		{object}	models.ProcessingError
-//	@Failure		500		{string}	string	"Failed to render item"
+//	@Param			itemId	path		string	true	"SkyBlock item ID or Minecraft item identifier"	example(ASPECT_OF_THE_END)
+//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
+//	@Success		302		{string}	string					"Redirects to a canonical rendered asset URL."
+//	@Header			302		{string}	Location				"Redirect target URL."
+//	@Failure		400		{object}	models.ProcessingError	"Item identifier is missing or invalid."
+//	@Failure		500		{object}	models.ProcessingError	"Item image could not be rendered."
 //	@Router			/api/item/{itemId} [get]
 func ItemHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()

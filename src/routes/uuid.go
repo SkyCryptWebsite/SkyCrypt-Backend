@@ -11,13 +11,16 @@ import (
 
 // UUIDHandler godoc
 //
-//	@Summary		Get UUID for a specified username
-//	@Description	Returns the UUID associated with the given username
-//	@Tags			uuid
+//	@Summary		Resolve UUID by username
+//	@Description	Resolves a Minecraft username to its UUID and returns the normalized player identity payload.
+//	@ID				resolveUuidByUsername
+//	@Tags			Mojang
 //	@Produce		json
-//	@Param			username	path		string	true	"Username"
-//	@Success		200			{object}	models.PlayerResolve
-//	@Failure		400			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			username	path		string	true	"Minecraft username"	minlength(3)	maxlength(16)	example(duckysolucky)
+//	@Success		200			{object}	models.PlayerResolve		"UUID resolved successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Username is invalid or the player could not be found."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
 //	@Router			/api/uuid/{username} [get]
 func UUIDHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()

@@ -9,15 +9,16 @@ import (
 
 // PotionHandlers godoc
 //
-//	@Summary		Render and return a potion image
-//	@Description	Returns a PNG image of a potion for the given type and color
-//	@Tags			potion
+//	@Summary		Render a potion
+//	@Description	Renders a potion image for the requested potion type and color.
+//	@ID				renderPotionImage
+//	@Tags			Rendering
 //	@Produce		png
-//	@Param			type	path		string	true	"Potion Type"
-//	@Param			color	path		string	true	"Potion Color"
-//	@Success		200		{file}		binary	"PNG image of the potion"
-//	@Failure		400		{object}	models.ProcessingError
-//	@Failure		500		{object}	models.ProcessingError
+//	@Param			type	path		string	true	"Potion type identifier"	example(splash)
+//	@Param			color	path		string	true	"Potion color value"		example(ff0000)
+//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
+//	@Failure		400		{object}	models.ProcessingError	"Potion type or color is missing or invalid."
+//	@Failure		500		{object}	models.ProcessingError	"Potion image could not be rendered."
 //	@Router			/api/potion/{type}/{color} [get]
 func PotionHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()

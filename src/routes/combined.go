@@ -19,15 +19,18 @@ import (
 
 // CombinedHandler godoc
 //
-//	@Summary		Get combined stats of a specified player
-//	@Description	Returns combined  stats for the given user and profile ID
-//	@Tags			combinedStats
+//	@Summary		Get combined profile data
+//	@Description	Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
+//	@Description	Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
+//	@ID				getCombinedProfileStats
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//	@Success		200			{object}	models.CombinedOutput
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{object}	models.CombinedOutput	"Combined profile data returned successfully."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or combined data could not be loaded."
 //	@Router			/api/combined/{uuid}/{profileId} [get]
 func CombinedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {

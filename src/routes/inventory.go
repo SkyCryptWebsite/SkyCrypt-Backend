@@ -24,16 +24,18 @@ import (
 
 // InventoryHandler godoc
 //
-//	@Summary		Get inventory items for a specified player
-//	@Description	Returns inventory items for the given user, profile ID
-//	@Tags			inventory
+//	@Summary		Get profile inventory
+//	@Description	Returns rendered inventory tabs and stripped item data for a specific SkyBlock profile.
+//	@Description	This endpoint refreshes the short-lived cache used by the inventory search endpoint. Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
+//	@ID				getProfileInventory
+//	@Tags			Stats
 //	@Produce		json
-//	@Param			uuid		path		string	true	"User UUID"
-//	@Param			profileId	path		string	true	"Profile ID"
-//	@Param			query		query		string	false	"Search query (required when inventoryId is 'search')"
-//	@Success		200			{object}	[]models.Inventory
-//	@Failure		400			{object}	models.ProcessingError
-//	@Failure		500			{object}	models.ProcessingError
+//	@Security		ApiTokenHeader
+//	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
+//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
+//	@Success		200			{array}		models.Inventory		"Profile inventory returned successfully."
+//	@Failure		400			{object}	models.ProcessingError	"Profile, museum, or inventory data could not be loaded."
+//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
 //	@Router			/api/inventory/{uuid}/{profileId} [get]
 func InventoryHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
