@@ -62,7 +62,7 @@ func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Playe
 	slayers := GetSlayers(userProfile)
 
 	bank := 0.0
-	if profile.Banking != nil {
+	if profile.Banking != nil && profile.Banking.Balance != nil {
 		bank = *profile.Banking.Balance
 	}
 
