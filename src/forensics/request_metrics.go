@@ -162,6 +162,24 @@ func RecordRedisBatchDependency(ctx context.Context, operation, keyGroup string,
 	metrics.addDependencyLocked("redis", operation, keyGroup, duration)
 }
 
+func RecordRedisBatchSetDependency(ctx context.Context, operation, keyGroup string, keyCount int, duration time.Duration, err error) {
+	metrics := MetricsFromContext(ctx)
+	if metrics == nil {
+		return
+	}
+
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+
+	metrics.redisCalls++
+	metrics.redisMs += durationToMs(duration)
+	if err == nil {
+		metrics.cacheSets += keyCount
+	}
+
+	metrics.addDependencyLocked("redis", operation, keyGroup, duration)
+}
+
 func RecordHTTPDependency(ctx context.Context, method, rawURL string, statusCode int, duration time.Duration, err error) {
 	metrics := MetricsFromContext(ctx)
 	if metrics == nil {
@@ -221,7 +239,7 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 		}
 		deps = append(deps, *dep)
 
-		if isRepeatedDependency(dep.Kind, dep.Count) {
+		if isRepeatedDependency(dep) {
 			repeated = append(repeated, RepeatedDependency{
 				Kind:       dep.Kind,
 				Operation:  dep.Operation,
@@ -355,12 +373,12 @@ func durationToMs(duration time.Duration) float64 {
 	return float64(duration.Microseconds()) / 1000.0
 }
 
-func isRepeatedDependency(kind string, count int) bool {
-	switch kind {
+func isRepeatedDependency(dep *DependencySummary) bool {
+	switch dep.Kind {
 	case "redis":
-		return count >= 3
+		return (dep.Operation == "GET" || dep.Operation == "MGET") && dep.Count >= 3
 	case "http", "mongo":
-		return count >= 2
+		return dep.Count >= 2
 	default:
 		return false
 	}

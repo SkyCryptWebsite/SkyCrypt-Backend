@@ -80,9 +80,7 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 		return "", nil
 	}
 
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60) // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)              // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojang:%s", post.UUID), string(body), 24*60*60)           // Cross-cache for ResolvePlayer
+	cacheMowojangIdentity(ctx, post.Name, post.UUID, string(body), true)
 
 	return post.UUID, nil
 }
@@ -149,9 +147,11 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 		return "", nil
 	}
 
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), uuid, 24*60*60) // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", uuid), post.Name, 24*60*60)              // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojang:%s", uuid), string(body), 24*60*60)           // Cross-cache for ResolvePlayer
+	identityUUID := post.UUID
+	if identityUUID == "" {
+		identityUUID = uuid
+	}
+	cacheMowojangIdentity(ctx, post.Name, identityUUID, string(body), true)
 
 	return post.Name, nil
 }
@@ -237,7 +237,7 @@ func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*mode
 		if uuid == "" || resolved[uuid] != nil {
 			continue
 		}
-		mowojang, err := ResolvePlayerContext(ctx, uuid, false)
+		mowojang, err := resolvePlayerByUUIDFreshContext(ctx, uuid)
 		if err == nil && mowojang.UUID != "" {
 			resolved[uuid] = mowojang
 		}
@@ -274,7 +274,7 @@ func GetUsernamesContext(ctx context.Context, uuids []string) map[string]string 
 		if uuid == "" || usernames[uuid] != "" {
 			continue
 		}
-		username, err := GetUsernameContext(ctx, uuid, false)
+		username, err := getUsernameFreshContext(ctx, uuid, false)
 		if err != nil || username == "" {
 			username = "Unknown"
 		}
@@ -295,6 +295,12 @@ func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.Mowoj
 			return &post, nil
 		}
 	}
+
+	return resolvePlayerByUUIDFreshContext(ctx, uuid)
+}
+
+func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
+	var post models.MowojangResponse
 
 	resp, err := getContext(ctx, fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -328,10 +334,7 @@ func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.Mowoj
 		return &post, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojangUUID:%s", uuid), string(body), 24*60*60)                           // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojangUsername:%s", strings.ToLower(post.Name)), string(body), 24*60*60) // Cache for 24 hours
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(post.Name)), post.UUID, 24*60*60)                // Cross-cache for GetUUID
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", post.UUID), post.Name, 24*60*60)                             // Cross-cache for GetUsername
+	cacheMowojangIdentity(ctx, post.Name, post.UUID, string(body), true)
 
 	return &post, nil
 }
@@ -384,13 +387,16 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 		return "", nil
 	}
 
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), mojangResp.ID, 24*60*60)
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", mojangResp.ID), mojangResp.Name, 24*60*60)
+	cacheMowojangIdentity(ctx, mojangResp.Name, mojangResp.ID, "", true)
 
 	return mojangResp.ID, nil
 }
 
 func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
+	return getUsernameFreshContext(ctx, uuid, shouldThrowError)
+}
+
+func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
 	if err != nil {
 		if shouldThrowError {
@@ -435,8 +441,7 @@ func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowE
 		return "", nil
 	}
 
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), uuid, 24*60*60)
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", uuid), mojangResp.Name, 24*60*60)
+	cacheMowojangIdentity(ctx, mojangResp.Name, uuid, "", true)
 
 	return mojangResp.Name, nil
 }
@@ -483,10 +488,36 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 	}
 
 	mojangBytes, _ := json.Marshal(mojangResp)
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojangUUID:%s", uuid), string(mojangBytes), 24*60*60)
-	_ = redis.SetContext(ctx, fmt.Sprintf("mowojangUsername:%s", strings.ToLower(mojangResp.Name)), string(mojangBytes), 24*60*60)
-	_ = redis.SetContext(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(mojangResp.Name)), mojangResp.ID, 24*60*60)
-	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", uuid), mojangResp.Name, 24*60*60)
+	cacheMowojangIdentity(ctx, mojangResp.Name, mojangResp.ID, string(mojangBytes), true)
 
 	return post, nil
+}
+
+func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body string, includeFullResponse bool) {
+	if name == "" || uuid == "" {
+		return
+	}
+	if body == "" && includeFullResponse {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		bodyBytes, err := json.Marshal(models.MowojangResponse{
+			UUID: uuid,
+			Name: name,
+		})
+		if err == nil {
+			body = string(bodyBytes)
+		}
+	}
+
+	values := map[string]interface{}{
+		fmt.Sprintf("uuid:%s", strings.ToLower(name)): uuid,
+		fmt.Sprintf("username:%s", uuid):              name,
+	}
+	if body != "" {
+		values[fmt.Sprintf("mowojang:%s", uuid)] = body
+		if includeFullResponse {
+			values[fmt.Sprintf("mowojangUUID:%s", uuid)] = body
+			values[fmt.Sprintf("mowojangUsername:%s", strings.ToLower(name))] = body
+		}
+	}
+	_ = redis.SetManyContext(ctx, values, 24*60*60)
 }

@@ -265,6 +265,56 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 	return SetContext(context.Background(), key, value, expirationSeconds)
 }
 
+func SetManyContext(ctx context.Context, values map[string]interface{}, expirationSeconds int) error {
+	if len(values) == 0 {
+		return nil
+	}
+
+	start := time.Now()
+	client, err := getRedisClient()
+	if err != nil {
+		return err
+	}
+
+	expiration := time.Duration(expirationSeconds) * time.Second
+	pipe := client.Pipeline()
+	for key, value := range values {
+		pipe.Set(ctx, key, value, expiration)
+	}
+	_, err = pipe.Exec(ctx)
+	duration := time.Since(start)
+
+	if err != nil {
+		forensics.RecordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, err)
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Error("redis_pipeline_set_error",
+				zap.Int("key_count", len(values)),
+				zap.Error(err),
+				zap.Duration("duration", duration),
+			)
+		}
+		return fmt.Errorf("could not set values in Redis: %v", err)
+	}
+
+	forensics.RecordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, nil)
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Debug("redis_pipeline_set_completed",
+			zap.Int("key_count", len(values)),
+			zap.Int("ttl_seconds", expirationSeconds),
+			zap.Duration("duration", duration),
+		)
+	}
+
+	if duration > 5*time.Millisecond && utility.IsForensicsEnabled() {
+		forensics.Logger.Warn("slow_redis_pipeline_set",
+			zap.Int("key_count", len(values)),
+			zap.Duration("duration", duration),
+		)
+	}
+
+	return nil
+}
+
 func SetContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
 	start := time.Now()
 
