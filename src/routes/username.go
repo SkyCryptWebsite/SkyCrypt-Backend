@@ -29,8 +29,13 @@ func UsernameHandler(c *fiber.Ctx) error {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
 	}
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("username", uuid)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
-	username, err := api.GetUsernameContext(c.UserContext(), uuid)
+	username, err := api.GetUsernameContext(reqCtx, uuid)
 	if err != nil {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
@@ -38,9 +43,9 @@ func UsernameHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/username/%s in %s", username, time.Since(timeNow))
 
-	return c.JSON(fiber.Map{
+	return sendAndCacheJSON(c, reqCtx, cacheKey, fiber.Map{
 		"displayName": db.GetDisplayName(username, uuid),
 		"username":    username,
 		"uuid":        uuid,
-	})
+	}, 24*60*60)
 }

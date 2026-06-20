@@ -10,7 +10,7 @@ import (
 
 const selectedProfileTTLSeconds = 5 * 60
 
-var selectedProfileCache = localcache.NewLocalCache[string](2048)
+var selectedProfileCache = localcache.NewLocalCache[string](512)
 
 func selectedProfileCacheKey(uuid string) string {
 	return fmt.Sprintf("selected_profile:%s", uuid)

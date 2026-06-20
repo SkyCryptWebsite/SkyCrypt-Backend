@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
 	"strings"
 	"sync"
@@ -49,10 +50,13 @@ func disabledPacksCachePart(disabledPacks []string) string {
 }
 
 func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
-	if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
-		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-		c.Set("X-SkyCrypt-Backend-Cache", "memory")
-		return true, c.SendString(cached)
+	if responseRAMCacheEnabled(cacheKey.endpoint) {
+		if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
+			forensics.RecordResponseCache(c.UserContext(), cacheKey.endpoint, "ram")
+			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+			c.Set("X-SkyCrypt-Backend-Cache", "ram")
+			return true, c.SendString(cached)
+		}
 	}
 
 	cached, err := db.GetContext(c.UserContext(), cacheKey.key)
@@ -60,7 +64,10 @@ func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 		return false, nil
 	}
 
-	responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, cached, 30*time.Second, 30*time.Second)
+	if responseRAMCacheEnabled(cacheKey.endpoint) {
+		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, cached, 30*time.Second, 30*time.Second)
+	}
+	forensics.RecordResponseCache(c.UserContext(), cacheKey.endpoint, "redis")
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	c.Set("X-SkyCrypt-Backend-Cache", "redis")
 	return true, c.SendString(cached)
@@ -74,7 +81,10 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 	}
 
 	body := string(payload)
-	responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, body, 30*time.Second, 30*time.Second)
+	if responseRAMCacheEnabled(cacheKey.endpoint) {
+		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, body, 30*time.Second, 30*time.Second)
+	}
+	forensics.RecordResponseCache(ctx, cacheKey.endpoint, "cold")
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -99,7 +109,22 @@ func responseCacheForEndpoint(endpoint string) *localcache.LocalCache[string] {
 	if cache = responseCaches[endpoint]; cache != nil {
 		return cache
 	}
-	cache = localcache.NewLocalCache[string](256)
+	cache = localcache.NewLocalCache[string](responseCacheLimit(endpoint))
 	responseCaches[endpoint] = cache
 	return cache
+}
+
+func responseCacheLimit(endpoint string) int {
+	switch endpoint {
+	case "embed", "stats", "combined":
+		return 128
+	case "uuid", "username":
+		return 1024
+	default:
+		return 0
+	}
+}
+
+func responseRAMCacheEnabled(endpoint string) bool {
+	return endpoint == "embed" || endpoint == "stats" || endpoint == "combined" || endpoint == "uuid" || endpoint == "username"
 }
