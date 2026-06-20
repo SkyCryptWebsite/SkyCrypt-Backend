@@ -109,7 +109,7 @@ func GetContext(ctx context.Context, key string) (string, error) {
 
 	if err != nil {
 		if err == redis.Nil {
-			forensics.RecordRedisDependency(ctx, "GET", key, "miss", duration, nil)
+			recordRedisDependency(ctx, "GET", key, "miss", duration, nil)
 			if utility.IsForensicsEnabled() {
 				forensics.Logger.Debug("redis_cache_miss",
 					zap.String("key", key),
@@ -118,7 +118,7 @@ func GetContext(ctx context.Context, key string) (string, error) {
 			}
 			return "", nil
 		}
-		forensics.RecordRedisDependency(ctx, "GET", key, "error", duration, err)
+		recordRedisDependency(ctx, "GET", key, "error", duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_get_error",
 				zap.String("key", key),
@@ -129,7 +129,7 @@ func GetContext(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("could not get value from Redis: %v", err)
 	}
 
-	forensics.RecordRedisDependency(ctx, "GET", key, "hit", duration, nil)
+	recordRedisDependency(ctx, "GET", key, "hit", duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_cache_hit",
 			zap.String("key", key),
@@ -164,9 +164,12 @@ func GetManyContext(ctx context.Context, keys []string) (map[string]string, erro
 
 	values, err := client.MGet(ctx, keys...).Result()
 	duration := time.Since(start)
-	keyGroup := forensics.RedisKeyGroup(keys[0])
+	keyGroup := ""
+	if utility.IsForensicsEnabled() {
+		keyGroup = forensics.RedisKeyGroup(keys[0])
+	}
 	if err != nil {
-		forensics.RecordRedisBatchDependency(ctx, "MGET", keyGroup, 0, 0, duration, err)
+		recordRedisBatchDependency(ctx, "MGET", keyGroup, 0, 0, duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_mget_error",
 				zap.Strings("keys", keys),
@@ -192,7 +195,7 @@ func GetManyContext(ctx context.Context, keys []string) (map[string]string, erro
 		result[keys[i]] = str
 	}
 
-	forensics.RecordRedisBatchDependency(ctx, "MGET", keyGroup, hits, misses, duration, nil)
+	recordRedisBatchDependency(ctx, "MGET", keyGroup, hits, misses, duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_mget_completed",
 			zap.String("key_group", keyGroup),
@@ -282,6 +285,24 @@ func redisOptionInt(name string, fallback int) int {
 	return value
 }
 
+func recordRedisDependency(ctx context.Context, operation, key, cacheResult string, duration time.Duration, err error) {
+	if utility.IsForensicsEnabled() {
+		forensics.RecordRedisDependency(ctx, operation, key, cacheResult, duration, err)
+	}
+}
+
+func recordRedisBatchDependency(ctx context.Context, operation, keyGroup string, hits, misses int, duration time.Duration, err error) {
+	if utility.IsForensicsEnabled() {
+		forensics.RecordRedisBatchDependency(ctx, operation, keyGroup, hits, misses, duration, err)
+	}
+}
+
+func recordRedisBatchSetDependency(ctx context.Context, operation, keyGroup string, keyCount int, duration time.Duration, err error) {
+	if utility.IsForensicsEnabled() {
+		forensics.RecordRedisBatchSetDependency(ctx, operation, keyGroup, keyCount, duration, err)
+	}
+}
+
 func Set(key string, value interface{}, expirationSeconds int) error {
 	return SetContext(context.Background(), key, value, expirationSeconds)
 }
@@ -306,7 +327,7 @@ func SetManyContext(ctx context.Context, values map[string]interface{}, expirati
 	duration := time.Since(start)
 
 	if err != nil {
-		forensics.RecordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, err)
+		recordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_pipeline_set_error",
 				zap.Int("key_count", len(values)),
@@ -317,7 +338,7 @@ func SetManyContext(ctx context.Context, values map[string]interface{}, expirati
 		return fmt.Errorf("could not set values in Redis: %v", err)
 	}
 
-	forensics.RecordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, nil)
+	recordRedisBatchSetDependency(ctx, "PIPELINE_SET", "identity_cache", len(values), duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_pipeline_set_completed",
 			zap.Int("key_count", len(values)),
@@ -349,7 +370,7 @@ func SetContext(ctx context.Context, key string, value interface{}, expirationSe
 	duration := time.Since(start)
 
 	if err != nil {
-		forensics.RecordRedisDependency(ctx, "SET", key, "error", duration, err)
+		recordRedisDependency(ctx, "SET", key, "error", duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_set_error",
 				zap.String("key", key),
@@ -360,7 +381,7 @@ func SetContext(ctx context.Context, key string, value interface{}, expirationSe
 		return fmt.Errorf("could not set value in Redis: %v", err)
 	}
 
-	forensics.RecordRedisDependency(ctx, "SET", key, "set", duration, nil)
+	recordRedisDependency(ctx, "SET", key, "set", duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_set_completed",
 			zap.String("key", key),
