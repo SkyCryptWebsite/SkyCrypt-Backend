@@ -198,19 +198,96 @@ func ResolvePlayerContext(ctx context.Context, input string, throwAnError ...boo
 	return resultIface.(*models.MowojangResponse), nil
 }
 
+func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*models.MowojangResponse {
+	resolved := make(map[string]*models.MowojangResponse, len(uuids))
+	keys := make([]string, 0, len(uuids))
+	keyToUUID := make(map[string]string, len(uuids))
+
+	for _, uuid := range uuids {
+		if uuid == "" {
+			continue
+		}
+		if !utility.IsUUID(uuid) {
+			mowojang, err := ResolvePlayerContext(ctx, uuid, false)
+			if err == nil && mowojang.UUID != "" {
+				resolved[mowojang.UUID] = mowojang
+			}
+			continue
+		}
+		key := fmt.Sprintf("mowojangUUID:%s", uuid)
+		if _, exists := keyToUUID[key]; exists {
+			continue
+		}
+		keys = append(keys, key)
+		keyToUUID[key] = uuid
+	}
+
+	cache, err := redis.GetManyContext(ctx, keys)
+	if err == nil {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		for key, value := range cache {
+			var post models.MowojangResponse
+			if err := json.Unmarshal([]byte(value), &post); err == nil && post.UUID != "" {
+				resolved[keyToUUID[key]] = &post
+			}
+		}
+	}
+
+	for _, uuid := range uuids {
+		if uuid == "" || resolved[uuid] != nil {
+			continue
+		}
+		mowojang, err := ResolvePlayerContext(ctx, uuid, false)
+		if err == nil && mowojang.UUID != "" {
+			resolved[uuid] = mowojang
+		}
+	}
+
+	return resolved
+}
+
+func GetUsernamesContext(ctx context.Context, uuids []string) map[string]string {
+	usernames := make(map[string]string, len(uuids))
+	keys := make([]string, 0, len(uuids))
+	keyToUUID := make(map[string]string, len(uuids))
+
+	for _, uuid := range uuids {
+		if uuid == "" {
+			continue
+		}
+		key := fmt.Sprintf("username:%s", uuid)
+		if _, exists := keyToUUID[key]; exists {
+			continue
+		}
+		keys = append(keys, key)
+		keyToUUID[key] = uuid
+	}
+
+	cache, err := redis.GetManyContext(ctx, keys)
+	if err == nil {
+		for key, value := range cache {
+			usernames[keyToUUID[key]] = value
+		}
+	}
+
+	for _, uuid := range uuids {
+		if uuid == "" || usernames[uuid] != "" {
+			continue
+		}
+		username, err := GetUsernameContext(ctx, uuid, false)
+		if err != nil || username == "" {
+			username = "Unknown"
+		}
+		usernames[uuid] = username
+	}
+
+	return usernames
+}
+
 func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
 	var post models.MowojangResponse
 
 	cache, err := redis.GetContext(ctx, fmt.Sprintf("mowojangUUID:%s", uuid))
-	if err == nil && cache != "" {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err = json.Unmarshal([]byte(cache), &post)
-		if err == nil {
-			return &post, nil
-		}
-	}
-
-	cache, err = redis.GetContext(ctx, fmt.Sprintf("mowojangUsername:%s", uuid))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &post)

@@ -143,6 +143,25 @@ func RecordRedisDependency(ctx context.Context, operation, key, cacheResult stri
 	metrics.addDependencyLocked("redis", operation, name, duration)
 }
 
+func RecordRedisBatchDependency(ctx context.Context, operation, keyGroup string, hits, misses int, duration time.Duration, err error) {
+	metrics := MetricsFromContext(ctx)
+	if metrics == nil {
+		return
+	}
+
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+
+	metrics.redisCalls++
+	metrics.redisMs += durationToMs(duration)
+	if err == nil {
+		metrics.cacheHits += hits
+		metrics.cacheMisses += misses
+	}
+
+	metrics.addDependencyLocked("redis", operation, keyGroup, duration)
+}
+
 func RecordHTTPDependency(ctx context.Context, method, rawURL string, statusCode int, duration time.Duration, err error) {
 	metrics := MetricsFromContext(ctx)
 	if metrics == nil {

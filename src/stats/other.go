@@ -7,7 +7,6 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"sort"
-	"sync"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -58,51 +57,29 @@ func FormatProfiles(profiles *models.HypixelProfilesResponse) []*models.Profiles
 	return profileStats
 }
 
-type memberResult struct {
-	uuid   string
-	member *models.MemberStats
-	err    error
-}
-
 func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
 	return FormatMembersContext(context.Background(), profile)
 }
 
 func FormatMembersContext(ctx context.Context, profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
-	results := make(chan memberResult, len(profile.Members))
-	var wg sync.WaitGroup
-
-	for memberUUID, memberData := range profile.Members {
-		wg.Add(1)
-		go func(uuid string, data skycrypttypes.Member) {
-			defer wg.Done()
-			mowojang, err := api.ResolvePlayerContext(ctx, uuid)
-			if err != nil {
-				results <- memberResult{uuid: uuid, err: err}
-				return
-			}
-			results <- memberResult{uuid: uuid, member: &models.MemberStats{
-				UUID:      mowojang.UUID,
-				CuteName:  profile.CuteName,
-				ProfileId: profile.ProfileID,
-				Name:      mowojang.Name,
-				Removed:   isMemberRemoved(&data),
-			}}
-		}(memberUUID, memberData)
+	memberUUIDs := make([]string, 0, len(profile.Members))
+	for memberUUID := range profile.Members {
+		memberUUIDs = append(memberUUIDs, memberUUID)
 	}
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
+	resolvedMembers := api.ResolvePlayersContext(ctx, memberUUIDs)
 	members := make([]*models.MemberStats, 0, len(profile.Members))
-	for res := range results {
-		if res.err != nil {
+	for memberUUID, memberData := range profile.Members {
+		mowojang := resolvedMembers[memberUUID]
+		if mowojang == nil {
 			continue
 		}
-
-		members = append(members, res.member)
+		members = append(members, &models.MemberStats{
+			UUID:      mowojang.UUID,
+			CuteName:  profile.CuteName,
+			ProfileId: profile.ProfileID,
+			Name:      mowojang.Name,
+			Removed:   isMemberRemoved(&memberData),
+		})
 	}
 
 	sort.SliceStable(members, func(i, j int) bool {

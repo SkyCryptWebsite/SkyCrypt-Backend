@@ -94,26 +94,9 @@ func Get(key string) (string, error) {
 func GetContext(ctx context.Context, key string) (string, error) {
 	start := time.Now()
 
-	clientMutex.RLock()
-	client := redisClient
-	clientMutex.RUnlock()
-
-	if client == nil {
-		clientMutex.Lock()
-		if redisClient == nil {
-			if redisAddr != "" {
-				err := InitRedis(redisAddr, redisPassword, redisDB)
-				if err != nil {
-					clientMutex.Unlock()
-					return "", fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
-				}
-			} else {
-				clientMutex.Unlock()
-				return "", fmt.Errorf("redis client not initialized. Call InitRedis() first")
-			}
-		}
-		client = redisClient
-		clientMutex.Unlock()
+	client, err := getRedisClient()
+	if err != nil {
+		return "", err
 	}
 
 	val, err := client.Get(ctx, key).Result()
@@ -162,6 +145,95 @@ func GetContext(ctx context.Context, key string) (string, error) {
 	return val, nil
 }
 
+func GetManyContext(ctx context.Context, keys []string) (map[string]string, error) {
+	result := make(map[string]string, len(keys))
+	if len(keys) == 0 {
+		return result, nil
+	}
+
+	start := time.Now()
+	client, err := getRedisClient()
+	if err != nil {
+		return result, err
+	}
+
+	values, err := client.MGet(ctx, keys...).Result()
+	duration := time.Since(start)
+	keyGroup := forensics.RedisKeyGroup(keys[0])
+	if err != nil {
+		forensics.RecordRedisBatchDependency(ctx, "MGET", keyGroup, 0, 0, duration, err)
+		if utility.IsForensicsEnabled() {
+			forensics.Logger.Error("redis_mget_error",
+				zap.Strings("keys", keys),
+				zap.Error(err),
+				zap.Duration("duration", duration),
+			)
+		}
+		return result, fmt.Errorf("could not get values from Redis: %v", err)
+	}
+
+	hits, misses := 0, 0
+	for i, value := range values {
+		if value == nil {
+			misses++
+			continue
+		}
+		str, ok := value.(string)
+		if !ok || str == "" {
+			misses++
+			continue
+		}
+		hits++
+		result[keys[i]] = str
+	}
+
+	forensics.RecordRedisBatchDependency(ctx, "MGET", keyGroup, hits, misses, duration, nil)
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Debug("redis_mget_completed",
+			zap.String("key_group", keyGroup),
+			zap.Int("key_count", len(keys)),
+			zap.Int("hits", hits),
+			zap.Int("misses", misses),
+			zap.Duration("duration", duration),
+		)
+	}
+
+	if duration > 5*time.Millisecond && utility.IsForensicsEnabled() {
+		forensics.Logger.Warn("slow_redis_mget",
+			zap.String("key_group", keyGroup),
+			zap.Int("key_count", len(keys)),
+			zap.Duration("duration", duration),
+		)
+	}
+
+	return result, nil
+}
+
+func getRedisClient() (*redis.Client, error) {
+	clientMutex.RLock()
+	client := redisClient
+	clientMutex.RUnlock()
+
+	if client == nil {
+		clientMutex.Lock()
+		if redisClient == nil {
+			if redisAddr != "" {
+				err := InitRedis(redisAddr, redisPassword, redisDB)
+				if err != nil {
+					clientMutex.Unlock()
+					return nil, fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
+				}
+			} else {
+				clientMutex.Unlock()
+				return nil, fmt.Errorf("redis client not initialized. Call InitRedis() first")
+			}
+		}
+		client = redisClient
+		clientMutex.Unlock()
+	}
+	return client, nil
+}
+
 func NewRedisClient(addr string, password string, db int) *RedisClient {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:         addr,
@@ -196,30 +268,13 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 func SetContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
 	start := time.Now()
 
-	clientMutex.RLock()
-	client := redisClient
-	clientMutex.RUnlock()
-
-	if client == nil {
-		clientMutex.Lock()
-		if redisClient == nil {
-			if redisAddr != "" {
-				err := InitRedis(redisAddr, redisPassword, redisDB)
-				if err != nil {
-					clientMutex.Unlock()
-					return fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
-				}
-			} else {
-				clientMutex.Unlock()
-				return fmt.Errorf("redis client not initialized. Call InitRedis() first")
-			}
-		}
-		client = redisClient
-		clientMutex.Unlock()
+	client, err := getRedisClient()
+	if err != nil {
+		return err
 	}
 
 	expiration := time.Duration(expirationSeconds) * time.Second
-	err := client.Set(ctx, key, value, expiration).Err()
+	err = client.Set(ctx, key, value, expiration).Err()
 	duration := time.Since(start)
 
 	if err != nil {
