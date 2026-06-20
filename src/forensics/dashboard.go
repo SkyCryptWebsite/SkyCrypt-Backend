@@ -344,7 +344,9 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	mongoDeps := make(map[string]*dependencyReportEntry)
 	var allCachedDurations, mixedDurations, coldDurations []int64
 	var cacheHits, cacheMisses uint64
+	var legacyCacheHits, legacyCacheMisses uint64
 	var responseRAMHits, responseRedisHits, responseCold uint64
+	var responseRAMEligibleHits, responseRAMEligibleTotal uint64
 	var slowest []slowRequestEntry
 	var slowestMinMs int64
 	var recent []recentRequestEntry
@@ -434,6 +436,12 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 					responseAgg.Cold++
 					responseCold++
 				}
+				if responseCacheRAMEligibleEndpoint(endpoint) {
+					responseRAMEligibleTotal++
+					if entry.ResponseCacheStatus == "ram" {
+						responseRAMEligibleHits++
+					}
+				}
 			}
 
 			recent = append(recent, recentRequestEntry{
@@ -515,9 +523,9 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			}
 
 		case "redis_cache_hit":
-			cacheHits++
+			legacyCacheHits++
 		case "redis_cache_miss":
-			cacheMisses++
+			legacyCacheMisses++
 		case "request_completed":
 			durMs := entry.DurationMs
 			if durMs == 0 && entry.Duration > 0 {
@@ -539,7 +547,11 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 		}
 	}
 
-	finalizeCacheStats(report, cacheHits, cacheMisses, responseRAMHits, responseRedisHits, responseCold, allCachedDurations, mixedDurations, coldDurations)
+	if summaryCount == 0 {
+		cacheHits = legacyCacheHits
+		cacheMisses = legacyCacheMisses
+	}
+	finalizeCacheStats(report, cacheHits, cacheMisses, responseRAMHits, responseRedisHits, responseCold, responseRAMEligibleHits, responseRAMEligibleTotal, allCachedDurations, mixedDurations, coldDurations)
 	report.TopSpans = buildSpanEntries(spans)
 	report.CacheLatencyByEndpoint = buildLatencyEntries(latency)
 	report.ResponseCacheByEndpoint = buildResponseCacheEntries(responseCache)
@@ -562,15 +574,17 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	report.LogStats.ParseTimeMs = time.Since(parseStart).Milliseconds()
 }
 
-func finalizeCacheStats(report *dashboardReport, hits, misses, responseRAMHits, responseRedisHits, responseCold uint64, allCached, mixed, cold []int64) {
+func finalizeCacheStats(report *dashboardReport, hits, misses, responseRAMHits, responseRedisHits, responseCold, responseRAMEligibleHits, responseRAMEligibleTotal uint64, allCached, mixed, cold []int64) {
 	total := hits + misses
 	if total > 0 {
 		report.CacheStats.HitRate = float64(hits) / float64(total) * 100
 	}
 	responseTotal := responseRAMHits + responseRedisHits + responseCold
 	if responseTotal > 0 {
-		report.CacheStats.ResponseRAMHitRate = float64(responseRAMHits) / float64(responseTotal) * 100
 		report.CacheStats.ResponseHitRate = float64(responseRAMHits+responseRedisHits) / float64(responseTotal) * 100
+	}
+	if responseRAMEligibleTotal > 0 {
+		report.CacheStats.ResponseRAMHitRate = float64(responseRAMEligibleHits) / float64(responseRAMEligibleTotal) * 100
 	}
 	report.CacheStats.Hits = hits
 	report.CacheStats.Misses = misses
@@ -683,6 +697,15 @@ func buildResponseCacheEntries(responseCache map[string]*responseCacheAgg) []res
 		return entries[i].Count > entries[j].Count
 	})
 	return entries
+}
+
+func responseCacheRAMEligibleEndpoint(endpoint string) bool {
+	switch endpoint {
+	case "embed", "stats", "combined", "uuid", "username":
+		return true
+	default:
+		return false
+	}
 }
 
 func addSlowest(slowest *[]slowRequestEntry, slowestMinMs *int64, req slowRequestEntry) {
@@ -859,7 +882,7 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
   <div class="card"><div class="label">Mixed Avg / P95</div><div class="value">%.1f / %.1f ms</div></div>
   <div class="card"><div class="label">Cold Avg / P95</div><div class="value">%.1f / %.1f ms</div></div>
   <div class="card"><div class="label">Redis Hit Rate</div><div class="value">%.1f%%</div></div>
-  <div class="card"><div class="label">Response RAM Hit Rate</div><div class="value">%.1f%%</div></div>
+  <div class="card"><div class="label">Response RAM Hit Rate (RAM Routes)</div><div class="value">%.1f%%</div></div>
   <div class="card"><div class="label">Response Total Hit Rate</div><div class="value">%.1f%%</div></div>
   <div class="card"><div class="label">Response RAM / Redis / Cold</div><div class="value">%d / %d / %d</div></div>
   <div class="card"><div class="label">Upstream Errors</div><div class="value">%d</div></div>
