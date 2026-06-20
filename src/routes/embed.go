@@ -135,7 +135,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 	return c.JSON(output)
 }
 
-// selectedProfileEmbedDocs godoc
+// SelectedProfileEmbedHandler godoc
 //
 //	@Summary		Get selected profile embed data
 //	@Description	Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.
@@ -150,4 +150,6 @@ func EmbedHandler(c *fiber.Ctx) error {
 //	@Failure		401		{object}	models.ProcessingError	"X-API-Token is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Networth calculation failed."
 //	@Router			/api/embed/{uuid} [get]
-func selectedProfileEmbedDocs() {}
+func SelectedProfileEmbedHandler(c *fiber.Ctx) error {
+	return EmbedHandler(c)
+}

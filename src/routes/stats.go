@@ -52,7 +52,7 @@ func StatsHandler(c *fiber.Ctx) error {
 	return c.JSON(output)
 }
 
-// selectedProfileStatsDocs godoc
+// SelectedProfileStatsHandler godoc
 //
 //	@Summary		Get selected profile stats
 //	@Description	Returns the complete SkyCrypt stats payload for a player's selected SkyBlock profile.
@@ -66,7 +66,9 @@ func StatsHandler(c *fiber.Ctx) error {
 //	@Failure		401		{object}	models.ProcessingError	"X-API-Token is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
 //	@Router			/api/stats/{uuid} [get]
-func selectedProfileStatsDocs() {}
+func SelectedProfileStatsHandler(c *fiber.Ctx) error {
+	return StatsHandler(c)
+}
 
 func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
 	var mowojang *models.MowojangResponse
