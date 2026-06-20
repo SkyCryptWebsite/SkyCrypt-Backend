@@ -84,7 +84,7 @@ func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Playe
 		ProfileCuteName: profile.CuteName,
 		Joined:          userProfile.Profile.FirstJoin,
 		GameMode:        profile.GameMode,
-		SkyBlockLevel:   math.Floor(GetSkyBlockLevel(userProfile).LevelWithProgress),
+		SkyBlockLevel:   GetSkyBlockLevel(userProfile).LevelWithProgress,
 		Skills:          getSkillsForEmbed(skills),
 		Networth:        formattedNetworth,
 		Purse:           RoundToOneDecimal(userProfile.Currencies.CoinPurse),
