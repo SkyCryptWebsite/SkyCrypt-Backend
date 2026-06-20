@@ -35,7 +35,7 @@ import (
 //	@Router			/api/combined/{uuid}/{profileId} [get]
 func CombinedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
-		defer forensics.TrackSpan("handler.Stats")()
+		defer forensics.TrackSpan("handler.Combined")()
 	}
 
 	timeNow := time.Now()

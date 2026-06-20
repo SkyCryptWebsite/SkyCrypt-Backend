@@ -17,7 +17,8 @@ var baseTransport = &http.Transport{
 }
 
 var HTTPClient = &http.Client{
-	// Timeout: 10 * time.Second,
+	Transport: baseTransport,
+	Timeout:   10 * time.Second,
 }
 
 func init() {
