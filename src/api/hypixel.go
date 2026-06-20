@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,10 @@ import (
 var HYPIXEL_API_KEY = os.Getenv("HYPIXEL_API_KEY")
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
+	return GetPlayerContext(context.Background(), uuid)
+}
+
+func GetPlayerContext(ctx context.Context, uuid string) (*skycrypttypes.Player, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetPlayer")()
 	}
@@ -26,7 +31,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 	var response skycrypttypes.Player
 
 	if !utility.IsUUID(uuid) {
-		respUUID, err := GetUUID(uuid)
+		respUUID, err := GetUUIDContext(ctx, uuid)
 		if err != nil {
 			return &response, err
 		}
@@ -34,7 +39,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 		uuid = respUUID
 	}
 
-	cache, err := redis.Get(fmt.Sprintf(`player:%s`, uuid))
+	cache, err := redis.GetContext(ctx, fmt.Sprintf(`player:%s`, uuid))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &rawReponse)
@@ -43,7 +48,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get(fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	resp, err := getContext(ctx, fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
 
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
@@ -71,7 +76,7 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 		return &rawReponse.Player, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.Set(fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
+	_ = redis.SetContext(ctx, fmt.Sprintf(`player:%s`, uuid), string(body), 24*60*60)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
 			zap.String("api", "GetPlayer"),
@@ -84,13 +89,17 @@ func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
 }
 
 func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
+	return GetProfilesContext(context.Background(), uuid)
+}
+
+func GetProfilesContext(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetProfiles")()
 	}
 
 	var response models.HypixelProfilesResponse
 	if !utility.IsUUID(uuid) {
-		respUUID, err := GetUUID(uuid)
+		respUUID, err := GetUUIDContext(ctx, uuid)
 		if err != nil {
 			return &response, err
 		}
@@ -98,7 +107,7 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 		uuid = respUUID
 	}
 
-	cache, err := redis.Get(fmt.Sprintf(`profiles:%s`, uuid))
+	cache, err := redis.GetContext(ctx, fmt.Sprintf(`profiles:%s`, uuid))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &response)
@@ -107,7 +116,7 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	resp, err := getContext(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
 	if err != nil {
 		return &response, fmt.Errorf("error making request: %v", err)
 	}
@@ -138,7 +147,7 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 		return &response, fmt.Errorf("error fetching profiles: %s", response.Cause)
 	}
 
-	_ = redis.Set(fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
+	_ = redis.SetContext(ctx, fmt.Sprintf(`profiles:%s`, uuid), string(body), 5*60) // Cache for 5 minutes
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
 			zap.String("api", "GetProfiles"),
@@ -151,11 +160,15 @@ func GetProfiles(uuid string) (*models.HypixelProfilesResponse, error) {
 }
 
 func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error) {
+	return GetProfileContext(context.Background(), uuid, profileId...)
+}
+
+func GetProfileContext(ctx context.Context, uuid string, profileId ...string) (*skycrypttypes.Profile, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetProfile")()
 	}
 
-	profiles, err := GetProfiles(uuid)
+	profiles, err := GetProfilesContext(ctx, uuid)
 	if err != nil {
 		return &skycrypttypes.Profile{}, err
 	}
@@ -187,13 +200,17 @@ func GetProfile(uuid string, profileId ...string) (*skycrypttypes.Profile, error
 }
 
 func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
+	return GetMuseumContext(context.Background(), profileId)
+}
+
+func GetMuseumContext(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetMuseum")()
 	}
 
 	var rawReponse models.HypixelMuseumResponse
 
-	cache, err := redis.Get(fmt.Sprintf(`museum:%s`, profileId))
+	cache, err := redis.GetContext(ctx, fmt.Sprintf(`museum:%s`, profileId))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &rawReponse)
@@ -202,7 +219,7 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	resp, err := getContext(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -229,18 +246,22 @@ func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.Set(fmt.Sprintf(`museum:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
+	_ = redis.SetContext(ctx, fmt.Sprintf(`museum:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
 	return rawReponse.Members, nil
 }
 
 func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
+	return GetGardenContext(context.Background(), profileId)
+}
+
+func GetGardenContext(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetGarden")()
 	}
 
 	var rawReponse models.HypixelGardenResponse
 
-	cache, err := redis.Get(fmt.Sprintf(`garden:%s`, profileId))
+	cache, err := redis.GetContext(ctx, fmt.Sprintf(`garden:%s`, profileId))
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &rawReponse)
@@ -249,7 +270,7 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get(fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	resp, err := getContext(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -276,6 +297,14 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	_ = redis.Set(fmt.Sprintf(`garden:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
+	_ = redis.SetContext(ctx, fmt.Sprintf(`garden:%s`, profileId), string(body), 60*30) // Cache for 30 minutes
 	return &rawReponse.Garden, nil
+}
+
+func getContext(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return HTTPClient.Do(req)
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"skycrypt/src/forensics"
 	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/event"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -15,6 +17,7 @@ import (
 var mongoClient *mongo.Client
 var mongoDatabase *mongo.Database
 var mongoMutex sync.RWMutex
+var mongoCommandCollections sync.Map
 
 var EMOJIS map[string]string = map[string]string{
 	"4855c53ee4fb4100997600a92fc50984": "🦆",
@@ -28,6 +31,27 @@ func InitMongo(uri string, dbName string) error {
 	defer cancel()
 
 	clientOptions := options.Client().ApplyURI(uri)
+	if os.Getenv("FORENSICS_ENABLED") == "true" {
+		clientOptions.SetMonitor(&event.CommandMonitor{
+			Started: func(ctx context.Context, evt *event.CommandStartedEvent) {
+				mongoCommandCollections.Store(evt.RequestID, mongoCommandCollection(evt.CommandName, evt.Command))
+			},
+			Succeeded: func(ctx context.Context, evt *event.CommandSucceededEvent) {
+				collection := evt.CommandName
+				if value, ok := mongoCommandCollections.LoadAndDelete(evt.RequestID); ok {
+					collection = value.(string)
+				}
+				forensics.RecordMongoDependency(ctx, collection, evt.CommandName, evt.Duration, nil)
+			},
+			Failed: func(ctx context.Context, evt *event.CommandFailedEvent) {
+				collection := evt.CommandName
+				if value, ok := mongoCommandCollections.LoadAndDelete(evt.RequestID); ok {
+					collection = value.(string)
+				}
+				forensics.RecordMongoDependency(ctx, collection, evt.CommandName, evt.Duration, evt.Failure)
+			},
+		})
+	}
 	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		return fmt.Errorf("could not connect to MongoDB: %v", err)
@@ -50,6 +74,18 @@ func InitMongo(uri string, dbName string) error {
 	}
 
 	return nil
+}
+
+func mongoCommandCollection(commandName string, raw bson.Raw) string {
+	if len(raw) > 0 {
+		for _, key := range []string{"find", "aggregate", "insert", "update", "delete", "count", "distinct"} {
+			value := raw.Lookup(key)
+			if value.Type == bson.TypeString {
+				return value.StringValue()
+			}
+		}
+	}
+	return commandName
 }
 
 func indexCollections() error {

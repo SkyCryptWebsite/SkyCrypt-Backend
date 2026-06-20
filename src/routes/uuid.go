@@ -30,7 +30,7 @@ func UUIDHandler(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidUserError)
 	}
 
-	uuid, err := api.GetUUID(username)
+	uuid, err := api.GetUUIDContext(c.UserContext(), username)
 	if err != nil {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)

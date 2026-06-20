@@ -71,6 +71,9 @@ func InitRedis(addr string, password string, db int) error {
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
 		fmt.Print("[REDIS] Redis connected successfully\n")
 	}
+	if utility.IsForensicsEnabled() {
+		go forensics.NewPoolMonitor().MonitorRedisPool(redisClient)
+	}
 
 	return nil
 }
@@ -85,6 +88,10 @@ func (r *RedisClient) Set(key string, value interface{}, expirationSeconds int) 
 }
 
 func Get(key string) (string, error) {
+	return GetContext(context.Background(), key)
+}
+
+func GetContext(ctx context.Context, key string) (string, error) {
 	start := time.Now()
 
 	clientMutex.RLock()
@@ -114,6 +121,7 @@ func Get(key string) (string, error) {
 
 	if err != nil {
 		if err == redis.Nil {
+			forensics.RecordRedisDependency(ctx, "GET", key, "miss", duration, nil)
 			if utility.IsForensicsEnabled() {
 				forensics.Logger.Debug("redis_cache_miss",
 					zap.String("key", key),
@@ -122,6 +130,7 @@ func Get(key string) (string, error) {
 			}
 			return "", nil
 		}
+		forensics.RecordRedisDependency(ctx, "GET", key, "error", duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_get_error",
 				zap.String("key", key),
@@ -132,6 +141,7 @@ func Get(key string) (string, error) {
 		return "", fmt.Errorf("could not get value from Redis: %v", err)
 	}
 
+	forensics.RecordRedisDependency(ctx, "GET", key, "hit", duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_cache_hit",
 			zap.String("key", key),
@@ -180,6 +190,10 @@ func NewRedisClient(addr string, password string, db int) *RedisClient {
 }
 
 func Set(key string, value interface{}, expirationSeconds int) error {
+	return SetContext(context.Background(), key, value, expirationSeconds)
+}
+
+func SetContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
 	start := time.Now()
 
 	clientMutex.RLock()
@@ -209,6 +223,7 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 	duration := time.Since(start)
 
 	if err != nil {
+		forensics.RecordRedisDependency(ctx, "SET", key, "error", duration, err)
 		if utility.IsForensicsEnabled() {
 			forensics.Logger.Error("redis_set_error",
 				zap.String("key", key),
@@ -219,6 +234,7 @@ func Set(key string, value interface{}, expirationSeconds int) error {
 		return fmt.Errorf("could not set value in Redis: %v", err)
 	}
 
+	forensics.RecordRedisDependency(ctx, "SET", key, "set", duration, nil)
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Debug("redis_set_completed",
 			zap.String("key", key),

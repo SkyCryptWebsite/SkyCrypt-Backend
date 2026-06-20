@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
@@ -41,7 +42,7 @@ func StatsHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	output, err := computeStats(uuid, profileId)
+	output, err := computeStatsContext(c.UserContext(), uuid, profileId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -70,10 +71,10 @@ func SelectedProfileStatsHandler(c *fiber.Ctx) error {
 	return StatsHandler(c)
 }
 
-func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
+func computeStatsContext(ctx context.Context, rawInput string, profileId string) (*models.StatsOutput, error) {
 	var mowojang *models.MowojangResponse
 	var err error
-	mowojang, err = api.ResolvePlayer(rawInput)
+	mowojang, err = api.ResolvePlayerContext(ctx, rawInput)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve player: %v", err)
 	}
@@ -92,12 +93,12 @@ func computeStats(rawInput string, profileId string) (*models.StatsOutput, error
 	playerCh := make(chan playerResult, 1)
 
 	go func() {
-		profiles, fetchErr := api.GetProfiles(uuid)
+		profiles, fetchErr := api.GetProfilesContext(ctx, uuid)
 		profilesCh <- profilesResult{profiles: profiles, err: fetchErr}
 	}()
 
 	go func() {
-		player, fetchErr := api.GetPlayer(uuid)
+		player, fetchErr := api.GetPlayerContext(ctx, uuid)
 		playerCh <- playerResult{player: player, err: fetchErr}
 	}()
 
@@ -118,12 +119,12 @@ func computeStats(rawInput string, profileId string) (*models.StatsOutput, error
 	}
 	player := playerRes.player
 
-	profileMuseum, err := api.GetMuseum(profile.ProfileID)
+	profileMuseum, err := api.GetMuseumContext(ctx, profile.ProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get museum: %v", err)
 	}
 
-	members, err := stats.FormatMembers(profile)
+	members, err := stats.FormatMembersContext(ctx, profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}

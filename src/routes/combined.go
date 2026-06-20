@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -60,7 +61,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	result, err := computeCombined(uuid, profileId, disabledPacks)
+	result, err := computeCombinedContext(c.UserContext(), uuid, profileId, disabledPacks)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -71,7 +72,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func computeCombined(uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
+func computeCombinedContext(ctx context.Context, uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
 	var (
 		mowojang      *models.MowojangResponse
 		profiles      *models.HypixelProfilesResponse
@@ -82,17 +83,17 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	g := errgroup.Group{}
+	g, groupCtx := errgroup.WithContext(ctx)
 
 	if isProfileUUID {
 		g.Go(func() error {
 			var err error
-			profileMuseum, err = api.GetMuseum(profileId)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
 			return err
 		})
 	}
 
-	mowojang, err = api.ResolvePlayer(uuid)
+	mowojang, err = api.ResolvePlayerContext(ctx, uuid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve player: %v", err)
 	}
@@ -101,13 +102,13 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 
 	g.Go(func() error {
 		var err error
-		player, err = api.GetPlayer(uuid)
+		player, err = api.GetPlayerContext(groupCtx, uuid)
 		return err
 	})
 
 	g.Go(func() error {
 		var err error
-		profiles, err = api.GetProfiles(uuid)
+		profiles, err = api.GetProfilesContext(groupCtx, uuid)
 		if err != nil {
 			return err
 		}
@@ -118,7 +119,7 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 		}
 
 		if !isProfileUUID {
-			profileMuseum, err = api.GetMuseum(profile.ProfileID)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}
 
@@ -129,7 +130,7 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 		return nil, err
 	}
 
-	members, err := stats.FormatMembers(profile)
+	members, err := stats.FormatMembersContext(ctx, profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
@@ -138,5 +139,5 @@ func computeCombined(uuid string, profileId string, disabledPacks []string) (*mo
 	museum := profileMuseum[uuid]
 	userProfile := &userProfileValue
 
-	return stats.GetCombined(mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
+	return stats.GetCombinedContext(ctx, mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
 }

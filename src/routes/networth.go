@@ -53,17 +53,18 @@ func NetworthHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	g, _ := errgroup.WithContext(c.Context())
+	reqCtx := c.UserContext()
+	g, groupCtx := errgroup.WithContext(reqCtx)
 
 	if isProfileUUID {
 		g.Go(func() error {
 			var err error
-			profileMuseum, err = api.GetMuseum(profileId)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
 			return err
 		})
 	}
 
-	mowojang, err = api.ResolvePlayer(uuid)
+	mowojang, err = api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to resolve player: %v", err),
@@ -72,7 +73,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 
 	g.Go(func() error {
 		var err error
-		profiles, err = api.GetProfiles(mowojang.UUID)
+		profiles, err = api.GetProfilesContext(groupCtx, mowojang.UUID)
 		if err != nil {
 			return err
 		}
@@ -83,7 +84,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 		}
 
 		if !isProfileUUID {
-			profileMuseum, err = api.GetMuseum(profile.ProfileID)
+			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}
 
