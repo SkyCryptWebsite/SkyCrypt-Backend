@@ -97,6 +97,16 @@ func GetFarming(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		}
 
 		if medal != "" {
+			if output.Medals == nil {
+				output.Medals = map[string]*models.Medal{
+					"bronze":   {Amount: 0, Total: 0},
+					"silver":   {Amount: 0, Total: 0},
+					"gold":     {Amount: 0, Total: 0},
+					"platinum": {Amount: 0, Total: 0},
+					"diamond":  {Amount: 0, Total: 0},
+				}
+			}
+
 			output.Medals[medal].Total += 1
 			output.Contests[cropId].Medals[medal] += 1
 
