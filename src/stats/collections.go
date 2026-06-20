@@ -123,15 +123,11 @@ func GetCollections(userProfile *skycrypttypes.Member, profile *skycrypttypes.Pr
 }
 
 func GetCollectionsContext(ctx context.Context, userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile) *models.CollectionsOutput {
-	usernames := map[string]string{}
+	memberIDs := make([]string, 0, len(profile.Members))
 	for memberId := range profile.Members {
-		username, err := api.GetUsernameContext(ctx, memberId)
-		if err != nil {
-			username = "Unknown"
-		}
-
-		usernames[memberId] = username
+		memberIDs = append(memberIDs, memberId)
 	}
+	usernames := api.GetUsernamesContext(ctx, memberIDs)
 
 	output := &models.CollectionsOutput{
 		Categories: map[string]models.CollectionCategory{},
