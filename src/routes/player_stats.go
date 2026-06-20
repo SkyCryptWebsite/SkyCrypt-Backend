@@ -36,8 +36,13 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("playerStats", uuid, profileId)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
-	resolvedPlayer, err := api.ResolvePlayerContext(c.UserContext(), uuid)
+	resolvedPlayer, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to resolve player: %v", err),
@@ -45,7 +50,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	}
 	resolvedUUID := resolvedPlayer.UUID
 
-	profile, err := api.GetProfileContext(c.UserContext(), uuid, profileId)
+	profile, err := api.GetProfileContext(reqCtx, resolvedUUID, profileId)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get profile: %v", err),
@@ -63,5 +68,5 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 		Stats: output,
 	}
 
-	return c.JSON(formattedStats)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, formattedStats, 5*60)
 }

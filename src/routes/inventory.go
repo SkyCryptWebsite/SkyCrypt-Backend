@@ -61,6 +61,11 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("inventory", uuid, profileId, disabledPacksCachePart(disabledPacks))
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
 	var (
 		profiles      *models.HypixelProfilesResponse
@@ -69,8 +74,13 @@ func InventoryHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	reqCtx := c.UserContext()
 	g, groupCtx := errgroup.WithContext(reqCtx)
+	type museumResult struct {
+		profileID string
+		museum    map[string]*skycrypttypes.Museum
+		err       error
+	}
+	var selectedMuseumCh chan museumResult
 
 	if isProfileUUID {
 		g.Go(func() error {
@@ -78,6 +88,17 @@ func InventoryHandler(c *fiber.Ctx) error {
 			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
 			return err
 		})
+	}
+
+	if profileId == "" {
+		if cachedProfileID := getCachedSelectedProfileID(reqCtx, uuid); cachedProfileID != "" {
+			selectedMuseumCh = make(chan museumResult, 1)
+			g.Go(func() error {
+				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
+				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
+				return nil
+			})
+		}
 	}
 
 	g.Go(func() error {
@@ -91,8 +112,18 @@ func InventoryHandler(c *fiber.Ctx) error {
 		if err != nil {
 			return err
 		}
+		if profileId == "" {
+			cacheSelectedProfileID(groupCtx, uuid, profile.ProfileID)
+		}
 
 		if !isProfileUUID {
+			if selectedMuseumCh != nil {
+				result := <-selectedMuseumCh
+				if result.err == nil && result.profileID == profile.ProfileID {
+					profileMuseum = result.museum
+					return nil
+				}
+			}
 			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
 			return err
 		}
@@ -177,5 +208,5 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 	}()
 
-	return c.JSON(output)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
 }

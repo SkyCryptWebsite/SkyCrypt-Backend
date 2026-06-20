@@ -37,6 +37,11 @@ func GardenHandler(c *fiber.Ctx) error {
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("garden", uuid, profileId)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
 	var (
 		profiles *models.HypixelProfilesResponse
@@ -45,8 +50,13 @@ func GardenHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	reqCtx := c.UserContext()
 	g, groupCtx := errgroup.WithContext(reqCtx)
+	type gardenResult struct {
+		profileID string
+		garden    *skycrypttypes.Garden
+		err       error
+	}
+	var selectedGardenCh chan gardenResult
 
 	if isProfileUUID {
 		g.Go(func() error {
@@ -54,6 +64,17 @@ func GardenHandler(c *fiber.Ctx) error {
 			garden, err = api.GetGardenContext(groupCtx, profileId)
 			return err
 		})
+	}
+
+	if profileId == "" {
+		if cachedProfileID := getCachedSelectedProfileID(reqCtx, uuid); cachedProfileID != "" {
+			selectedGardenCh = make(chan gardenResult, 1)
+			g.Go(func() error {
+				fetchedGarden, err := api.GetGardenContext(groupCtx, cachedProfileID)
+				selectedGardenCh <- gardenResult{profileID: cachedProfileID, garden: fetchedGarden, err: err}
+				return nil
+			})
+		}
 	}
 
 	g.Go(func() error {
@@ -67,8 +88,18 @@ func GardenHandler(c *fiber.Ctx) error {
 		if err != nil {
 			return err
 		}
+		if profileId == "" {
+			cacheSelectedProfileID(groupCtx, uuid, profile.ProfileID)
+		}
 
 		if !isProfileUUID {
+			if selectedGardenCh != nil {
+				result := <-selectedGardenCh
+				if result.err == nil && result.profileID == profile.ProfileID {
+					garden = result.garden
+					return nil
+				}
+			}
 			garden, err = api.GetGardenContext(groupCtx, profile.ProfileID)
 			return err
 		}
@@ -88,5 +119,5 @@ func GardenHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/garden/%s in %s", profileId, time.Since(timeNow))
 
-	return c.JSON(output)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 60*60)
 }

@@ -41,8 +41,13 @@ func StatsHandler(c *fiber.Ctx) error {
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
+	reqCtx := c.UserContext()
+	cacheKey := responseCacheKey("stats", uuid, profileId)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
-	output, err := computeStatsContext(c.UserContext(), uuid, profileId)
+	output, err := computeStatsContext(reqCtx, uuid, profileId)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -50,7 +55,7 @@ func StatsHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
-	return c.JSON(output)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
 }
 
 // SelectedProfileStatsHandler godoc
@@ -79,6 +84,7 @@ func computeStatsContext(ctx context.Context, rawInput string, profileId string)
 		return nil, fmt.Errorf("failed to resolve player: %v", err)
 	}
 	uuid := mowojang.UUID
+	requestedProfileID := profileId
 
 	type profilesResult struct {
 		profiles *models.HypixelProfilesResponse
@@ -88,9 +94,15 @@ func computeStatsContext(ctx context.Context, rawInput string, profileId string)
 		player *skycrypttypes.Player
 		err    error
 	}
+	type museumResult struct {
+		profileID string
+		museum    map[string]*skycrypttypes.Museum
+		err       error
+	}
 
 	profilesCh := make(chan profilesResult, 1)
 	playerCh := make(chan playerResult, 1)
+	var selectedMuseumCh chan museumResult
 
 	go func() {
 		profiles, fetchErr := api.GetProfilesContext(ctx, uuid)
@@ -102,6 +114,16 @@ func computeStatsContext(ctx context.Context, rawInput string, profileId string)
 		playerCh <- playerResult{player: player, err: fetchErr}
 	}()
 
+	if requestedProfileID == "" {
+		if cachedProfileID := getCachedSelectedProfileID(ctx, uuid); cachedProfileID != "" {
+			selectedMuseumCh = make(chan museumResult, 1)
+			go func() {
+				museum, fetchErr := api.GetMuseumContext(ctx, cachedProfileID)
+				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: fetchErr}
+			}()
+		}
+	}
+
 	profilesRes := <-profilesCh
 	if profilesRes.err != nil {
 		return nil, fmt.Errorf("failed to get profiles: %v", profilesRes.err)
@@ -112,6 +134,9 @@ func computeStatsContext(ctx context.Context, rawInput string, profileId string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get profile: %v", err)
 	}
+	if requestedProfileID == "" {
+		cacheSelectedProfileID(ctx, uuid, profile.ProfileID)
+	}
 
 	playerRes := <-playerCh
 	if playerRes.err != nil {
@@ -119,9 +144,18 @@ func computeStatsContext(ctx context.Context, rawInput string, profileId string)
 	}
 	player := playerRes.player
 
-	profileMuseum, err := api.GetMuseumContext(ctx, profile.ProfileID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get museum: %v", err)
+	var profileMuseum map[string]*skycrypttypes.Museum
+	if selectedMuseumCh != nil {
+		result := <-selectedMuseumCh
+		if result.err == nil && result.profileID == profile.ProfileID {
+			profileMuseum = result.museum
+		}
+	}
+	if profileMuseum == nil {
+		profileMuseum, err = api.GetMuseumContext(ctx, profile.ProfileID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get museum: %v", err)
+		}
 	}
 
 	members, err := stats.FormatMembersContext(ctx, profile)
