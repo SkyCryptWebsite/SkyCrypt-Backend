@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"skycrypt/src/db"
+	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
 	"strings"
 	"sync"
@@ -50,8 +51,9 @@ func disabledPacksCachePart(disabledPacks []string) string {
 
 func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 	if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
+		forensics.RecordResponseCache(c.UserContext(), cacheKey.endpoint, "ram")
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-		c.Set("X-SkyCrypt-Backend-Cache", "memory")
+		c.Set("X-SkyCrypt-Backend-Cache", "ram")
 		return true, c.SendString(cached)
 	}
 
@@ -61,6 +63,7 @@ func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 	}
 
 	responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, cached, 30*time.Second, 30*time.Second)
+	forensics.RecordResponseCache(c.UserContext(), cacheKey.endpoint, "redis")
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	c.Set("X-SkyCrypt-Backend-Cache", "redis")
 	return true, c.SendString(cached)
@@ -75,6 +78,7 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 
 	body := string(payload)
 	responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, body, 30*time.Second, 30*time.Second)
+	forensics.RecordResponseCache(ctx, cacheKey.endpoint, "cold")
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()

@@ -32,28 +32,30 @@ type RepeatedDependency struct {
 }
 
 type RequestSummary struct {
-	RequestID            string               `json:"request_id"`
-	Method               string               `json:"method"`
-	Path                 string               `json:"path"`
-	Route                string               `json:"route"`
-	CacheStatus          string               `json:"cache_status"`
-	StatusCode           int                  `json:"status_code"`
-	DurationMs           int64                `json:"duration_ms"`
-	ResponseSize         int                  `json:"response_size"`
-	AllocDeltaBytes      int64                `json:"alloc_delta_bytes"`
-	CacheHits            int                  `json:"cache_hits"`
-	CacheMisses          int                  `json:"cache_misses"`
-	CacheSets            int                  `json:"cache_sets"`
-	RedisCalls           int                  `json:"redis_calls"`
-	RedisMs              float64              `json:"redis_ms"`
-	HTTPCalls            int                  `json:"http_calls"`
-	HTTPMs               float64              `json:"http_ms"`
-	HTTPErrors           int                  `json:"http_errors"`
-	HTTPRateLimits       int                  `json:"http_rate_limits"`
-	MongoCalls           int                  `json:"mongo_calls"`
-	MongoMs              float64              `json:"mongo_ms"`
-	Dependencies         []DependencySummary  `json:"dependencies"`
-	RepeatedDependencies []RepeatedDependency `json:"repeated_dependencies"`
+	RequestID             string               `json:"request_id"`
+	Method                string               `json:"method"`
+	Path                  string               `json:"path"`
+	Route                 string               `json:"route"`
+	CacheStatus           string               `json:"cache_status"`
+	ResponseCacheStatus   string               `json:"response_cache_status,omitempty"`
+	ResponseCacheEndpoint string               `json:"response_cache_endpoint,omitempty"`
+	StatusCode            int                  `json:"status_code"`
+	DurationMs            int64                `json:"duration_ms"`
+	ResponseSize          int                  `json:"response_size"`
+	AllocDeltaBytes       int64                `json:"alloc_delta_bytes"`
+	CacheHits             int                  `json:"cache_hits"`
+	CacheMisses           int                  `json:"cache_misses"`
+	CacheSets             int                  `json:"cache_sets"`
+	RedisCalls            int                  `json:"redis_calls"`
+	RedisMs               float64              `json:"redis_ms"`
+	HTTPCalls             int                  `json:"http_calls"`
+	HTTPMs                float64              `json:"http_ms"`
+	HTTPErrors            int                  `json:"http_errors"`
+	HTTPRateLimits        int                  `json:"http_rate_limits"`
+	MongoCalls            int                  `json:"mongo_calls"`
+	MongoMs               float64              `json:"mongo_ms"`
+	Dependencies          []DependencySummary  `json:"dependencies"`
+	RepeatedDependencies  []RepeatedDependency `json:"repeated_dependencies"`
 }
 
 type RequestMetrics struct {
@@ -68,6 +70,9 @@ type RequestMetrics struct {
 	cacheMisses int
 	cacheSets   int
 
+	responseCacheStatus   string
+	responseCacheEndpoint string
+
 	redisCalls int
 	redisMs    float64
 
@@ -80,6 +85,18 @@ type RequestMetrics struct {
 	mongoMs    float64
 
 	dependencies map[string]*DependencySummary
+}
+
+func RecordResponseCache(ctx context.Context, endpoint, status string) {
+	metrics := MetricsFromContext(ctx)
+	if metrics == nil {
+		return
+	}
+
+	metrics.mu.Lock()
+	metrics.responseCacheEndpoint = endpoint
+	metrics.responseCacheStatus = status
+	metrics.mu.Unlock()
 }
 
 func NewRequestMetrics(requestID, method, path string) *RequestMetrics {
@@ -254,28 +271,30 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 
 	cacheStatus := classifyCacheStatus(metrics.cacheHits, metrics.cacheMisses, metrics.httpCalls)
 	summary := RequestSummary{
-		RequestID:            metrics.requestID,
-		Method:               metrics.method,
-		Path:                 metrics.path,
-		Route:                metrics.route,
-		CacheStatus:          cacheStatus,
-		StatusCode:           statusCode,
-		DurationMs:           duration.Milliseconds(),
-		ResponseSize:         responseSize,
-		AllocDeltaBytes:      allocDelta,
-		CacheHits:            metrics.cacheHits,
-		CacheMisses:          metrics.cacheMisses,
-		CacheSets:            metrics.cacheSets,
-		RedisCalls:           metrics.redisCalls,
-		RedisMs:              metrics.redisMs,
-		HTTPCalls:            metrics.httpCalls,
-		HTTPMs:               metrics.httpMs,
-		HTTPErrors:           metrics.httpErrors,
-		HTTPRateLimits:       metrics.httpRateLimits,
-		MongoCalls:           metrics.mongoCalls,
-		MongoMs:              metrics.mongoMs,
-		Dependencies:         deps,
-		RepeatedDependencies: repeated,
+		RequestID:             metrics.requestID,
+		Method:                metrics.method,
+		Path:                  metrics.path,
+		Route:                 metrics.route,
+		CacheStatus:           cacheStatus,
+		ResponseCacheStatus:   metrics.responseCacheStatus,
+		ResponseCacheEndpoint: metrics.responseCacheEndpoint,
+		StatusCode:            statusCode,
+		DurationMs:            duration.Milliseconds(),
+		ResponseSize:          responseSize,
+		AllocDeltaBytes:       allocDelta,
+		CacheHits:             metrics.cacheHits,
+		CacheMisses:           metrics.cacheMisses,
+		CacheSets:             metrics.cacheSets,
+		RedisCalls:            metrics.redisCalls,
+		RedisMs:               metrics.redisMs,
+		HTTPCalls:             metrics.httpCalls,
+		HTTPMs:                metrics.httpMs,
+		HTTPErrors:            metrics.httpErrors,
+		HTTPRateLimits:        metrics.httpRateLimits,
+		MongoCalls:            metrics.mongoCalls,
+		MongoMs:               metrics.mongoMs,
+		Dependencies:          deps,
+		RepeatedDependencies:  repeated,
 	}
 
 	if Logger != nil {
@@ -285,6 +304,8 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 			zap.String("path", summary.Path),
 			zap.String("route", summary.Route),
 			zap.String("cache_status", summary.CacheStatus),
+			zap.String("response_cache_status", summary.ResponseCacheStatus),
+			zap.String("response_cache_endpoint", summary.ResponseCacheEndpoint),
 			zap.Int("status_code", summary.StatusCode),
 			zap.Int64("duration_ms", summary.DurationMs),
 			zap.Int("response_size", summary.ResponseSize),

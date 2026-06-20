@@ -88,6 +88,7 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 			"level": "info", "timestamp": now, "msg": "forensic_request_summary",
 			"request_id": "req-1", "method": "GET", "path": "/api/stats/ducky/Kiwi", "route": "/api/stats/:uuid/:profileId",
 			"cache_status": "all_cached", "status_code": 200, "duration_ms": 20, "response_size": 100,
+			"response_cache_status": "ram", "response_cache_endpoint": "stats",
 			"cache_hits": 3, "cache_misses": 0, "redis_calls": 3, "redis_ms": 5.0,
 			"dependencies": []DependencySummary{
 				{Kind: "redis", Operation: "GET", Name: "profiles", Count: 3, TotalMs: 5, AvgMs: 1.6},
@@ -100,6 +101,7 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 			"level": "info", "timestamp": now, "msg": "forensic_request_summary",
 			"request_id": "req-2", "method": "GET", "path": "/api/stats/ducky/Kiwi", "route": "/api/stats/:uuid/:profileId",
 			"cache_status": "cold", "status_code": 200, "duration_ms": 120, "response_size": 100,
+			"response_cache_status": "cold", "response_cache_endpoint": "stats",
 			"cache_hits": 0, "cache_misses": 1, "redis_calls": 1, "redis_ms": 1.0, "http_calls": 1, "http_ms": 90.0,
 			"dependencies": []DependencySummary{
 				{Kind: "http", Operation: "GET", Name: "api.hypixel.net/v2/player", Count: 1, TotalMs: 90, AvgMs: 90},
@@ -130,6 +132,15 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 	}
 	if len(report.CacheLatencyByEndpoint) != 2 {
 		t.Fatalf("CacheLatencyByEndpoint len = %d, want 2", len(report.CacheLatencyByEndpoint))
+	}
+	if report.CacheStats.ResponseRAMHits != 1 || report.CacheStats.ResponseRedisHits != 0 || report.CacheStats.ResponseCold != 1 {
+		t.Fatalf("response cache stats = ram:%d redis:%d cold:%d, want 1/0/1", report.CacheStats.ResponseRAMHits, report.CacheStats.ResponseRedisHits, report.CacheStats.ResponseCold)
+	}
+	if report.CacheStats.ResponseRAMHitRate != 50 || report.CacheStats.ResponseHitRate != 50 {
+		t.Fatalf("response hit rates = ram:%.1f total:%.1f, want 50/50", report.CacheStats.ResponseRAMHitRate, report.CacheStats.ResponseHitRate)
+	}
+	if len(report.ResponseCacheByEndpoint) != 1 || report.ResponseCacheByEndpoint[0].Endpoint != "stats" {
+		t.Fatalf("unexpected ResponseCacheByEndpoint: %+v", report.ResponseCacheByEndpoint)
 	}
 	if len(report.RepeatedDependencyCalls) != 1 {
 		t.Fatalf("RepeatedDependencyCalls len = %d, want 1", len(report.RepeatedDependencyCalls))
