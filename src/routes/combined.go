@@ -72,10 +72,6 @@ func CombinedHandler(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func computeCombined(uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
-	return computeCombinedContext(context.Background(), uuid, profileId, disabledPacks)
-}
-
 func computeCombinedContext(ctx context.Context, uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
 	var (
 		mowojang      *models.MowojangResponse

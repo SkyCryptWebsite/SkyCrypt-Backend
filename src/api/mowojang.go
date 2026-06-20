@@ -259,10 +259,6 @@ func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.Mowoj
 	return &post, nil
 }
 
-func getUUIDFromMojang(username string, shouldThrowError bool) (string, error) {
-	return getUUIDFromMojangContext(context.Background(), username, shouldThrowError)
-}
-
 func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowError bool) (string, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://api.mojang.com/users/profiles/minecraft/%s", username))
 	if err != nil {
@@ -317,10 +313,6 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 	return mojangResp.ID, nil
 }
 
-func getUsernameFromMojang(uuid string, shouldThrowError bool) (string, error) {
-	return getUsernameFromMojangContext(context.Background(), uuid, shouldThrowError)
-}
-
 func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
 	if err != nil {
@@ -370,10 +362,6 @@ func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowE
 	_ = redis.SetContext(ctx, fmt.Sprintf("username:%s", uuid), mojangResp.Name, 24*60*60)
 
 	return mojangResp.Name, nil
-}
-
-func resolvePlayerFromMojang(uuid string) (*models.MowojangResponse, error) {
-	return resolvePlayerFromMojangContext(context.Background(), uuid)
 }
 
 func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {

@@ -71,10 +71,6 @@ func SelectedProfileStatsHandler(c *fiber.Ctx) error {
 	return StatsHandler(c)
 }
 
-func computeStats(rawInput string, profileId string) (*models.StatsOutput, error) {
-	return computeStatsContext(context.Background(), rawInput, profileId)
-}
-
 func computeStatsContext(ctx context.Context, rawInput string, profileId string) (*models.StatsOutput, error) {
 	var mowojang *models.MowojangResponse
 	var err error
