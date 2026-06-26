@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/bob_omb"
-  },
-  "parent": "minecraft:item/handheld"
-}

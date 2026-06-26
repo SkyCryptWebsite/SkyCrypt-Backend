@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/bridge_egg"
-  },
-  "parent": "minecraft:item/generated"
-}

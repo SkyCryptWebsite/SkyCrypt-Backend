@@ -1,6 +1,0 @@
-{
-	"textures": {
-		"layer0": "cittofirmgenerated:item/auger_rod_cast"
-	},
-	"parent": "firmskyblock:item/auger_rod"
-}

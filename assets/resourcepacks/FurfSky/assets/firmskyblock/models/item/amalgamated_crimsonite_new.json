@@ -1,9 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/amalgamated_crimsonite"
-  },
-  "parent": "minecraft:item/handheld",
-  "firmament:tint_overrides": {
-        "0": -1
-    }
-}

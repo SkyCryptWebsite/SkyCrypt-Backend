@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/blood_donor_artifact"
-  },
-  "parent": "cittofirmgenerated:item/skyblock/item"
-}

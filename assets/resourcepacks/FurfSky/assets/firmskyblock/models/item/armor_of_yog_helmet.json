@@ -1,7 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/armor_of_yog_helmet",
-    "layer1": "cittofirmgenerated:item/armor_of_yog_helmet"
-  },
-  "parent": "cittofirmgenerated:item/skyblock/item"
-}

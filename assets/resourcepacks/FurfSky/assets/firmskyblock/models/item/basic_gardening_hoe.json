@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/basic_gardening_hoe"
-  },
-  "parent": "minecraft:item/handheld"
-}

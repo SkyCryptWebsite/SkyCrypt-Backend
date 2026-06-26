@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/thick_scorpion_foil"
-  },
-  "parent": "minecraft:item/handheld"
-}

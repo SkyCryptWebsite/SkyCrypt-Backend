@@ -1,6 +1,0 @@
-{
-  "textures": {
-    "layer0": "cittofirmgenerated:item/budget_hopper"
-  },
-  "parent": "minecraft:item/handheld"
-}

@@ -1,9 +1,0 @@
-{
-  "screen": "firmament:always",
-  "model": "cittofirmgenerated:ui/always/skin_decouple/diver_mask_helmet",
-  "predicate": {
-    "firmament:skull": {
-      "textureValue": "ewogICJ0aW1lc3RhbXAiIDogMTYwNTgzMzM4NTA4OSwKICAicHJvZmlsZUlkIiA6ICJmMjc0YzRkNjI1MDQ0ZTQxOGVmYmYwNmM3NWIyMDIxMyIsCiAgInByb2ZpbGVOYW1lIiA6ICJIeXBpZ3NlbCIsCiAgInNpZ25hdHVyZVJlcXVpcmVkIiA6IHRydWUsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS9kOGYxMWMyYjFlYjA1NjhjYWM2NGY5NzZlNTBlMGU0NWYzYzA5YTY1ODAxZTdlZDcyNzM0YjFhOTlmMTYwNmNhIgogICAgfQogIH0KfQ=="
-    }
-  }
-}
