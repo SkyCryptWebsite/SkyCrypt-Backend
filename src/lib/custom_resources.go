@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +30,9 @@ var ITEM_TEXTURE_CACHE = make(map[string]AppliedItemTexture)
 var itemTextureCacheMu sync.RWMutex
 var renderedSkyBlockIndex = make(map[string]struct{})
 var renderedSkyBlockIndexMu sync.RWMutex
+var renderedTextureIndexReloadMu sync.Mutex
+var renderedTextureIndexCacheDir string
+var renderedTextureIndexLastLazyReload time.Time
 var customResourcesOnce sync.Once
 var customResourcesErr error
 var resourcePackConfigsOnce sync.Once
@@ -41,6 +45,7 @@ var vanillaModelTextureCache sync.Map
 var vanillaItemExistsCache sync.Map
 
 var fallbackResourcePackIDs = []string{"FSR", "HYPIXEL_PLUS"}
+var renderedTextureIndexLazyReloadInterval = 5 * time.Second
 
 type AppliedItemTexture struct {
 	Texture     string
@@ -166,10 +171,7 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 		}
 		url := strings.TrimSpace(meta.URL)
 		author := strings.TrimSpace(meta.Author)
-		icon := strings.TrimSpace(meta.Icon)
-		if icon == "" {
-			icon = fmt.Sprintf("%s/assets/resourcepacks/%s/pack.webp", utility.GetDomain(), file.Name())
-		}
+		icon := resourcePackIconURL(file.Name(), meta.Icon)
 		priority := meta.Priority
 		if priority == 0 {
 			priority = defaultResourcePackPriority(id)
@@ -189,6 +191,35 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 
 	sortResourcePackConfigs(configs)
 	return configs, nil
+}
+
+func resourcePackIconURL(packDirName string, metaIcon string) string {
+	metaIcon = strings.TrimSpace(metaIcon)
+	if strings.HasPrefix(metaIcon, "http://") || strings.HasPrefix(metaIcon, "https://") {
+		return metaIcon
+	}
+	iconName := resourcePackIconFileName(metaIcon)
+	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, iconName)))
+}
+
+func escapePath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+func resourcePackIconFileName(icon string) string {
+	icon = strings.TrimSpace(icon)
+	if icon == "" {
+		return "pack.png"
+	}
+	iconName := filepath.Base(filepath.FromSlash(strings.TrimPrefix(icon, "/")))
+	if iconName == "." || iconName == string(filepath.Separator) || iconName == "" {
+		return "pack.png"
+	}
+	return iconName
 }
 
 func sortResourcePackConfigs(configs []models.ResourcePackConfig) {
@@ -296,6 +327,19 @@ func cachedTextureForStableKey(stableKey string, packSignature string, enabledPa
 		return AppliedItemTexture{}, false
 	}
 
+	if texture, ok := cachedTextureForStableKeyInMemory(stableKey, packSignature, enabledPackIDs, disabledPacks, legacyKeys...); ok {
+		return texture, true
+	}
+	if lazyReloadRenderedTextureIndex() {
+		if texture, ok := cachedTextureForStableKeyInMemory(stableKey, packSignature, enabledPackIDs, disabledPacks, legacyKeys...); ok {
+			return texture, true
+		}
+	}
+
+	return AppliedItemTexture{}, false
+}
+
+func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, enabledPackIDs []string, disabledPacks map[string]struct{}, legacyKeys ...string) (AppliedItemTexture, bool) {
 	seenKeys := map[string]struct{}{}
 	if texture, ok := cachedTextureByKeyOnce(textureCacheKey(packSignature, stableKey), disabledPacks, seenKeys); ok {
 		return texture, true
@@ -1382,6 +1426,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		}
 		cacheDir = filepath.Join(cwd, "cache")
 	}
+	rememberRenderedTextureIndexCacheDir(cacheDir)
 
 	renderedDir := filepath.Join(cacheDir, "rendered")
 	files, err := os.ReadDir(renderedDir)
@@ -1438,6 +1483,34 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	}
 
 	return loaded, nil
+}
+
+func rememberRenderedTextureIndexCacheDir(cacheDir string) {
+	cacheDir = strings.TrimSpace(cacheDir)
+	if cacheDir == "" {
+		return
+	}
+	renderedTextureIndexReloadMu.Lock()
+	renderedTextureIndexCacheDir = cacheDir
+	renderedTextureIndexReloadMu.Unlock()
+}
+
+func lazyReloadRenderedTextureIndex() bool {
+	renderedTextureIndexReloadMu.Lock()
+	now := time.Now()
+	if !renderedTextureIndexLastLazyReload.IsZero() && now.Sub(renderedTextureIndexLastLazyReload) < renderedTextureIndexLazyReloadInterval {
+		renderedTextureIndexReloadMu.Unlock()
+		return false
+	}
+	cacheDir := renderedTextureIndexCacheDir
+	renderedTextureIndexLastLazyReload = now
+	renderedTextureIndexReloadMu.Unlock()
+
+	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		return false
+	}
+	return loaded > 0
 }
 
 func debugFilenameIdentifier(value string) string {

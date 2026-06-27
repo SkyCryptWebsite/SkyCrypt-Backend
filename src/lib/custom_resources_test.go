@@ -9,6 +9,7 @@ import (
 	"skycrypt/src/utility"
 	"strings"
 	"testing"
+	"time"
 
 	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -113,6 +114,25 @@ func withRenderedSkyBlockIndex(t *testing.T, index map[string]struct{}) {
 	})
 }
 
+func withRenderedTextureIndexReloadState(t *testing.T) {
+	t.Helper()
+	renderedTextureIndexReloadMu.Lock()
+	previousDir := renderedTextureIndexCacheDir
+	previousLastReload := renderedTextureIndexLastLazyReload
+	previousInterval := renderedTextureIndexLazyReloadInterval
+	renderedTextureIndexCacheDir = ""
+	renderedTextureIndexLastLazyReload = time.Time{}
+	renderedTextureIndexReloadMu.Unlock()
+
+	t.Cleanup(func() {
+		renderedTextureIndexReloadMu.Lock()
+		renderedTextureIndexCacheDir = previousDir
+		renderedTextureIndexLastLazyReload = previousLastReload
+		renderedTextureIndexLazyReloadInterval = previousInterval
+		renderedTextureIndexReloadMu.Unlock()
+	})
+}
+
 func withRealRenderer(t *testing.T) {
 	t.Helper()
 
@@ -139,10 +159,14 @@ func withRealRenderer(t *testing.T) {
 }
 
 func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
-	root := t.TempDir()
+	appRoot := t.TempDir()
+	root := filepath.Join(appRoot, "assets", "resourcepacks")
+	if err := os.MkdirAll(root, 0755); err != nil {
+		t.Fatal(err)
+	}
 	packs := map[string]string{
 		"Low Pack":  `{"id":"low","name":"Low","url":"https://example.test/low","priority":10,"author":"Low Author"}`,
-		"High Pack": `{"id":"high","name":"High","url":"https://example.test/high","priority":100,"author":"High Author"}`,
+		"High Pack": `{"id":"high","name":"High","url":"https://example.test/high","icon":"/assets/resourcepacks/Wrong_Path/pack.png","priority":100,"author":"High Author"}`,
 		"Same Pack": `{"id":"same","name":"Same","url":"https://example.test/same","priority":100,"author":"Same Author"}`,
 		"Vanilla":   `{"id":"vanilla","name":"Vanilla","priority":1000}`,
 	}
@@ -155,7 +179,6 @@ func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
 	configs, err := loadResourcePackConfigs(root)
 	if err != nil {
 		t.Fatalf("loadResourcePackConfigs returned error: %v", err)
@@ -172,6 +195,32 @@ func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
 	if configs[0].Author != "High Author" || configs[0].Url != "https://example.test/high" {
 		t.Fatalf("config compatibility fields not populated: %#v", configs[0])
 	}
+	if configs[0].Icon != "/assets/resourcepacks/High%20Pack/pack.png" {
+		t.Fatalf("icon = %q, want escaped actual pack directory path", configs[0].Icon)
+	}
+}
+
+func TestLoadResourcePackConfigsDefaultsMissingIconToPackPNG(t *testing.T) {
+	appRoot := t.TempDir()
+	root := filepath.Join(appRoot, "assets", "resourcepacks")
+	packDir := filepath.Join(root, "No Icon Pack")
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, "meta.json"), []byte(`{"id":"NO_ICON","name":"No Icon","priority":1}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	configs, err := loadResourcePackConfigs(root)
+	if err != nil {
+		t.Fatalf("loadResourcePackConfigs returned error: %v", err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("len(configs) = %d, want 1", len(configs))
+	}
+	if configs[0].Icon != "/assets/resourcepacks/No%20Icon%20Pack/pack.png" {
+		t.Fatalf("icon = %q, want default pack.png asset path", configs[0].Icon)
+	}
 }
 
 func TestNormalizeDisabledPacksCanonicalizesInput(t *testing.T) {
@@ -186,6 +235,7 @@ func TestLoadRenderedTextureIndexPopulatesDefaultCacheWithoutRenderer(t *testing
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 	withRenderedSkyBlockIndex(t, map[string]struct{}{})
+	withRenderedTextureIndexReloadState(t)
 
 	cacheDir := t.TempDir()
 	renderedDir := filepath.Join(cacheDir, "rendered")
@@ -216,6 +266,7 @@ func TestLoadRenderedTextureIndexKeepsPerPackVariants(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 	withRenderedSkyBlockIndex(t, map[string]struct{}{})
+	withRenderedTextureIndexReloadState(t)
 
 	cacheDir := t.TempDir()
 	renderedDir := filepath.Join(cacheDir, "rendered")
@@ -248,6 +299,41 @@ func TestLoadRenderedTextureIndexKeepsPerPackVariants(t *testing.T) {
 	hplusTexture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "DUAL_INDEXED"}, NewTextureApplyContext([]string{"fsr"}))
 	if hplusTexture.TexturePack != "hplus" {
 		t.Fatalf("disabled fsr texture pack = %q, want hplus", hplusTexture.TexturePack)
+	}
+}
+
+func TestApplyTextureInputLazyReloadsRenderedIndexForNewPackFiles(t *testing.T) {
+	withNoRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+	withRenderedSkyBlockIndex(t, map[string]struct{}{})
+	withRenderedTextureIndexReloadState(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fsrFile := "skyblock=LAZY_PACK_INDEX__pack=FSR__hash=fsr.webp"
+	if err := os.WriteFile(filepath.Join(renderedDir, fsrFile), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatalf("LoadRenderedTextureIndex returned error: %v", err)
+	}
+	if loaded != 1 {
+		t.Fatalf("loaded = %d, want 1", loaded)
+	}
+
+	hplusFile := "skyblock=LAZY_PACK_INDEX__pack=HYPIXEL_PLUS__hash=hplus.webp"
+	if err := os.WriteFile(filepath.Join(renderedDir, hplusFile), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	texture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "LAZY_PACK_INDEX"}, NewTextureApplyContext([]string{"fsr"}))
+	want := testDomain() + "/cache/rendered/" + hplusFile
+	if texture.Texture != want || texture.TexturePack != "HYPIXEL_PLUS" {
+		t.Fatalf("ApplyTextureInput() = %#v, want texture %q pack HYPIXEL_PLUS", texture, want)
 	}
 }
 

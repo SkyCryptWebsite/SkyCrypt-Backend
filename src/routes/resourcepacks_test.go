@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"skycrypt/src/models"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -45,5 +46,16 @@ func TestResourcePackHandlerReturnsMetaBackedPacks(t *testing.T) {
 	}
 	if packs[0].Url == "" || packs[0].Author == "" {
 		t.Fatalf("resource pack fields missing: %#v", packs[0])
+	}
+	for _, pack := range packs {
+		if strings.Contains(pack.Icon, "FurSky_Reborn") || strings.Contains(pack.Icon, "Hypixel_Plus") {
+			t.Fatalf("pack %s returned invalid metadata icon path %q", pack.Id, pack.Icon)
+		}
+	}
+	if packs[0].Icon != "/assets/resourcepacks/FurSky%20Reborn/pack.png" {
+		t.Fatalf("fsr icon = %q, want corrected assets path", packs[0].Icon)
+	}
+	if packs[1].Icon != "/assets/resourcepacks/Hypixel%20Plus/pack.png" {
+		t.Fatalf("hplus icon = %q, want corrected assets path", packs[1].Icon)
 	}
 }
