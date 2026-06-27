@@ -1266,8 +1266,9 @@ func publicCacheTextureURL(texturePath string) string {
 }
 
 func preRenderSkyBlockItemIDs() []string {
+	skyblockItems := constants.ItemsSnapshot()
 	seen := map[string]struct{}{}
-	itemIDs := make([]string, 0, len(constants.ITEMS))
+	itemIDs := make([]string, 0, len(skyblockItems))
 
 	addID := func(id string) {
 		id = strings.TrimSpace(id)
@@ -1281,7 +1282,7 @@ func preRenderSkyBlockItemIDs() []string {
 		itemIDs = append(itemIDs, id)
 	}
 
-	for _, item := range constants.ITEMS {
+	for _, item := range skyblockItems {
 		addID(item.SkyblockID)
 	}
 
@@ -1866,7 +1867,8 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 			armorColor = fmt.Sprintf("%06X", input.DisplayColor)
 		}
 		if armorColor == "" && input.SkyBlockID != "" {
-			if defaultHexColor := constants.ITEMS[input.SkyBlockID].Color; defaultHexColor != "" {
+			if item, ok := constants.GetItem(input.SkyBlockID); ok && item.Color != "" {
+				defaultHexColor := item.Color
 				armorColor = defaultHexColor
 			}
 		}

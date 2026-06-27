@@ -79,8 +79,8 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 			color := fmt.Sprintf("%06X", item.Tag.Display.Color)
 			if item.Tag.ExtraAttributes.DyeItem == "" {
 				if !utility.IsArmorHexColorsEnabled() {
-					defaultHexColor := constants.ITEMS[item.Tag.ExtraAttributes.Id].Color
-					if defaultHexColor != "" {
+					if itemData, ok := constants.GetItem(item.Tag.ExtraAttributes.Id); ok && itemData.Color != "" {
+						defaultHexColor := itemData.Color
 						color = defaultHexColor
 					}
 				}
@@ -229,7 +229,9 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 
 		textureID := ""
 		if skyblockId != "" {
-			textureID = constants.ITEMS[skyblockId].TextureId
+			if itemData, ok := constants.GetItem(skyblockId); ok {
+				textureID = itemData.TextureId
+			}
 		}
 
 		appliedTexture := lib.ApplyTextureInput(lib.ItemTextureInput{
@@ -319,9 +321,14 @@ func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []m
 				}
 			}
 
+			rarity := ""
+			if itemData, ok := constants.GetItem(rawItemId); ok {
+				rarity = itemData.Rarity
+			}
+
 			items[i].ContainsItems = append(items[i].ContainsItems, models.ProcessedItem{
 				DisplayName: NEUItem.Name,
-				Rarity:      constants.ITEMS[rawItemId].Rarity,
+				Rarity:      rarity,
 				Texture:     itemTexture,
 				Lore:        lore,
 				Count:       &itemAmount,

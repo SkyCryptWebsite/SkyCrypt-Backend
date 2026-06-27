@@ -215,7 +215,7 @@ func LoadSkyBlockItems(fromCache bool) error {
 		return fmt.Errorf("failed to get SkyBlock items: %v", err)
 	}
 
-	constants.ITEMS = processItems(&items)
+	constants.SetItems(processItems(&items))
 
 	// fmt.Printf("[ITEMS] Loaded %d items in %s\n", len(constants.ITEMS), time.Since(timeNow))
 

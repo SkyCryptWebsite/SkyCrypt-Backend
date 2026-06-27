@@ -34,13 +34,13 @@ func (m *MuseumConstants) GetAllItems() []string {
 
 var priorityOrder = []string{"HAT", "HOOD", "HELMET", "CHESTPLATE", "TUNIC", "LEGGINGS", "TROUSERS", "SLIPPERS", "BOOTS", "NECKLACE", "CLOAK", "BELT", "GAUNTLET", "GLOVES"}
 
-func sortMuseumItems(items []string) {
+func sortMuseumItems(items []string, skyblockItems map[string]models.ProcessedHypixelItem) {
 	sort.Slice(items, func(i, j int) bool {
 		a := items[i]
 		b := items[j]
 
-		aItem, aOk := ITEMS[a]
-		bItem, bOk := ITEMS[b]
+		aItem, aOk := skyblockItems[a]
+		bItem, bOk := skyblockItems[b]
 		if !aOk || !bOk {
 			return false
 		}
@@ -67,6 +67,7 @@ func sortMuseumItems(items []string) {
 }
 
 func getMuseumItems() {
+	skyblockItems := ItemsSnapshot()
 	output := MuseumConstants{
 		Children:     make(map[string]string),
 		ArmorSets:    make(map[string][]string),
@@ -78,7 +79,7 @@ func getMuseumItems() {
 		output.Categories[cat] = []string{}
 	}
 
-	for _, item := range ITEMS {
+	for _, item := range skyblockItems {
 		if item.MuseumData == nil {
 			continue
 		}
@@ -99,7 +100,7 @@ func getMuseumItems() {
 
 			output.ArmorSets[armorSetId] = append(output.ArmorSets[armorSetId], item.SkyblockID)
 
-			sortMuseumItems(output.ArmorSets[armorSetId])
+			sortMuseumItems(output.ArmorSets[armorSetId], skyblockItems)
 
 			output.ArmorSetToId[armorSetId] = output.ArmorSets[armorSetId][0]
 

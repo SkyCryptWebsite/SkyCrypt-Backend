@@ -202,7 +202,7 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 	upgrades := make([]models.ProcessedItem, 0)
 	other := make([]models.ProcessedItem, 0)
 	for _, missingAccessory := range filteredMissing {
-		accessory := constants.ITEMS[missingAccessory.Id]
+		accessory, _ := constants.GetItem(missingAccessory.Id)
 		object := models.ProcessedItem{
 			Texture:     accessory.Texture,
 			DisplayName: accessory.Name,
@@ -250,8 +250,10 @@ func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices ma
 			// Custom Price (POWER_RELIC for example)
 			if (*accessories)[i].Id == "POWER_RELIC" && (*accessories)[i].Rarity == "legendary" {
 				price := 0.0
-				for _, slot := range constants.ITEMS["POWER_RELIC"].GemstoneSlots {
-					price += prices[fmt.Sprintf("PERFECT_%s_GEM", slot.SlotType)]
+				if powerRelic, ok := constants.GetItem("POWER_RELIC"); ok {
+					for _, slot := range powerRelic.GemstoneSlots {
+						price += prices[fmt.Sprintf("PERFECT_%s_GEM", slot.SlotType)]
+					}
 				}
 
 				(*accessories)[i].Lore = append((*accessories)[i].Lore, "", fmt.Sprintf("§7Price: §6%s Coins §7(§6%s§7 per MP)", utility.AddCommas(int(price)), utility.FormatNumber(price/float64(GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))))

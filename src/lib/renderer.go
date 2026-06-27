@@ -894,7 +894,7 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 
 	itemID = strings.TrimSpace(itemID)
 	skyblockID := strings.ToUpper(itemID)
-	itemData, isSkyBlockItem := constants.ITEMS[skyblockID]
+	itemData, isSkyBlockItem := constants.GetItem(skyblockID)
 	isSkyBlockItem = isSkyBlockItem && itemData.SkyblockID != ""
 
 	var customItem map[string]interface{}

@@ -49,7 +49,7 @@ var ACCESSORIES []models.ProcessedHypixelItem
 
 func getAccessories() {
 	var output []models.ProcessedHypixelItem
-	for _, item := range ITEMS {
+	for _, item := range ItemsSnapshot() {
 		if item.Category == "accessory" {
 			output = append(output, item)
 		}

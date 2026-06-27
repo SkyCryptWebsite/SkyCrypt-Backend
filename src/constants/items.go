@@ -1,6 +1,9 @@
 package constants
 
-import "skycrypt/src/models"
+import (
+	"skycrypt/src/models"
+	"sync"
+)
 
 var POTION_COLORS = map[int]string{
 	0:     "375cc4", // None
@@ -359,7 +362,36 @@ var ENCHANTMENT_LADDERS = map[string]EnchantmentLadder{
 	},
 }
 
+var itemsMu sync.RWMutex
 var ITEMS = map[string]models.ProcessedHypixelItem{}
+
+func SetItems(items map[string]models.ProcessedHypixelItem) {
+	itemsMu.Lock()
+	ITEMS = cloneItems(items)
+	itemsMu.Unlock()
+}
+
+func GetItem(id string) (models.ProcessedHypixelItem, bool) {
+	itemsMu.RLock()
+	item, ok := ITEMS[id]
+	itemsMu.RUnlock()
+	return item, ok
+}
+
+func ItemsSnapshot() map[string]models.ProcessedHypixelItem {
+	itemsMu.RLock()
+	items := cloneItems(ITEMS)
+	itemsMu.RUnlock()
+	return items
+}
+
+func cloneItems(items map[string]models.ProcessedHypixelItem) map[string]models.ProcessedHypixelItem {
+	cloned := make(map[string]models.ProcessedHypixelItem, len(items))
+	for id, item := range items {
+		cloned[id] = item
+	}
+	return cloned
+}
 
 var BLACKLISTED_HEX_ARMOR_PIECES = []string{
 	"VELVET_TOP_HAT",

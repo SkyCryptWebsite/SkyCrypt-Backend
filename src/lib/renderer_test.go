@@ -69,16 +69,16 @@ func withRenderItemGlobals(t *testing.T) {
 	t.Helper()
 
 	previousRenderer := SkyCryptRender
-	previousItems := constants.ITEMS
+	previousItems := constants.ItemsSnapshot()
 	previousCache := ITEM_TEXTURE_CACHE
 
 	SkyCryptRender = nil
-	constants.ITEMS = map[string]models.ProcessedHypixelItem{}
+	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	ITEM_TEXTURE_CACHE = map[string]AppliedItemTexture{}
 
 	t.Cleanup(func() {
 		SkyCryptRender = previousRenderer
-		constants.ITEMS = previousItems
+		constants.SetItems(previousItems)
 		ITEM_TEXTURE_CACHE = previousCache
 	})
 }
@@ -86,11 +86,13 @@ func withRenderItemGlobals(t *testing.T) {
 func TestRenderItemHandlesKnownSkyBlockItem(t *testing.T) {
 	withRenderItemGlobals(t)
 
-	constants.ITEMS["TEST_SKYBLOCK_ITEM"] = models.ProcessedHypixelItem{
-		SkyblockID: "TEST_SKYBLOCK_ITEM",
-		Material:   "APPLE",
-		ItemId:     constants.BUKKIT_TO_ID["APPLE"],
-	}
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"TEST_SKYBLOCK_ITEM": {
+			SkyblockID: "TEST_SKYBLOCK_ITEM",
+			Material:   "APPLE",
+			ItemId:     constants.BUKKIT_TO_ID["APPLE"],
+		},
+	})
 	ITEM_TEXTURE_CACHE["TEST_SKYBLOCK_ITEM"] = AppliedItemTexture{
 		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png",
 	}
