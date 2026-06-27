@@ -16,6 +16,8 @@ func disabledPacksFromRequest(c *fiber.Ctx) []string {
 		var parsedPacks []string
 		if err := json.Unmarshal([]byte(disabledPacksCookie), &parsedPacks); err == nil {
 			disabledPacks = append(disabledPacks, parsedPacks...)
+		} else {
+			disabledPacks = append(disabledPacks, strings.Split(disabledPacksCookie, ",")...)
 		}
 	} else if os.Getenv("DEV") == "true" {
 		if disabledResourcePacks := c.Query("disabledPacks", ""); disabledResourcePacks != "" {
