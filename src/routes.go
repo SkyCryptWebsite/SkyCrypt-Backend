@@ -8,6 +8,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
+	"skycrypt/src/lib"
 	"skycrypt/src/routes"
 	"skycrypt/src/utility"
 	"time"
@@ -80,6 +81,12 @@ func SetupApplication() error {
 		}
 
 		go func() {
+			if err := lib.StartCustomResources(); err != nil {
+				log.Printf("failed to start custom resources: %v", err)
+			}
+		}()
+
+		go func() {
 			_, err := skyhelpernetworthgo.GetPrices(true, 0, 0)
 			if err != nil {
 				log.Printf("error fetching SkyHelper prices: %v", err)
@@ -113,6 +120,16 @@ func SetupApplication() error {
 		if err := notenoughupdates.ParseNEURepository(); err != nil {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
+
+		if _, err := lib.LoadRenderedTextureIndex(""); err != nil {
+			log.Printf("failed to load custom resource index: %v", err)
+		}
+
+		go func() {
+			if err := lib.StartCustomResources(); err != nil {
+				log.Printf("failed to start custom resources: %v", err)
+			}
+		}()
 	}
 
 	return nil
@@ -125,6 +142,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// Assets folder
 	app.Static("/assets", "assets")
+	app.Static("/cache", "cache")
 
 	if os.Getenv("DEV") != "true" {
 		if os.Getenv("FIBER_PREFORK_CHILD") == "" {

@@ -128,7 +128,10 @@ func GetCollectionsContext(ctx context.Context, userProfile *skycrypttypes.Membe
 		memberIDs = append(memberIDs, memberId)
 	}
 	usernames := api.GetUsernamesContext(ctx, memberIDs)
+	return getCollectionsWithUsernames(userProfile, profile, usernames)
+}
 
+func getCollectionsWithUsernames(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, usernames map[string]string) *models.CollectionsOutput {
 	output := &models.CollectionsOutput{
 		Categories: map[string]models.CollectionCategory{},
 	}
@@ -150,8 +153,12 @@ func GetCollectionsContext(ctx context.Context, userProfile *skycrypttypes.Membe
 				memberAmount := memberData.Collections[itemData.Id]
 				totalAmount += memberAmount
 				if memberAmount > 0 {
+					username := usernames[memberId]
+					if username == "" {
+						username = "Unknown"
+					}
 					amounts = append(amounts, models.CollectionCategoryItemAmount{
-						Username: usernames[memberId],
+						Username: username,
 						Amount:   memberAmount,
 					})
 				}

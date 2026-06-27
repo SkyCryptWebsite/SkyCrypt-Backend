@@ -3,6 +3,7 @@ module skycrypt
 go 1.26.4
 
 require (
+	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.1.30
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.20
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18
 	github.com/gofiber/fiber/v2 v2.52.13
@@ -16,8 +17,10 @@ require (
 
 // replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
 // replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
+// replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ./third_party/SkyCrypt-Backend-Renderer
 
 require (
+	github.com/HugoSmits86/nativewebp v1.3.0 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
 	github.com/bytedance/sonic v1.15.1 // indirect
@@ -54,6 +57,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.27.0 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/image v0.39.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

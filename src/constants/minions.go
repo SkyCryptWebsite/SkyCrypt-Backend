@@ -114,7 +114,7 @@ var MINION_CATEGORY_ICONS = map[string]string{
 	"farming":  "/api/item/GOLD_HOE",
 	"mining":   "/api/item/STONE_PICKAXE",
 	"combat":   "/api/item/STONE_SWORD",
-	"foraging": "/api/item/SAPLING:3",
+	"foraging": "/api/item/JUNGLE_SAPLING",
 	"fishing":  "/api/item/FISHING_ROD",
 }
 

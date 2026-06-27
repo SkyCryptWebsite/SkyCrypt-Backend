@@ -366,7 +366,7 @@ var MUSEUM_INVENTORY_ITEM_SLOTS = []int{10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 
 var MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE = models.ProcessedItem{
 	DisplayName: "Missing Item",
 	Rarity:      "special",
-	Texture:     "/api/item/INK_SACK:8",
+	Texture:     "/api/item/GRAY_DYE",
 	Lore: []string{
 		"§7Click on this item in your",
 		"§7inventory to add it to your",
@@ -377,7 +377,7 @@ var MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE = models.ProcessedItem{
 var MUSEUM_INVENTORY_MISSING_ARMOR_SET_TEMPLATE = models.ProcessedItem{
 	DisplayName: "Missing Armor Set",
 	Rarity:      "special",
-	Texture:     "/api/item/INK_SACK:8",
+	Texture:     "/api/item/GRAY_DYE",
 	Lore: []string{
 		"§7Click on an armor piece in your",
 		"§7inventory that belongs to this",
@@ -388,7 +388,7 @@ var MUSEUM_INVENTORY_MISSING_ARMOR_SET_TEMPLATE = models.ProcessedItem{
 
 var MUSEUM_INVENTORY_HIGHER_TIER_DONATED_TEMPLATE = models.ProcessedItem{
 	DisplayName: "Higher Tier Donated",
-	Texture:     "/api/item/INK_SACK:10",
+	Texture:     "/api/item/GREEN_DYE",
 	Rarity:      "special",
 	Lore: []string{
 		"§7Donated as higher tier",

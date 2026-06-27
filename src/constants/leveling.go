@@ -96,7 +96,7 @@ var SKILL_ICONS = map[string]string{
 	"runecrafting":   "/api/item/MAGMA_CREAM",
 	"taming":         "/api/item/GHAST_SPAWN_EGG",
 	"mining":         "/api/item/STONE_PICKAXE",
-	"foraging":       "/api/item/SAPLING:3",
+	"foraging":       "/api/item/JUNGLE_SAPLING",
 	"enchanting":     "/api/item/ENCHANTING_TABLE",
 	"carpentry":      "/api/item/CRAFTING_TABLE",
 	"social":         "/api/item/EMERALD",

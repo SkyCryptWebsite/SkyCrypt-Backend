@@ -17,17 +17,18 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
-	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strconv"
 	"strings"
 	"sync"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -810,89 +811,187 @@ func (e RedirectError) Error() string {
 	return "redirect:" + e.URL
 }
 
-func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool) ([]byte, error) {
-	damage := 0
-	if strings.Contains(itemID, ":") {
-		splitId := strings.Split(itemID, ":")
-		itemID = splitId[0]
-		parsedDmg, err := utility.ParseInt(splitId[1])
-		if err == nil {
-			damage = parsedDmg
+func localStaticTexturePath(texture string) (string, bool, error) {
+	parsedTexture, err := url.Parse(strings.TrimSpace(texture))
+	if err != nil {
+		return "", false, fmt.Errorf("failed to parse texture path %q: %w", texture, err)
+	}
+	if parsedTexture.IsAbs() && parsedTexture.Host != "" {
+		localDomain, err := url.Parse(utility.GetDomain())
+		if err != nil {
+			return "", false, fmt.Errorf("failed to parse local domain %q: %w", utility.GetDomain(), err)
+		}
+		if localDomain.Host != "" && !strings.EqualFold(parsedTexture.Host, localDomain.Host) {
+			return "", false, nil
 		}
 	}
 
-	itemData := constants.ITEMS[strings.ToUpper(itemID)]
-	TextureItem := models.TextureItem{
-		Damage: &itemData.Damage,
-		ID:     &itemData.ItemId,
-		Tag: skycrypttypes.TextureItemExtraAttributes{
-			ExtraAttributes: map[string]interface{}{
-				"id": itemData.SkyblockID,
-			},
-		},
-		RawId:   itemID,
-		Texture: itemData.TextureId,
+	texturePath := parsedTexture.Path
+	if texturePath == "" {
+		texturePath = texture
+	}
+	texturePath = filepath.ToSlash(texturePath)
+	pathIsFilesystemAbsolute := !parsedTexture.IsAbs() && filepath.IsAbs(filepath.FromSlash(texturePath))
+
+	for _, root := range []string{"cache", "assets"} {
+		localPath, keepAbsolute := staticPathFromRoot(texturePath, root, pathIsFilesystemAbsolute)
+		if localPath == "" {
+			continue
+		}
+
+		if keepAbsolute {
+			return filepath.Clean(filepath.FromSlash(texturePath)), true, nil
+		}
+
+		appRoot, err := appRootDir()
+		if err != nil {
+			return "", false, err
+		}
+
+		return filepath.Join(appRoot, filepath.FromSlash(localPath)), true, nil
 	}
 
-	if damage != 0 {
-		TextureItem.Damage = &damage
+	return "", false, nil
+}
+
+func staticPathFromRoot(texturePath string, root string, pathIsFilesystemAbsolute bool) (string, bool) {
+	rootPath := "/" + root
+	normalizedPath := path.Clean("/" + strings.TrimLeft(texturePath, "/"))
+	if normalizedPath == rootPath || strings.HasPrefix(normalizedPath, rootPath+"/") {
+		return strings.TrimPrefix(normalizedPath, "/"), false
 	}
 
-	appliedTexure := ApplyTexture(TextureItem, disabledPacks)
+	rootSegment := "/" + root + "/"
+	rootIndex := strings.Index(normalizedPath, rootSegment)
+	if rootIndex < 0 {
+		return "", false
+	}
+
+	candidatePath := path.Clean("/" + normalizedPath[rootIndex+1:])
+	if candidatePath == rootPath || strings.HasPrefix(candidatePath, rootPath+"/") {
+		return strings.TrimPrefix(candidatePath, "/"), pathIsFilesystemAbsolute
+	}
+
+	return "", false
+}
+
+func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool) ([]byte, error) {
+	damage := 0
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return nil, fmt.Errorf("couldn't find the texture")
+	}
+
+	if !strings.HasPrefix(strings.ToLower(itemID), "minecraft:") {
+		if splitIndex := strings.LastIndex(itemID, ":"); splitIndex > 0 && splitIndex < len(itemID)-1 {
+			parsedDmg, err := utility.ParseInt(itemID[splitIndex+1:])
+			if err == nil {
+				itemID = itemID[:splitIndex]
+				damage = parsedDmg
+			}
+		}
+	}
+
+	itemID = strings.TrimSpace(itemID)
+	skyblockID := strings.ToUpper(itemID)
+	itemData, isSkyBlockItem := constants.ITEMS[skyblockID]
+	isSkyBlockItem = isSkyBlockItem && itemData.SkyblockID != ""
+
+	var customItem map[string]interface{}
+	if isSkyBlockItem {
+		itemDamage := itemData.Damage
+		if damage != 0 {
+			itemDamage = damage
+		}
+
+		tag := any(map[string]any{"ExtraAttributes": map[string]any{"id": itemData.SkyblockID}})
+		itemModel := ""
+		if neuItem, err := notenoughupdates.GetItem(itemData.SkyblockID); err == nil {
+			tag = neuItem.NBT.ToMap()
+			itemModel = strings.TrimSpace(neuItem.NBT.ItemModel)
+		}
+
+		vanillaItemId := constants.GetVanillaItemId(constants.ItemModel{
+			NumericId:  itemData.ItemId,
+			ItemDamage: itemDamage,
+		})
+		if itemModel != "" {
+			vanillaItemId = strings.TrimPrefix(strings.ToLower(itemModel), "minecraft:")
+		}
+		if vanillaItemId == "" {
+			vanillaItemId = strings.ToLower(itemData.Material)
+		}
+
+		customItem = map[string]interface{}{
+			"id":          fmt.Sprintf("minecraft:%s", vanillaItemId),
+			"tag":         tag,
+			"damage":      itemDamage,
+			"item_id":     itemData.ItemId,
+			"texture":     itemData.TextureId,
+			"skyblock_id": itemData.SkyblockID,
+		}
+		if itemModel != "" {
+			customItem["ItemModel"] = itemModel
+		}
+	} else {
+		vanillaID := strings.TrimPrefix(strings.ToLower(itemID), "minecraft:")
+		if vanillaID == "" {
+			return nil, fmt.Errorf("couldn't find the texture")
+		}
+
+		numericID := constants.BUKKIT_TO_ID[strings.ToUpper(vanillaID)]
+		if numericID != 0 {
+			mappedID := constants.GetVanillaItemId(constants.ItemModel{
+				NumericId:  numericID,
+				ItemDamage: damage,
+				ItemId:     vanillaID,
+			})
+			if mappedID != "" {
+				vanillaID = mappedID
+			}
+		} else if !vanillaItemResourceExists(vanillaID) {
+			return nil, fmt.Errorf("couldn't find the texture")
+		}
+
+		customItem = map[string]interface{}{
+			"id":      fmt.Sprintf("minecraft:%s", vanillaID),
+			"tag":     map[string]any{"ExtraAttributes": map[string]any{"id": ""}},
+			"damage":  damage,
+			"item_id": numericID,
+		}
+	}
+
+	appliedTexure := ApplyTexture(customItem, disabledPacks)
 	if appliedTexure.Texture == "" {
 		return nil, fmt.Errorf("couldn't find the texture")
 	}
 
-	if !returnBarrierIfNone && strings.HasSuffix(appliedTexure.Texture, "/Vanilla/assets/firmskyblock/models/item/barrier.png") {
+	if !returnBarrierIfNone && strings.HasSuffix(appliedTexure.Texture, "/barrier.png") {
 		return nil, fmt.Errorf("couldn't find the texture")
 	}
 
-	// If output is a redirect path (starts with /api/), return redirect error
-	if strings.HasPrefix(appliedTexure.Texture, "/api/") {
+	// if It's API just redirect to the API
+	if strings.Contains(appliedTexure.Texture, "/api/") {
 		return nil, RedirectError{URL: appliedTexure.Texture}
 	}
 
-	// If output is a localhost asset, read from disk (performance optimization)
-	if strings.Contains(appliedTexure.Texture, "/assets/") && !strings.Contains(appliedTexure.Texture, "/api/") {
-		assetsIdx := strings.Index(appliedTexure.Texture, "/assets/")
-		if assetsIdx != -1 {
-			localPath := appliedTexure.Texture[assetsIdx+1:] // skip the leading slash
-			if _, err := os.Stat(localPath); err == nil {
-				data, err := os.ReadFile(localPath)
-				if err != nil {
-					return nil, fmt.Errorf("error reading local asset: %v", err)
-				}
-				return data, nil
-			} else {
-				return nil, fmt.Errorf("local asset not found: %s", localPath)
-			}
+	// Static textures are served from local assets/cache, so return bytes directly.
+	if strings.Contains(appliedTexure.Texture, "cache/") || strings.Contains(appliedTexure.Texture, "assets/") {
+		texturePath, ok, err := localStaticTexturePath(appliedTexure.Texture)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, RedirectError{URL: appliedTexure.Texture}
 		}
 
-		return nil, fmt.Errorf("invalid localhost asset path: %s", appliedTexure.Texture)
+		textureBytes, err := os.ReadFile(texturePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read texture %s: %w", texturePath, err)
+		}
+
+		return textureBytes, nil
 	}
 
-	// Otherwise, fetch from the URL (this shouldn't ever happen but just as a fallback)
-	response, err := api.HTTPClient.Get(appliedTexure.Texture)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching item texture: %v", err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error fetching item texture: %v", err)
-	}
-
-	img, err := png.Decode(response.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding item texture: %v", err)
-	}
-
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		return nil, fmt.Errorf("error encoding item texture: %v", err)
-	}
-
-	return buf.Bytes(), nil
+	return nil, RedirectError{URL: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/barrier.png", utility.GetDomain())}
 }

@@ -3,7 +3,9 @@ package stats
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -109,7 +111,9 @@ func GetCombinedContext(
 	}
 
 	wardrobeSlice := make([]models.ProcessedItem, (maxWardrobeIndex+1)*4)
+	neuItemCache := map[string]models.NEUItem{}
 
+	timeNow := time.Now()
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
 		if invType == nil || len(invType.Items) == 0 {
@@ -125,7 +129,7 @@ func GetCombinedContext(
 			}
 		}
 
-		processed := statsItems.ProcessItems(buf, inventoryId, disabledPacks)
+		processed := statsItems.ProcessItemsWithNEUCache(buf, inventoryId, neuItemCache, disabledPacks)
 
 		if strings.HasPrefix(inventoryId, "wardrobe_") {
 			parts := strings.Split(inventoryId, "_")
@@ -148,25 +152,87 @@ func GetCombinedContext(
 
 	processedItems["wardrobe"] = wardrobeSlice
 
+	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), time.Since(timeNow), os.Getpid())
+
+	sectionsStart := time.Now()
+	sectionStart := time.Now()
+	gear := GetGear(processedItems, allItems)
+	gearDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	accessories := GetAccessories(userProfile, processedItems, disabledPacks)
+	accessoriesDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	pets := GetPets(userProfile, profile)
+	petsDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	mining := GetMining(userProfile, player, allItems)
+	foraging := GetForaging(userProfile, player, allItems)
+	farming := GetFarming(userProfile, allItems)
+	fishing := GetFishing(userProfile, allItems)
+	enchanting := GetEnchanting(userProfile)
+	hunting := GetAttributeShards(userProfile)
+	skillsDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	dungeons := GetDungeons(userProfile)
+	slayer := GetSlayers(userProfile)
+	minions := GetMinions(profile)
+	bestiary := GetBestiary(userProfile)
+	combatDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	collections := getCollectionsWithUsernames(userProfile, profile, memberUsernameMap(members))
+	collectionsDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	crimsonIsle := GetCrimsonIsle(userProfile)
+	rift := GetRift(userProfile, processedItems)
+	misc := GetMisc(userProfile, profile, player)
+	miscDuration := time.Since(sectionStart)
+
+	sectionsDuration := time.Since(sectionsStart)
+	if sectionsDuration > 50*time.Millisecond {
+		fmt.Printf(
+			"Combined sections in %v pid=%d gear=%v accessories=%v pets=%v skills=%v combat=%v collections=%v misc=%v\n",
+			sectionsDuration,
+			os.Getpid(),
+			gearDuration,
+			accessoriesDuration,
+			petsDuration,
+			skillsDuration,
+			combatDuration,
+			collectionsDuration,
+			miscDuration,
+		)
+	}
+
 	return &models.CombinedOutput{
-		Gear:        GetGear(processedItems, allItems),
-		Accessories: GetAccessories(userProfile, processedItems, disabledPacks),
-		Pets:        GetPets(userProfile, profile),
+		Gear:        gear,
+		Accessories: accessories,
+		Pets:        pets,
 		Skills: &models.SkillsOutput{
-			Mining:     GetMining(userProfile, player, allItems),
-			Foraging:   GetForaging(userProfile, player, allItems),
-			Farming:    GetFarming(userProfile, allItems),
-			Fishing:    GetFishing(userProfile, allItems),
-			Enchanting: GetEnchanting(userProfile),
-			Hunting:    GetAttributeShards(userProfile),
+			Mining:     mining,
+			Foraging:   foraging,
+			Farming:    farming,
+			Fishing:    fishing,
+			Enchanting: enchanting,
+			Hunting:    hunting,
 		},
-		Dungeons:    GetDungeons(userProfile),
-		Slayer:      GetSlayers(userProfile),
-		Minions:     GetMinions(profile),
-		Bestiary:    GetBestiary(userProfile),
-		Collections: GetCollectionsContext(ctx, userProfile, profile),
-		CrimsonIsle: GetCrimsonIsle(userProfile),
-		Rift:        GetRift(userProfile, processedItems),
-		Misc:        GetMisc(userProfile, profile, player),
+		Dungeons:    dungeons,
+		Slayer:      slayer,
+		Minions:     minions,
+		Bestiary:    bestiary,
+		Collections: collections,
+		CrimsonIsle: crimsonIsle,
+		Rift:        rift,
+		Misc:        misc,
 	}, nil
+}
+
+func memberUsernameMap(members []*models.MemberStats) map[string]string {
+	usernames := make(map[string]string, len(members))
+	for _, member := range members {
+		if member == nil || member.UUID == "" || member.Name == "" {
+			continue
+		}
+		usernames[member.UUID] = member.Name
+	}
+	return usernames
 }

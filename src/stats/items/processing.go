@@ -16,9 +16,21 @@ import (
 )
 
 func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[]string) []models.ProcessedItem {
-	var processedItems []models.ProcessedItem
+	return ProcessItemsWithNEUCache(items, source, map[string]models.NEUItem{}, disabledPacks...)
+}
+
+func ProcessItemsWithNEUCache(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, disabledPacks ...[]string) []models.ProcessedItem {
+	if neuItemCache == nil {
+		neuItemCache = map[string]models.NEUItem{}
+	}
+	textureCtx := lib.NewTextureApplyContext(disabledPacks...)
+	return processItemsWithTextureContext(items, source, neuItemCache, textureCtx)
+}
+
+func processItemsWithTextureContext(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) []models.ProcessedItem {
+	processedItems := make([]models.ProcessedItem, 0, len(items))
 	for _, item := range items {
-		processedItem := ProcessItem(item, source, disabledPacks...)
+		processedItem := processItem(item, source, neuItemCache, textureCtx)
 		processedItem.ItemIndex = len(processedItems)
 
 		processedItems = append(processedItems, processedItem)
@@ -28,6 +40,10 @@ func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[
 }
 
 func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]string) models.ProcessedItem {
+	return processItem(item, source, map[string]models.NEUItem{}, lib.NewTextureApplyContext(disabledPacks...))
+}
+
+func processItem(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) models.ProcessedItem {
 	if item == nil || item.Tag == nil {
 		return models.ProcessedItem{}
 	}
@@ -132,8 +148,17 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 		}
 
 		// Wiki links
-		NEUItem, err := notenoughupdates.GetItem(item.Tag.ExtraAttributes.Id)
-		if err == nil && len(NEUItem.Wiki) > 0 {
+		NEUItem, ok := neuItemCache[item.Tag.ExtraAttributes.Id]
+		neuItemFound := ok
+		if !ok {
+			var err error
+			NEUItem, err = notenoughupdates.GetItem(item.Tag.ExtraAttributes.Id)
+			if err == nil {
+				neuItemCache[item.Tag.ExtraAttributes.Id] = NEUItem
+				neuItemFound = true
+			}
+		}
+		if neuItemFound && len(NEUItem.Wiki) > 0 {
 			if len(NEUItem.Wiki) == 1 {
 				if !strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
 					processedItem.Wiki = &NEUItem.Wiki[0]
@@ -149,14 +174,18 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 	}
 
 	// POTIONS
-	if *item.ID == 373 {
-		color := constants.POTION_COLORS[*item.Damage]
+	if item.ID != nil && *item.ID == 373 {
+		damage := 0
+		if item.Damage != nil {
+			damage = *item.Damage
+		}
+		color := constants.POTION_COLORS[damage]
 		if color == "" {
 			color = constants.POTION_COLORS[15] // Uncraftable potion
 		}
 
 		var potionType string
-		if *item.Damage&16384 != 0 {
+		if damage&16384 != 0 {
 			potionType = "splash"
 		} else {
 			potionType = "normal"
@@ -170,21 +199,57 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 	}
 
 	if processedItem.Texture == "" {
-		TextureItem := models.TextureItem{
-			Count:  item.Count,
-			Damage: item.Damage,
-			ID:     item.ID,
-			Tag:    item.Tag.ToMap(),
+		numericId := 0
+		if item.ID != nil {
+			numericId = *item.ID
 		}
 
-		appliedTexture := lib.ApplyTexture(TextureItem, disabledPacks...)
+		damage := 0
+		if item.Damage != nil {
+			damage = *item.Damage
+		}
+
+		itemId := constants.GetVanillaItemId(constants.ItemModel{
+			// ItemId:     item.Tag.ItemModel,
+			NumericId:  numericId,
+			ItemDamage: damage,
+		})
+		itemModel := ""
+		if item.Tag != nil {
+			itemModel = strings.TrimSpace(item.Tag.ItemModel)
+		}
+		if itemModel != "" {
+			itemId = strings.TrimPrefix(strings.ToLower(itemModel), "minecraft:")
+		}
+
+		skyblockId := ""
+		if item.Tag != nil && item.Tag.ExtraAttributes != nil {
+			skyblockId = item.Tag.ExtraAttributes.Id
+		}
+
+		textureID := ""
+		if skyblockId != "" {
+			textureID = constants.ITEMS[skyblockId].TextureId
+		}
+
+		appliedTexture := lib.ApplyTextureInput(lib.ItemTextureInput{
+			ID:           fmt.Sprintf("minecraft:%s", itemId),
+			ItemModel:    itemModel,
+			SkyBlockID:   skyblockId,
+			NumericID:    numericId,
+			Damage:       damage,
+			Texture:      textureID,
+			DisplayColor: item.Tag.Display.Color,
+			SkullOwner:   item.Tag.SkullOwner,
+			Tag:          item.Tag,
+		}, textureCtx)
 		processedItem.Texture = appliedTexture.Texture
 		if appliedTexture.TexturePack != "" {
 			processedItem.TexturePack = appliedTexture.TexturePack
 		}
 
 		if processedItem.Texture == "" {
-			fmt.Printf("[CUSTOM_RESOURCES] Found no textures for item: %s\n", item.Tag.ExtraAttributes.Id)
+			fmt.Printf("[CUSTOM_RESOURCES] Found no textures for item: %s\n", skyblockId)
 		}
 	}
 
@@ -200,7 +265,7 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 			processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Container Value: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(containerValue)), utility.FormatNumber(containerValue)))
 		}
 
-		processedItem.ContainsItems = ProcessItems(item.ContainsItems, source, disabledPacks...)
+		processedItem.ContainsItems = processItemsWithTextureContext(item.ContainsItems, source, neuItemCache, textureCtx)
 	}
 
 	if item.Price > 0 {

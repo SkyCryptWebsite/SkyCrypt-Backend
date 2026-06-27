@@ -1,0 +1,190 @@
+package assets
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type DirectoryResourceProvider struct {
+	RootPath string
+}
+
+func (p *DirectoryResourceProvider) FileExists(relativePath string) bool {
+	fullPath, err := p.toFullPath(relativePath)
+	if err != nil {
+		return false
+	}
+
+	info, err := os.Stat(fullPath)
+	return err == nil && !info.IsDir()
+}
+
+func (p *DirectoryResourceProvider) DirectoryExists(relativePath string) bool {
+	if strings.TrimSpace(relativePath) == "" {
+		info, err := os.Stat(p.RootPath)
+		return err == nil && info.IsDir()
+	}
+
+	fullPath, err := p.toFullPath(relativePath)
+	if err != nil {
+		return false
+	}
+
+	info, err := os.Stat(fullPath)
+	return err == nil && info.IsDir()
+}
+
+func (p *DirectoryResourceProvider) OpenRead(relativePath string) (io.ReadCloser, error) {
+	fullPath, err := p.toFullPath(relativePath)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, os.ErrNotExist
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("path is a directory: %q", relativePath)
+	}
+
+	return os.Open(fullPath)
+}
+
+func (p *DirectoryResourceProvider) EnumerateFiles(directory, searchPattern string, recursive bool) ([]string, error) {
+	fullDir, err := p.resolveDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(fullDir); err != nil {
+		return []string{}, nil
+	}
+
+	if searchPattern == "" {
+		searchPattern = "*"
+	}
+
+	var results []string
+
+	if recursive {
+		err = filepath.WalkDir(fullDir, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if ok, _ := filepath.Match(searchPattern, d.Name()); ok {
+				results = append(results, p.toRelativePath(path))
+			}
+			return nil
+		})
+		return results, err
+	}
+
+	entries, err := os.ReadDir(fullDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if ok, _ := filepath.Match(searchPattern, entry.Name()); ok {
+			results = append(results, p.toRelativePath(filepath.Join(fullDir, entry.Name())))
+		}
+	}
+
+	return results, nil
+}
+
+func (p *DirectoryResourceProvider) EnumerateDirectories(directory, searchPattern string, recursive bool) ([]string, error) {
+	fullDir, err := p.resolveDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(fullDir); err != nil {
+		return []string{}, nil
+	}
+
+	if searchPattern == "" {
+		searchPattern = "*"
+	}
+
+	var results []string
+
+	if recursive {
+		err = filepath.WalkDir(fullDir, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if !d.IsDir() || path == fullDir {
+				return nil
+			}
+			if ok, _ := filepath.Match(searchPattern, d.Name()); ok {
+				results = append(results, p.toRelativePath(path))
+			}
+			return nil
+		})
+		return results, err
+	}
+
+	entries, err := os.ReadDir(fullDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if ok, _ := filepath.Match(searchPattern, entry.Name()); ok {
+			results = append(results, p.toRelativePath(filepath.Join(fullDir, entry.Name())))
+		}
+	}
+
+	return results, nil
+}
+
+func (p *DirectoryResourceProvider) resolveDirectory(relativePath string) (string, error) {
+	if strings.TrimSpace(relativePath) == "" {
+		return p.RootPath, nil
+	}
+	return p.toFullPath(relativePath)
+}
+
+func (p *DirectoryResourceProvider) toFullPath(relativePath string) (string, error) {
+	if strings.TrimSpace(relativePath) == "" {
+		return p.RootPath, nil
+	}
+
+	normalized := filepath.FromSlash(relativePath)
+	combined := filepath.Join(p.RootPath, normalized)
+	fullPath, err := filepath.Abs(combined)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(p.RootPath, fullPath)
+	if err != nil {
+		return "", err
+	}
+
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q resolves outside provider root", relativePath)
+	}
+
+	return fullPath, nil
+}
+
+func (p *DirectoryResourceProvider) toRelativePath(absolutePath string) string {
+	rel, err := filepath.Rel(p.RootPath, absolutePath)
+	if err != nil {
+		return filepath.ToSlash(absolutePath)
+	}
+	return filepath.ToSlash(rel)
+}

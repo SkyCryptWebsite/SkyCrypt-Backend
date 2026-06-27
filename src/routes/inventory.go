@@ -195,7 +195,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	utility.LogVerbose("Returning /api/inventory/%s/%s in %s", uuid, profileId, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
 
 	// Cache the full inventory for search functionality
 	go func() {

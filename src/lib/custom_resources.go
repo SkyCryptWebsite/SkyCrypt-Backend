@@ -1,417 +1,1567 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
+	"runtime"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
-	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
-func GetTexturePath(texturePath string, textureString string) string {
-	textureId := textureString[strings.Index(textureString, "/")+1:]
-	formattedPath := ""
-	if texturePath == "Vanilla" {
-		formattedPath = fmt.Sprintf("resourcepacks/%s/assets/firmskyblock/models/item/%s", texturePath, textureId)
-	} else {
-		if after, ok := strings.CutPrefix(textureId, "firmskyblock:item"); ok {
-			textureId = after
-		}
+var ctx = context.Background()
 
-		formattedPath = fmt.Sprintf("resourcepacks/%s/assets/cittofirmgenerated/textures/item/%s.png", texturePath, textureId)
-	}
+var SkyCryptRender *mr.Renderer
 
-	return fmt.Sprintf("%s/assets/%s", utility.GetDomain(), formattedPath)
-}
+var ITEM_TEXTURE_CACHE = make(map[string]AppliedItemTexture)
+var itemTextureCacheMu sync.RWMutex
+var renderedSkyBlockIndex = make(map[string]struct{})
+var renderedSkyBlockIndexMu sync.RWMutex
+var customResourcesOnce sync.Once
+var customResourcesErr error
 
-var regexCache sync.Map
+var vanillaTextureCache sync.Map
+var vanillaAssetTextureCache sync.Map
+var vanillaModelTextureCache sync.Map
+var vanillaItemExistsCache sync.Map
 
-func matchString(pattern, s string) (bool, error) {
-	if cached, ok := regexCache.Load(pattern); ok {
-		return cached.(*regexp.Regexp).MatchString(s), nil
-	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return false, err
-	}
-	regexCache.Store(pattern, re)
-	return re.MatchString(s), nil
-}
-
-func GetTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
-	textures := ITEM_MAP[strings.ToLower(item.Tag.ExtraAttributes["id"].(string))]
-	if len(textures) == 0 {
-		return AppliedItemTexture{}
-	}
-
-	textures = slices.Clone(textures)
-
-	disabledPacks := disabledPacksParam[0]
-	for _, disabledPack := range disabledPacks {
-		textures = slices.DeleteFunc(textures, func(t models.ItemTexture) bool {
-			return t.ResourcePackId == disabledPack
-		})
-	}
-
-	if len(textures) == 0 {
-		return AppliedItemTexture{}
-	}
-
-	// First, check all overrides with 'firmament:all' predicate
-	var evalPredicate func(key string, value interface{}) bool
-	evalPredicate = func(key string, value interface{}) bool {
-		switch key {
-		case "firmament:display_name":
-			switch v := value.(type) {
-			case map[string]interface{}:
-				if regexVal, ok := v["regex"]; ok {
-					if regexStr, ok := regexVal.(string); ok {
-						matched, err := matchString(regexStr, item.Tag.Display.Name)
-						return err == nil && matched
-					}
-				}
-			case string:
-				return v == item.Tag.Display.Name
-			}
-		case "firmament:lore":
-			switch v := value.(type) {
-			case map[string]interface{}:
-				if regexVal, ok := v["regex"]; ok {
-					if regexStr, ok := regexVal.(string); ok {
-						for _, line := range item.Tag.Display.Lore {
-							matched, err := matchString(regexStr, line)
-							if err == nil && matched {
-								return true
-							}
-						}
-					}
-				}
-			case string:
-				for _, line := range item.Tag.Display.Lore {
-					if v == line {
-						return true
-					}
-				}
-			}
-			return false
-		case "firmament:extra_attributes":
-			if m, ok := value.(map[string]interface{}); ok {
-				if path, ok := m["path"].(string); ok {
-					attrVal, exists := item.Tag.ExtraAttributes[path]
-					if !exists {
-						return false
-					}
-
-					intVal, ok := attrVal.(int)
-					if !ok {
-						// Try float64 conversion (just in case)
-						if f, ok := attrVal.(float64); ok {
-							intVal = int(f)
-						} else {
-							return false
-						}
-					}
-
-					if intMap, ok := m["int"].(map[string]interface{}); ok {
-						if minVal, ok := intMap["min"].(float64); ok {
-							if intVal < int(minVal) {
-								return false
-							}
-						}
-					}
-					return true
-				}
-			}
-			return false
-		case "firmament:all":
-			// value is expected to be []interface{} of predicate maps
-			if arr, ok := value.([]interface{}); ok {
-				for _, sub := range arr {
-					if subMap, ok := sub.(map[string]interface{}); ok {
-						for k, v := range subMap {
-							if !evalPredicate(k, v) {
-								return false
-							}
-						}
-					} else {
-						return false
-					}
-				}
-				return true
-			}
-			return false
-		case "firmament:not":
-			// value is a predicate map or array of predicate maps
-			switch v := value.(type) {
-			case map[string]interface{}:
-				for k, val := range v {
-					if evalPredicate(k, val) {
-						return false
-					}
-				}
-				return true
-			case []interface{}:
-				for _, sub := range v {
-					if subMap, ok := sub.(map[string]interface{}); ok {
-						for k, val := range subMap {
-							if evalPredicate(k, val) {
-								return false
-							}
-						}
-					}
-				}
-				return true
-			}
-			return false
-		}
-		return false
-	}
-
-	for _, texture := range textures {
-		// For each override, all predicates must match (AND logic)
-		for i := len(texture.Overrides) - 1; i >= 0; i-- {
-			override := texture.Overrides[i]
-			allMatch := true
-			for k, v := range override.Predicate {
-				if k == "firmament:not" {
-					// firmament:not must be true for the override to match
-					if !evalPredicate(k, v) {
-						allMatch = false
-						break
-					}
-				} else {
-					if !evalPredicate(k, v) {
-						allMatch = false
-						break
-					}
-				}
-			}
-			if allMatch {
-				return AppliedItemTexture{
-					Texture:     override.Texture,
-					TexturePack: texture.ResourcePackId,
-				}
-			}
-		}
-
-		if tex, ok := texture.Textures["layer0"]; ok {
-			return AppliedItemTexture{
-				Texture:     tex,
-				TexturePack: texture.ResourcePackId,
-			}
-		}
-
-		for _, tex := range texture.Textures {
-			return AppliedItemTexture{
-				Texture:     tex,
-				TexturePack: texture.ResourcePackId,
-			}
-		}
-
-	}
-
-	return AppliedItemTexture{}
-}
-
-var VANILLA_ITEM_MAP = map[string]models.ItemTexture{}
-var ITEM_MAP = map[string][]models.ItemTexture{}
-
-func init() {
-	assetsRoot := "assets/resourcepacks"
-	packDirs, err := os.ReadDir(assetsRoot)
-	if err != nil {
-		fmt.Printf("Failed to read assets directory: %v\n", err)
-		return
-	}
-
-	for _, packDir := range packDirs {
-		if !packDir.IsDir() {
-			continue
-		}
-
-		packAssetsPath := filepath.Join(assetsRoot, packDir.Name(), "assets")
-		if _, err := os.Stat(packAssetsPath); os.IsNotExist(err) {
-			continue
-		}
-
-		configPath := filepath.Join(assetsRoot, packDir.Name(), "config.json")
-		if _, err := os.Stat(configPath); err != nil {
-			fmt.Printf("No config.json found for pack %s, skipping\n", packDir.Name())
-			continue
-		}
-
-		data, err := os.ReadFile(configPath)
-		if err != nil {
-			fmt.Printf("Failed to read config.json for pack %s: %v\n", packDir.Name(), err)
-		}
-
-		var config models.ResourcePackConfig
-		if err := json.Unmarshal(data, &config); err != nil {
-			fmt.Printf("Failed to parse config.json for pack %s: %v\n", packDir.Name(), err)
-		}
-
-		if config.Disabled {
-			fmt.Printf("Skipping disabled resource pack: %s\n", packDir.Name())
-			continue
-		}
-
-		_ = filepath.WalkDir(packAssetsPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-
-			if d.IsDir() {
-				return nil
-			}
-
-			if !strings.Contains(path, "/models/item/") {
-				return nil
-			}
-
-			if packDir.Name() != "Vanilla" {
-				if !strings.HasSuffix(path, ".json") {
-					return nil
-				}
-
-				data, err := os.ReadFile(path)
-				if err != nil {
-					fmt.Printf("Failed to read %s: %v\n", path, err)
-					return nil
-				}
-
-				model := models.ItemTexture{ResourcePackId: config.Id}
-				if err := json.Unmarshal(data, &model); err != nil {
-					fmt.Printf("Failed to parse %s: %v\n", path, err)
-					return nil
-				}
-
-				// Skip 3D models for now
-				if len(model.Elements) > 0 || model.HeadModel != "" {
-					return nil
-				}
-
-				fileName := filepath.Base(path)
-				itemName := fileName[:len(fileName)-len(filepath.Ext(fileName))]
-				if _, exists := ITEM_MAP[itemName]; !exists {
-					ITEM_MAP[itemName] = []models.ItemTexture{}
-				}
-
-				for i := range model.Overrides {
-					if model.Overrides[i].Texture != "" {
-						model.Overrides[i].Texture = GetTexturePath(packDir.Name(), model.Overrides[i].Texture)
-					}
-				}
-
-				for key, texture := range model.Textures {
-					if texture != "" {
-						model.Textures[key] = GetTexturePath(packDir.Name(), texture)
-					}
-				}
-
-				ITEM_MAP[itemName] = append(ITEM_MAP[itemName], model)
-				return nil
-			} else {
-				fileName := filepath.Base(path)
-				textureId := strings.Replace(fileName, ".webp", "", 1)
-
-				VANILLA_ITEM_MAP[textureId] = models.ItemTexture{
-					Parent:    "item/generated",
-					Textures:  map[string]string{"layer0": GetTexturePath(packDir.Name(), fileName)},
-					Overrides: []models.Override{},
-				}
-			}
-
-			return nil
-		})
-	}
-}
+var defaultResourcePackIDs = []string{"hplus", "fsr"}
+var defaultPackSignature = strings.Join(defaultResourcePackIDs, ",")
 
 type AppliedItemTexture struct {
 	Texture     string
 	TexturePack string
 }
 
-func ApplyTexture(item models.TextureItem, disabledPacksParam ...[]string) AppliedItemTexture {
-	// ? NOTE: we're ignoring enchanted books because they're quite expensive to render and not really worth the performance hit
-	if item.Tag.ExtraAttributes == nil || item.Tag.ExtraAttributes["id"] == "ENCHANTED_BOOK" {
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/enchanted_book.webp", utility.GetDomain())}
+type ItemTextureInput struct {
+	ID           string
+	ItemModel    string
+	SkyBlockID   string
+	NumericID    int
+	Damage       int
+	Texture      string
+	DisplayColor int
+	SkullOwner   *skycrypttypes.SkullOwner
+	Tag          any
+}
+
+type TextureApplyContext struct {
+	DisabledPacks  map[string]struct{}
+	EnabledPackIDs []string
+	PackSignature  string
+	Domain         string
+	Stats          *TextureApplyStats
+}
+
+type TextureApplyStats struct {
+	Total            int
+	CacheHits        int
+	RenderAttempts   int
+	RenderHits       int
+	RenderErrors     int
+	RenderDuration   time.Duration
+	SkullFallbacks   int
+	HeadFallbacks    int
+	LeatherFallbacks int
+	VanillaFallbacks int
+	BarrierFallbacks int
+}
+
+func NewTextureApplyContext(disabledPacksParam ...[]string) TextureApplyContext {
+	disabledPacks := disabledPackSet(disabledPacksParam...)
+	enabledPackIDs := enabledPackIDs(disabledPacks)
+	signature := strings.Join(enabledPackIDs, ",")
+	if signature == "" {
+		signature = "vanilla"
 	}
 
-	disabledPacks := []string{}
-	if len(disabledPacksParam) > 0 {
-		disabledPacks = disabledPacksParam[0]
+	return TextureApplyContext{
+		DisabledPacks:  disabledPacks,
+		EnabledPackIDs: enabledPackIDs,
+		PackSignature:  signature,
+		Domain:         utility.GetDomain(),
+		Stats:          &TextureApplyStats{},
+	}
+}
+
+func normalizeTextureApplyContext(textureCtx TextureApplyContext) TextureApplyContext {
+	if textureCtx.DisabledPacks == nil {
+		textureCtx.DisabledPacks = map[string]struct{}{}
+	}
+	if textureCtx.EnabledPackIDs == nil {
+		textureCtx.EnabledPackIDs = enabledPackIDs(textureCtx.DisabledPacks)
+	}
+	if textureCtx.PackSignature == "" {
+		if len(textureCtx.EnabledPackIDs) == 0 {
+			textureCtx.PackSignature = "vanilla"
+		} else {
+			textureCtx.PackSignature = strings.Join(textureCtx.EnabledPackIDs, ",")
+		}
+	}
+	if textureCtx.Domain == "" {
+		textureCtx.Domain = utility.GetDomain()
+	}
+	if textureCtx.Stats == nil {
+		textureCtx.Stats = &TextureApplyStats{}
+	}
+	return textureCtx
+}
+
+func cachedItemTexture(id string, disabledPacks map[string]struct{}) (AppliedItemTexture, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return AppliedItemTexture{}, false
 	}
 
-	customTexture := GetTexture(item, disabledPacks)
-	if customTexture.Texture != "" {
-		if !strings.Contains(customTexture.Texture, "Vanilla") && !strings.Contains(customTexture.Texture, "skull") {
-			return customTexture
+	packSignature := packSignatureFromDisabled(disabledPacks)
+	for _, key := range []string{
+		textureCacheKey(packSignature, "skyblock:"+id),
+		textureCacheKey(defaultPackSignature, "skyblock:"+id),
+		id,
+	} {
+		if texture, ok := cachedTextureByKey(key, disabledPacks); ok {
+			return texture, true
 		}
 	}
 
-	if item.Tag.SkullOwner != nil && len(item.Tag.SkullOwner.Properties.Textures) > 0 && item.Tag.SkullOwner.Properties.Textures[0].Value != "" {
-		skinHash := utility.GetSkinHash(item.Tag.SkullOwner.Properties.Textures[0].Value)
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), skinHash)}
+	return AppliedItemTexture{}, false
+}
+
+func cachedTextureByKey(key string, disabledPacks map[string]struct{}) (AppliedItemTexture, bool) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return AppliedItemTexture{}, false
 	}
 
-	// Preparsed texture from /api/item endpoint
-	if item.Texture != "" {
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), item.Texture)}
+	itemTextureCacheMu.RLock()
+	texture := ITEM_TEXTURE_CACHE[key]
+	itemTextureCacheMu.RUnlock()
+
+	if !validCachedTexture(texture, disabledPacks) {
+		return AppliedItemTexture{}, false
 	}
 
-	if *item.ID >= 298 && *item.ID <= 301 {
-		armorType := constants.ARMOR_TYPES[*item.ID-298]
+	return texture, true
+}
 
-		armorColor := fmt.Sprintf("%06X", item.Tag.Display.Color)
-		if item.Tag.Display.Color != 0 {
-			dyeItem, _ := item.Tag.ExtraAttributes["dye_item"].(string)
-			if dyeItem == "" {
-				if !utility.IsArmorHexColorsEnabled() {
-					idStr, ok := item.Tag.ExtraAttributes["id"].(string)
-					if ok {
-						defaultHexColor := constants.ITEMS[idStr].Color
-						if defaultHexColor != "" {
-							armorColor = defaultHexColor
-						}
-					}
+func setCachedItemTexture(id string, texture AppliedItemTexture) {
+	id = strings.TrimSpace(id)
+	if id == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
+		return
+	}
+
+	itemTextureCacheMu.Lock()
+	ITEM_TEXTURE_CACHE[id] = texture
+	ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, "skyblock:"+id)] = texture
+	itemTextureCacheMu.Unlock()
+	rememberRenderedSkyBlockID(id)
+}
+
+func setCachedTextureForStableKey(packSignature string, stableKey string, texture AppliedItemTexture) {
+	stableKey = strings.TrimSpace(stableKey)
+	if stableKey == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
+		return
+	}
+	packSignature = strings.TrimSpace(packSignature)
+	if packSignature == "" {
+		packSignature = defaultPackSignature
+	}
+
+	itemTextureCacheMu.Lock()
+	ITEM_TEXTURE_CACHE[textureCacheKey(packSignature, stableKey)] = texture
+	if packSignature == defaultPackSignature {
+		ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, stableKey)] = texture
+	}
+	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
+		ITEM_TEXTURE_CACHE[skyblockID] = texture
+		ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, stableKey)] = texture
+	}
+	itemTextureCacheMu.Unlock()
+
+	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
+		rememberRenderedSkyBlockID(skyblockID)
+	}
+}
+
+func itemTextureCacheLen() int {
+	itemTextureCacheMu.RLock()
+	length := len(ITEM_TEXTURE_CACHE)
+	itemTextureCacheMu.RUnlock()
+	return length
+}
+
+func cachedTextureFromRawMap(itemMap map[string]any, disabledPacks map[string]struct{}) (AppliedItemTexture, bool) {
+	if skyblockID := textureString(itemMap, "skyblock_id", "skyblockId", "SkyblockID"); skyblockID != "" {
+		if cachedTexture, ok := cachedItemTexture(skyblockID, disabledPacks); ok {
+			return cachedTexture, true
+		}
+	}
+
+	if id := normalizeMinecraftItemID(textureString(itemMap, "ItemModel", "item_model", "itemModel", "id", "ID")); id != "" {
+		if cachedTexture, ok := cachedItemTexture(strings.TrimPrefix(id, "minecraft:"), disabledPacks); ok {
+			return cachedTexture, true
+		}
+	}
+
+	return AppliedItemTexture{}, false
+}
+
+func barrierTextureURL() string {
+	return fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/barrier.png", utility.GetDomain())
+}
+
+func normalizeTextureItem(item any) (map[string]any, bool) {
+	if item == nil {
+		return nil, false
+	}
+
+	data, err := json.Marshal(item)
+	if err != nil {
+		return nil, false
+	}
+
+	var itemMap map[string]any
+	if err := json.Unmarshal(data, &itemMap); err != nil {
+		return nil, false
+	}
+	if len(itemMap) == 0 {
+		return nil, false
+	}
+
+	return itemMap, true
+}
+
+func textureValue(values map[string]any, keys ...string) (any, bool) {
+	if values == nil {
+		return nil, false
+	}
+
+	for _, key := range keys {
+		for actualKey, value := range values {
+			if strings.EqualFold(actualKey, key) {
+				return value, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+func textureMap(values map[string]any, keys ...string) (map[string]any, bool) {
+	value, ok := textureValue(values, keys...)
+	if !ok {
+		return nil, false
+	}
+
+	mapped, ok := value.(map[string]any)
+	return mapped, ok
+}
+
+func textureString(values map[string]any, keys ...string) string {
+	value, ok := textureValue(values, keys...)
+	if !ok || value == nil {
+		return ""
+	}
+
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case json.Number:
+		return strings.TrimSpace(typed.String())
+	case float64:
+		if typed == float64(int64(typed)) {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strings.TrimSpace(strconv.FormatFloat(typed, 'f', -1, 64))
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	default:
+		return strings.TrimSpace(fmt.Sprint(value))
+	}
+}
+
+func textureInt(values map[string]any, keys ...string) (int, bool) {
+	value, ok := textureValue(values, keys...)
+	if !ok || value == nil {
+		return 0, false
+	}
+
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case *int:
+		if typed != nil {
+			return *typed, true
+		}
+	case int8:
+		return int(typed), true
+	case *int8:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case int16:
+		return int(typed), true
+	case *int16:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case int32:
+		return int(typed), true
+	case *int32:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case int64:
+		return int(typed), true
+	case *int64:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case uint:
+		return int(typed), true
+	case *uint:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case uint8:
+		return int(typed), true
+	case *uint8:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case uint16:
+		return int(typed), true
+	case *uint16:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case uint32:
+		return int(typed), true
+	case *uint32:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case uint64:
+		return int(typed), true
+	case *uint64:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case float32:
+		return int(typed), true
+	case *float32:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case float64:
+		return int(typed), true
+	case *float64:
+		if typed != nil {
+			return int(*typed), true
+		}
+	case json.Number:
+		parsed, err := typed.Int64()
+		if err == nil {
+			return int(parsed), true
+		}
+	case *json.Number:
+		if typed != nil {
+			parsed, err := typed.Int64()
+			if err == nil {
+				return int(parsed), true
+			}
+		}
+	case string:
+		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err == nil {
+			return parsed, true
+		}
+	case *string:
+		if typed != nil {
+			parsed, err := strconv.Atoi(strings.TrimSpace(*typed))
+			if err == nil {
+				return parsed, true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+func numericString(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	_, err := strconv.Atoi(value)
+	return err == nil
+}
+
+func normalizeMinecraftItemID(id string) string {
+	id = strings.TrimSpace(strings.ToLower(id))
+	if id == "" {
+		return ""
+	}
+	if numericString(id) {
+		return ""
+	}
+	if !strings.Contains(id, ":") {
+		return "minecraft:" + id
+	}
+	return id
+}
+
+func itemModelFromItem(itemMap map[string]any) string {
+	if itemModel := normalizeMinecraftItemID(textureString(itemMap, "ItemModel", "item_model", "itemModel")); itemModel != "" {
+		return itemModel
+	}
+
+	tag, ok := textureMap(itemMap, "tag", "Tag")
+	if !ok {
+		return ""
+	}
+
+	return normalizeMinecraftItemID(textureString(tag, "ItemModel", "item_model", "itemModel"))
+}
+
+func explicitMinecraftItemIDFromItem(itemMap map[string]any) string {
+	if itemModel := itemModelFromItem(itemMap); itemModel != "" {
+		return itemModel
+	}
+	return normalizeMinecraftItemID(textureString(itemMap, "id", "ID"))
+}
+
+func shouldUseLegacyNumericFallback(id string) bool {
+	id = strings.TrimSpace(strings.ToLower(id))
+	if id == "" || id == "minecraft:" || id == "minecraft:air" {
+		return true
+	}
+	id = strings.TrimPrefix(id, "minecraft:")
+	return numericString(id) || !vanillaItemResourceExists(id)
+}
+
+func disabledPackSet(disabledPacksParam ...[]string) map[string]struct{} {
+	disabledPacks := map[string]struct{}{}
+	if len(disabledPacksParam) == 0 {
+		return disabledPacks
+	}
+
+	for _, pack := range disabledPacksParam[0] {
+		pack = strings.TrimSpace(pack)
+		if pack == "" {
+			continue
+		}
+		disabledPacks[pack] = struct{}{}
+	}
+
+	return disabledPacks
+}
+
+func enabledPackIDs(disabledPacks map[string]struct{}) []string {
+	enabled := make([]string, 0, len(defaultResourcePackIDs))
+	for _, packID := range defaultResourcePackIDs {
+		if _, disabled := disabledPacks[packID]; disabled {
+			continue
+		}
+		enabled = append(enabled, packID)
+	}
+	return enabled
+}
+
+func packSignatureFromDisabled(disabledPacks map[string]struct{}) string {
+	enabled := enabledPackIDs(disabledPacks)
+	if len(enabled) == 0 {
+		return "vanilla"
+	}
+	return strings.Join(enabled, ",")
+}
+
+func textureCacheKey(packSignature string, stableKey string) string {
+	packSignature = strings.TrimSpace(packSignature)
+	if packSignature == "" {
+		packSignature = defaultPackSignature
+	}
+	return packSignature + "|" + stableKey
+}
+
+func texturePackDisabled(texturePack string, disabledPacks map[string]struct{}) bool {
+	if strings.TrimSpace(texturePack) == "" {
+		return false
+	}
+
+	_, disabled := disabledPacks[texturePack]
+	return disabled
+}
+
+func validCachedTexture(texture AppliedItemTexture, disabledPacks map[string]struct{}) bool {
+	return texture.Texture != "" && !texturePackDisabled(texture.TexturePack, disabledPacks) && !isStaleVanillaChestParticleRender(texture.Texture)
+}
+
+func isStaleVanillaChestParticleRender(texture string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(texture))
+	if normalized == "" || !strings.Contains(normalized, "/cache/rendered/") {
+		return false
+	}
+
+	staleMarkers := []string{
+		"model=minecraft_item_chest__tex1=minecraft_block_oak_planks",
+		"model=minecraft_item_ender_chest__tex1=minecraft_block_obsidian",
+		"model=minecraft_item_trapped_chest__tex1=minecraft_block_oak_planks",
+	}
+	for _, marker := range staleMarkers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func rememberRenderedSkyBlockID(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	renderedSkyBlockIndexMu.Lock()
+	renderedSkyBlockIndex[id] = struct{}{}
+	renderedSkyBlockIndexMu.Unlock()
+}
+
+func renderedSkyBlockIDKnown(id string) bool {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return false
+	}
+	renderedSkyBlockIndexMu.RLock()
+	_, ok := renderedSkyBlockIndex[id]
+	renderedSkyBlockIndexMu.RUnlock()
+	if ok {
+		return true
+	}
+	_, ok = cachedTextureByKey(textureCacheKey(defaultPackSignature, "skyblock:"+id), nil)
+	return ok
+}
+
+func skyblockIDFromItem(itemMap map[string]any) string {
+	if skyblockID := textureString(itemMap, "skyblock_id", "skyblockId", "SkyblockID"); skyblockID != "" {
+		return skyblockID
+	}
+
+	tag, ok := textureMap(itemMap, "tag", "Tag")
+	if !ok {
+		return ""
+	}
+
+	extraAttributes, ok := textureMap(tag, "ExtraAttributes", "extraAttributes", "extra_attributes")
+	if !ok {
+		return ""
+	}
+
+	return textureString(extraAttributes, "id", "Id", "ID")
+}
+
+func vanillaRenderItem(itemMap map[string]any, id string) map[string]any {
+	vanillaItem, ok := normalizeTextureItem(itemMap)
+	if !ok {
+		return nil
+	}
+
+	vanillaItem["id"] = id
+	vanillaItem["skyblock_id"] = ""
+	vanillaItem["skyblockId"] = ""
+	vanillaItem["SkyblockID"] = ""
+
+	tag, ok := textureMap(vanillaItem, "tag", "Tag")
+	if !ok {
+		return vanillaItem
+	}
+
+	extraAttributes, ok := textureMap(tag, "ExtraAttributes", "extraAttributes", "extra_attributes")
+	if ok {
+		extraAttributes["id"] = ""
+		extraAttributes["Id"] = ""
+		extraAttributes["ID"] = ""
+	}
+
+	return vanillaItem
+}
+
+func skullTextureHashFromItem(itemMap map[string]any) string {
+	if hash := skullTextureHashFromValues(itemMap); hash != "" {
+		return hash
+	}
+
+	tag, ok := textureMap(itemMap, "tag", "Tag")
+	if !ok {
+		return ""
+	}
+
+	return skullTextureHashFromValues(tag)
+}
+
+func skullTextureHashFromValues(values map[string]any) string {
+	skullOwner, ok := textureMap(values, "SkullOwner", "skullOwner", "skull_owner")
+	if !ok {
+		return ""
+	}
+
+	properties, ok := textureMap(skullOwner, "Properties", "properties")
+	if !ok {
+		return ""
+	}
+
+	texturesValue, ok := textureValue(properties, "textures", "Textures")
+	if !ok {
+		return ""
+	}
+
+	textures, ok := texturesValue.([]any)
+	if !ok || len(textures) == 0 {
+		return ""
+	}
+
+	textureEntry, ok := textures[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+
+	value := textureString(textureEntry, "Value", "value")
+	if value == "" {
+		return ""
+	}
+
+	return utility.GetSkinHash(value)
+}
+
+func headTextureURL(texture string) AppliedItemTexture {
+	texture = strings.TrimSpace(texture)
+	if texture == "" {
+		return AppliedItemTexture{}
+	}
+
+	if skinHash := utility.GetSkinHash(texture); skinHash != "" {
+		texture = skinHash
+	}
+
+	return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), texture)}
+}
+
+func displayColorFromItem(itemMap map[string]any) string {
+	tag, ok := textureMap(itemMap, "tag", "Tag")
+	if !ok {
+		return ""
+	}
+
+	display, ok := textureMap(tag, "display", "Display")
+	if !ok {
+		return ""
+	}
+
+	color, ok := textureInt(display, "color", "Color")
+	if !ok || color == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("%06X", color)
+}
+
+func vanillaTextureURL(id string) AppliedItemTexture {
+	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	if id == "" {
+		return AppliedItemTexture{}
+	}
+	if cached, ok := vanillaTextureCache.Load(id); ok {
+		return cached.(AppliedItemTexture)
+	}
+
+	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/%s.png", id)
+	appRoot, err := appRootDir()
+	if err != nil {
+		return AppliedItemTexture{}
+	}
+
+	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
+	if _, err := os.Stat(localPath); err != nil {
+		vanillaTextureCache.Store(id, AppliedItemTexture{})
+		return AppliedItemTexture{}
+	}
+
+	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
+	vanillaTextureCache.Store(id, texture)
+	return texture
+}
+
+func vanillaAssetTextureURL(texturePath string) AppliedItemTexture {
+	texturePath = strings.TrimSpace(strings.TrimPrefix(texturePath, "minecraft:"))
+	if texturePath == "" {
+		return AppliedItemTexture{}
+	}
+	if cached, ok := vanillaAssetTextureCache.Load(texturePath); ok {
+		return cached.(AppliedItemTexture)
+	}
+
+	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/%s.png", texturePath)
+	appRoot, err := appRootDir()
+	if err != nil {
+		return AppliedItemTexture{}
+	}
+
+	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
+	if _, err := os.Stat(localPath); err != nil {
+		vanillaAssetTextureCache.Store(texturePath, AppliedItemTexture{})
+		return AppliedItemTexture{}
+	}
+
+	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
+	vanillaAssetTextureCache.Store(texturePath, texture)
+	return texture
+}
+
+func vanillaBlockTextureURL(id string) AppliedItemTexture {
+	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	if id == "" {
+		return AppliedItemTexture{}
+	}
+
+	for _, candidate := range []string{
+		"block/" + id,
+		"block/" + id + "_front",
+		"block/" + id + "_top",
+		"block/" + id + "_side",
+		"block/" + id + "_pane_top",
+	} {
+		if texture := vanillaAssetTextureURL(candidate); texture.Texture != "" {
+			return texture
+		}
+	}
+
+	return AppliedItemTexture{}
+}
+
+func vanillaModelTextureURL(id string) AppliedItemTexture {
+	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	if id == "" {
+		return AppliedItemTexture{}
+	}
+	if cached, ok := vanillaModelTextureCache.Load(id); ok {
+		return cached.(AppliedItemTexture)
+	}
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		return AppliedItemTexture{}
+	}
+
+	modelRefs := []string{}
+	if itemDefinition := readVanillaJSON(filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft", "items", id+".json")); itemDefinition != nil {
+		if modelRef := findVanillaModelRef(itemDefinition); modelRef != "" {
+			modelRefs = append(modelRefs, modelRef)
+		}
+	}
+	modelRefs = append(modelRefs, "minecraft:item/"+id, "minecraft:block/"+id)
+
+	seen := map[string]struct{}{}
+	for _, modelRef := range modelRefs {
+		modelRef = strings.TrimSpace(strings.TrimPrefix(modelRef, "minecraft:"))
+		if modelRef == "" {
+			continue
+		}
+		if _, ok := seen[modelRef]; ok {
+			continue
+		}
+		seen[modelRef] = struct{}{}
+
+		modelPath := filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft", "models", filepath.FromSlash(modelRef+".json"))
+		model := readVanillaJSON(modelPath)
+		if model == nil {
+			continue
+		}
+		if texture := textureFromVanillaModel(model); texture.Texture != "" {
+			vanillaModelTextureCache.Store(id, texture)
+			return texture
+		}
+	}
+
+	texture := vanillaBlockTextureURL(id)
+	vanillaModelTextureCache.Store(id, texture)
+	return texture
+}
+
+func readVanillaJSON(path string) map[string]any {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil
+	}
+
+	return decoded
+}
+
+func findVanillaModelRef(value any) string {
+	switch typed := value.(type) {
+	case map[string]any:
+		if modelRef, ok := typed["model"].(string); ok && strings.TrimSpace(modelRef) != "" {
+			return modelRef
+		}
+		for _, key := range []string{"model", "cases", "entries"} {
+			if modelRef := findVanillaModelRef(typed[key]); modelRef != "" {
+				return modelRef
+			}
+		}
+		for _, nested := range typed {
+			if modelRef := findVanillaModelRef(nested); modelRef != "" {
+				return modelRef
+			}
+		}
+	case []any:
+		for _, nested := range typed {
+			if modelRef := findVanillaModelRef(nested); modelRef != "" {
+				return modelRef
+			}
+		}
+	}
+
+	return ""
+}
+
+func textureFromVanillaModel(model map[string]any) AppliedItemTexture {
+	texturesRaw, ok := textureMap(model, "textures")
+	if !ok {
+		return AppliedItemTexture{}
+	}
+
+	textures := map[string]string{}
+	for key := range texturesRaw {
+		if textureRef := textureString(texturesRaw, key); textureRef != "" {
+			textures[key] = textureRef
+		}
+	}
+
+	for _, key := range []string{"layer0", "all", "front", "pane", "edge", "side", "top", "particle", "texture"} {
+		if texture := vanillaTextureFromModelRef(textures[key], textures); texture.Texture != "" {
+			return texture
+		}
+	}
+	for _, textureRef := range textures {
+		if texture := vanillaTextureFromModelRef(textureRef, textures); texture.Texture != "" {
+			return texture
+		}
+	}
+
+	return AppliedItemTexture{}
+}
+
+func vanillaTextureFromModelRef(textureRef string, textures map[string]string) AppliedItemTexture {
+	textureRef = strings.TrimSpace(textureRef)
+	if textureRef == "" {
+		return AppliedItemTexture{}
+	}
+	if strings.HasPrefix(textureRef, "#") {
+		textureRef = textures[strings.TrimPrefix(textureRef, "#")]
+	}
+
+	textureRef = strings.TrimPrefix(textureRef, "minecraft:")
+	return vanillaAssetTextureURL(textureRef)
+}
+
+func vanillaItemResourceExists(id string) bool {
+	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	if id == "" {
+		return false
+	}
+	if cached, ok := vanillaItemExistsCache.Load(id); ok {
+		return cached.(bool)
+	}
+	if vanillaTextureURL(id).Texture != "" {
+		vanillaItemExistsCache.Store(id, true)
+		return true
+	}
+	if vanillaModelTextureURL(id).Texture != "" {
+		vanillaItemExistsCache.Store(id, true)
+		return true
+	}
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		return false
+	}
+
+	for _, relativePath := range []string{
+		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/items/%s.json", id),
+		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/models/item/%s.json", id),
+		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/models/block/%s.json", id),
+	} {
+		if _, err := os.Stat(filepath.Join(appRoot, filepath.FromSlash(relativePath))); err == nil {
+			vanillaItemExistsCache.Store(id, true)
+			return true
+		}
+	}
+
+	vanillaItemExistsCache.Store(id, false)
+	return false
+}
+
+func publicCacheTextureURL(texturePath string) string {
+	texturePath = strings.TrimSpace(texturePath)
+	if texturePath == "" {
+		return ""
+	}
+	if strings.HasPrefix(texturePath, "http://") || strings.HasPrefix(texturePath, "https://") {
+		return texturePath
+	}
+
+	normalizedPath := filepath.ToSlash(texturePath)
+	if strings.HasPrefix(normalizedPath, "/cache/") {
+		return utility.GetDomain() + normalizedPath
+	}
+	if strings.HasPrefix(normalizedPath, "cache/") {
+		return fmt.Sprintf("%s/%s", utility.GetDomain(), normalizedPath)
+	}
+	if strings.HasPrefix(normalizedPath, "rendered/") {
+		return fmt.Sprintf("%s/cache/%s", utility.GetDomain(), normalizedPath)
+	}
+	if cacheIndex := strings.Index(normalizedPath, "/cache/"); cacheIndex >= 0 {
+		return utility.GetDomain() + normalizedPath[cacheIndex:]
+	}
+
+	return fmt.Sprintf("%s/cache/rendered/%s", utility.GetDomain(), filepath.Base(normalizedPath))
+}
+
+func preRenderSkyBlockItemIDs() []string {
+	seen := map[string]struct{}{}
+	itemIDs := make([]string, 0, len(constants.ITEMS))
+
+	addID := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		itemIDs = append(itemIDs, id)
+	}
+
+	for _, item := range constants.ITEMS {
+		addID(item.SkyblockID)
+	}
+
+	if appRoot, err := appRootDir(); err == nil {
+		if entries, err := os.ReadDir(filepath.Join(appRoot, "NotEnoughUpdates-REPO", "items")); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+
+				name := entry.Name()
+				if strings.EqualFold(filepath.Ext(name), ".json") {
+					addID(strings.TrimSuffix(name, filepath.Ext(name)))
+				}
+			}
+		}
+	}
+
+	notenoughupdates.CACHED_NEU_ITEMS.Range(func(key, value any) bool {
+		if keyID, ok := key.(string); ok {
+			addID(keyID)
+		}
+
+		switch item := value.(type) {
+		case models.NEUItem:
+			addID(item.NEUId)
+			if item.NBT.ExtraAttributes != nil {
+				addID(item.NBT.ExtraAttributes.Id)
+			}
+		case *models.NEUItem:
+			if item != nil {
+				addID(item.NEUId)
+				if item.NBT.ExtraAttributes != nil {
+					addID(item.NBT.ExtraAttributes.Id)
 				}
 			}
 		}
 
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", utility.GetDomain(), armorType, armorColor)}
-	}
-
-	textureId := constants.GetVanillaItemId(constants.ItemModel{
-		NumericId:  *item.ID,
-		ItemDamage: *item.Damage,
+		return true
 	})
 
-	if texture, ok := VANILLA_ITEM_MAP[textureId]; ok {
-		if tex, ok := texture.Textures["layer0"]; ok && tex != "" {
-			return AppliedItemTexture{Texture: tex}
+	return itemIDs
+}
+
+func LoadRenderedTextureIndex(cacheDir string) (int, error) {
+	if strings.TrimSpace(cacheDir) == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return 0, fmt.Errorf("failed to get current working directory: %v", err)
+		}
+		cacheDir = filepath.Join(cwd, "cache")
+	}
+
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	files, err := os.ReadDir(renderedDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	loaded := 0
+	for _, file := range files {
+		if file.IsDir() {
+			continue
 		}
 
-		for _, tex := range texture.Textures {
-			if tex == "" {
-				continue
+		fileName := file.Name()
+		parts := strings.Split(fileName, "__")
+		itemId := ""
+		minecraftID := ""
+		itemModel := ""
+		texturePack := ""
+		for _, part := range parts {
+			if strings.HasPrefix(part, "skyblock=") {
+				itemId = strings.TrimPrefix(part, "skyblock=")
+			} else if strings.HasPrefix(part, "mc=") {
+				minecraftID = debugFilenameIdentifier(strings.TrimPrefix(part, "mc="))
+			} else if strings.HasPrefix(part, "itemmodel=") {
+				itemModel = debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
+			} else if strings.HasPrefix(part, "pack=") {
+				texturePack = strings.TrimPrefix(part, "pack=")
 			}
+		}
 
-			return AppliedItemTexture{Texture: tex}
+		texture := AppliedItemTexture{
+			Texture:     publicCacheTextureURL(filepath.Join(renderedDir, fileName)),
+			TexturePack: texturePack,
+		}
+		if !validCachedTexture(texture, nil) {
+			continue
+		}
+		if itemId != "" && texturePack != "" {
+			setCachedItemTexture(itemId, texture)
+			loaded++
+		}
+		if texturePack != "" {
+			if itemModel != "" {
+				setCachedTextureForStableKey(defaultPackSignature, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+			}
+			if minecraftID != "" {
+				setCachedTextureForStableKey(defaultPackSignature, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
+			}
 		}
 	}
 
-	vanillaPath := fmt.Sprintf("assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/%s.webp", strings.ToLower(item.RawId))
-	if _, err := os.Stat(vanillaPath); err == nil {
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/%s", utility.GetDomain(), vanillaPath)}
+	return loaded, nil
+}
+
+func debugFilenameIdentifier(value string) string {
+	value = strings.TrimSuffix(strings.TrimSpace(value), ".webp")
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "minecraft_") {
+		return "minecraft:" + strings.TrimPrefix(value, "minecraft_")
+	}
+	return strings.ReplaceAll(value, "_", ":")
+}
+
+func StartCustomResources() error {
+	customResourcesOnce.Do(func() {
+		customResourcesErr = startCustomResources()
+	})
+	return customResourcesErr
+}
+
+func startCustomResources() error {
+	timeNow := time.Now()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %v", err)
 	}
 
-	fmt.Printf("[CUSTOM_RESOURCES] No custom texture found for item %s, returning default barrier texture\n", item.Tag.ExtraAttributes["id"])
-	return AppliedItemTexture{Texture: fmt.Sprintf("%s/assets/resourcepacks/Vanilla/assets/firmskyblock/models/item/barrier.webp", utility.GetDomain())}
+	cacheDir := filepath.Join(cwd, "cache")
+	resourcePacksPath := filepath.Join(cwd, "assets", "resourcepacks")
+	assetsPath := filepath.Join(resourcePacksPath, "Vanilla", "assets", "minecraft")
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	_, renderedDirErr := os.Stat(renderedDir)
+	if renderedDirErr != nil && !os.IsNotExist(renderedDirErr) {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to stat cache directory %s: %v", renderedDir, renderedDirErr)
+	}
+	renderedDirExists := renderedDirErr == nil
+
+	timeNowv2 := time.Now()
+	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
+	}
+	if os.Getenv("FIBER_PREFORK_CHILD") == "" || loaded > 0 {
+		fmt.Printf("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s\n", utility.AddCommas(loaded), renderedDir, time.Since(timeNowv2))
+	}
+
+	preloadRenderer := os.Getenv("FIBER_PREFORK_CHILD") == ""
+	if err := InitRenderer(cacheDir, resourcePacksPath, assetsPath, preloadRenderer); err != nil {
+		return err
+	}
+
+	fmt.Printf("[CUSTOM_RESOURCES] Started SkyCrypt renderer instance in %s\n", time.Since(timeNow))
+
+	// Render textures only on main thread; generated files are shared in cache/rendered.
+	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+		if err := WarmMissingSkyBlockTextures(ctx, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{}); err != nil {
+			return err
+		}
+	} else if !renderedDirExists && os.IsNotExist(renderedDirErr) {
+		fmt.Printf("[CUSTOM_RESOURCES] cache/rendered is missing; child process will serve fallbacks until the main process warms textures\n")
+	}
+
+	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+		fmt.Printf("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully with %s textures in %s\n", utility.AddCommas(itemTextureCacheLen()), time.Since(timeNow))
+	}
+
+	return nil
+}
+
+func InitRenderer(cacheDir string, resourcePacksPath string, assetsPath string, preload bool) error {
+	renderer, err := mr.NewRendererWithOptions(mr.Options{
+		AssetsRoot:        assetsPath,
+		ResourcePacksRoot: resourcePacksPath,
+		PackIDs:           defaultResourcePackIDs,
+		Preload:           preload,
+		CacheDir:          cacheDir,
+	})
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: %v", err)
+	}
+	SkyCryptRender = renderer
+	return nil
+}
+
+func WarmMissingSkyBlockTextures(ctx context.Context, itemIDs []string, options mr.PreRenderOptions) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if SkyCryptRender == nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] renderer is not initialized")
+	}
+
+	missing := make([]string, 0, len(itemIDs))
+	for _, id := range itemIDs {
+		id = strings.TrimSpace(id)
+		if id == "" || renderedSkyBlockIDKnown(id) {
+			continue
+		}
+		missing = append(missing, id)
+	}
+
+	if options.Workers <= 0 {
+		options.Workers = runtime.GOMAXPROCS(0)
+		if options.Workers > 4 {
+			options.Workers = 4
+		}
+		if options.Workers < 1 {
+			options.Workers = 1
+		}
+	}
+
+	timeNow := time.Now()
+	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendering %s missing SkyBlock items with %d workers...\n", utility.AddCommas(len(missing)), options.Workers)
+	if len(missing) == 0 {
+		fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered 0 SkyBlock items, skipped 0, failed 0 in %s\n", time.Since(timeNow))
+		return nil
+	}
+
+	output, err := SkyCryptRender.PreRenderSkyBlockItemIDs(ctx, missing, options)
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to pre-render SkyBlock items: %v", err)
+	}
+
+	for _, item := range output.Entries {
+		if item.Error == "" && !item.Skipped {
+			setCachedItemTexture(item.InputID, AppliedItemTexture{
+				Texture:     publicCacheTextureURL(item.Path),
+				TexturePack: item.TexturePackID,
+			})
+		}
+	}
+
+	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered %d SkyBlock items, skipped %d, failed %d in %s\n", output.Succeeded, output.Skipped, output.Failed, time.Since(timeNow))
+	return nil
+}
+
+func stableTextureKeysFromInput(input ItemTextureInput) []string {
+	keys := make([]string, 0, 4)
+	if skullKey := skullIdentityFromInput(input); skullKey != "" {
+		if skyblockID := strings.TrimSpace(input.SkyBlockID); skyblockID != "" {
+			keys = append(keys, "skyblock:"+skyblockID+"|"+skullKey)
+		}
+		keys = append(keys, skullKey)
+		return keys
+	}
+
+	if skyblockID := strings.TrimSpace(input.SkyBlockID); skyblockID != "" {
+		keys = append(keys, "skyblock:"+skyblockID)
+	}
+	if itemModel := normalizeMinecraftItemID(input.ItemModel); itemModel != "" {
+		keys = append(keys, "itemmodel:"+itemModel)
+	}
+	if id := normalizeMinecraftItemID(input.ID); id != "" {
+		keys = append(keys, fmt.Sprintf("mc:%s|damage:%d|color:%d", id, input.Damage, input.DisplayColor))
+	}
+	if skinHash := skullTextureHashFromOwner(input.SkullOwner); skinHash != "" {
+		keys = append(keys, "skull:"+skinHash)
+	}
+	return keys
+}
+
+func cachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {
+	hasSkullIdentity := skullIdentityFromInput(input) != ""
+	for _, stableKey := range stableTextureKeysFromInput(input) {
+		if texture, ok := cachedTextureByKey(textureCacheKey(textureCtx.PackSignature, stableKey), textureCtx.DisabledPacks); ok {
+			return texture, true
+		}
+		if textureCtx.PackSignature != defaultPackSignature {
+			if texture, ok := cachedTextureByKey(textureCacheKey(defaultPackSignature, stableKey), textureCtx.DisabledPacks); ok {
+				return texture, true
+			}
+		}
+	}
+	if input.SkyBlockID != "" && !hasSkullIdentity {
+		return cachedItemTexture(input.SkyBlockID, textureCtx.DisabledPacks)
+	}
+	return AppliedItemTexture{}, false
+}
+
+func setCachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext, texture AppliedItemTexture) {
+	if texture.Texture == "" {
+		return
+	}
+	for _, stableKey := range stableTextureKeysFromInput(input) {
+		setCachedTextureForStableKey(textureCtx.PackSignature, stableKey, texture)
+	}
+}
+
+func itemTextureInputRenderMap(input ItemTextureInput) map[string]any {
+	id := normalizeMinecraftItemID(input.ID)
+	if id == "" && input.NumericID > 0 {
+		if mapped := constants.GetVanillaItemId(constants.ItemModel{NumericId: input.NumericID, ItemDamage: input.Damage}); mapped != "" {
+			id = "minecraft:" + mapped
+		}
+	}
+	if id == "" && input.ItemModel != "" {
+		id = normalizeMinecraftItemID(input.ItemModel)
+	}
+
+	tag := input.Tag
+	if tag == nil {
+		tag = map[string]any{"ExtraAttributes": map[string]any{"id": input.SkyBlockID}}
+	}
+
+	itemMap := map[string]any{
+		"id":          id,
+		"tag":         tag,
+		"damage":      input.Damage,
+		"item_id":     input.NumericID,
+		"skyblock_id": input.SkyBlockID,
+	}
+	if input.ItemModel != "" {
+		itemMap["ItemModel"] = input.ItemModel
+	}
+	if input.Texture != "" {
+		itemMap["texture"] = input.Texture
+	}
+	return itemMap
+}
+
+func itemTextureInputFromMap(itemMap map[string]any) ItemTextureInput {
+	itemModel := itemModelFromItem(itemMap)
+	id := explicitMinecraftItemIDFromItem(itemMap)
+	numericID, _ := textureInt(itemMap, "item_id", "itemId", "itemID")
+	damage, _ := textureInt(itemMap, "item_damage", "itemDamage", "damage", "Damage")
+	displayColor := 0
+	if armorColor := textureString(itemMap, "armor_color", "armorColor"); armorColor != "" {
+		if parsed, err := strconv.ParseInt(strings.TrimPrefix(armorColor, "#"), 16, 32); err == nil {
+			displayColor = int(parsed)
+		}
+	} else if color, ok := textureInt(itemMap, "display_color", "displayColor"); ok {
+		displayColor = color
+	} else if colorHex := displayColorFromItem(itemMap); colorHex != "" {
+		if parsed, err := strconv.ParseInt(colorHex, 16, 32); err == nil {
+			displayColor = int(parsed)
+		}
+	}
+	tag, _ := textureValue(itemMap, "tag", "Tag")
+
+	return ItemTextureInput{
+		ID:           id,
+		ItemModel:    itemModel,
+		SkyBlockID:   skyblockIDFromItem(itemMap),
+		NumericID:    numericID,
+		Damage:       damage,
+		Texture:      textureString(itemMap, "texture", "Texture"),
+		DisplayColor: displayColor,
+		Tag:          tag,
+	}
+}
+
+func skullIdentityFromInput(input ItemTextureInput) string {
+	if input.SkullOwner != nil {
+		if id := strings.TrimSpace(input.SkullOwner.ID); id != "" {
+			return "skullid:" + id
+		}
+		if skinHash := skullTextureHashFromOwner(input.SkullOwner); skinHash != "" {
+			return "skull:" + skinHash
+		}
+	}
+
+	switch tag := input.Tag.(type) {
+	case *skycrypttypes.Tag:
+		if tag == nil || tag.SkullOwner == nil {
+			return ""
+		}
+		if id := strings.TrimSpace(tag.SkullOwner.ID); id != "" {
+			return "skullid:" + id
+		}
+		if skinHash := skullTextureHashFromOwner(tag.SkullOwner); skinHash != "" {
+			return "skull:" + skinHash
+		}
+		return ""
+	case skycrypttypes.Tag:
+		if tag.SkullOwner == nil {
+			return ""
+		}
+		if id := strings.TrimSpace(tag.SkullOwner.ID); id != "" {
+			return "skullid:" + id
+		}
+		if skinHash := skullTextureHashFromOwner(tag.SkullOwner); skinHash != "" {
+			return "skull:" + skinHash
+		}
+		return ""
+	case skycrypttypes.TextureItemExtraAttributes:
+		if tag.SkullOwner == nil {
+			return ""
+		}
+		if id := strings.TrimSpace(tag.SkullOwner.ID); id != "" {
+			return "skullid:" + id
+		}
+		if skinHash := skullTextureHashFromOwner(tag.SkullOwner); skinHash != "" {
+			return "skull:" + skinHash
+		}
+		return ""
+	case *skycrypttypes.TextureItemExtraAttributes:
+		if tag == nil || tag.SkullOwner == nil {
+			return ""
+		}
+		if id := strings.TrimSpace(tag.SkullOwner.ID); id != "" {
+			return "skullid:" + id
+		}
+		if skinHash := skullTextureHashFromOwner(tag.SkullOwner); skinHash != "" {
+			return "skull:" + skinHash
+		}
+		return ""
+	}
+
+	if _, ok := input.Tag.(map[string]any); ok {
+		if tagID := skullOwnerIDFromTag(input.Tag); tagID != "" {
+			return "skullid:" + tagID
+		}
+		if skinHash := skullTextureHashFromTag(input.Tag); skinHash != "" {
+			return "skull:" + skinHash
+		}
+	}
+	return ""
+}
+
+func skullTextureHashFromOwner(skullOwner *skycrypttypes.SkullOwner) string {
+	if skullOwner == nil || len(skullOwner.Properties.Textures) == 0 {
+		return ""
+	}
+	return utility.GetSkinHash(skullOwner.Properties.Textures[0].Value)
+}
+
+func skullFallbackTexture(input ItemTextureInput, textureCtx TextureApplyContext) AppliedItemTexture {
+	if texture := headTextureURL(input.Texture); texture.Texture != "" {
+		return texture
+	}
+	if skinHash := skullTextureHashFromOwner(input.SkullOwner); skinHash != "" {
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", textureCtx.Domain, skinHash)}
+	}
+	if skinHash := skullTextureHashFromTag(input.Tag); skinHash != "" {
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/head/%s", textureCtx.Domain, skinHash)}
+	}
+	return AppliedItemTexture{}
+}
+
+func skullOwnerIDFromTag(tag any) string {
+	if tag == nil {
+		return ""
+	}
+	tagMap, ok := tag.(map[string]any)
+	if !ok {
+		normalized, ok := normalizeTextureItem(tag)
+		if !ok {
+			return ""
+		}
+		tagMap = normalized
+	}
+	skullOwner, ok := textureMap(tagMap, "SkullOwner", "skullOwner", "skull_owner")
+	if !ok {
+		return ""
+	}
+	return textureString(skullOwner, "Id", "ID", "id")
+}
+
+func skullTextureHashFromTag(tag any) string {
+	if tag == nil {
+		return ""
+	}
+	tagMap, ok := tag.(map[string]any)
+	if !ok {
+		normalized, ok := normalizeTextureItem(tag)
+		if !ok {
+			return ""
+		}
+		tagMap = normalized
+	}
+	return skullTextureHashFromValues(tagMap)
+}
+
+func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) AppliedItemTexture {
+	textureCtx = normalizeTextureApplyContext(textureCtx)
+
+	if cachedTexture, ok := cachedTextureForInput(input, textureCtx); ok {
+		return cachedTexture
+	}
+
+	skullFallback := skullFallbackTexture(input, textureCtx)
+	id := normalizeMinecraftItemID(input.ID)
+	if id == "" && input.ItemModel != "" {
+		id = normalizeMinecraftItemID(input.ItemModel)
+	}
+	isGenericSkullInput := skullFallback.Texture != "" && strings.TrimSpace(input.SkyBlockID) == "" && id == "minecraft:player_head"
+
+	itemMap := map[string]any(nil)
+	var renderErr error
+	renderer := SkyCryptRender
+	if renderer != nil && len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput {
+		itemMap = itemTextureInputRenderMap(input)
+		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, textureCtx.EnabledPackIDs)
+		if err == nil && customTexture != nil && customTexture.Path != "" {
+			outputTexture := AppliedItemTexture{
+				Texture:     publicCacheTextureURL(customTexture.Path),
+				TexturePack: customTexture.TexturePackID,
+			}
+			if !texturePackDisabled(outputTexture.TexturePack, textureCtx.DisabledPacks) {
+				if skullFallback.Texture == "" || outputTexture.TexturePack != "" && outputTexture.TexturePack != "vanilla" {
+					setCachedTextureForInput(input, textureCtx, outputTexture)
+					return outputTexture
+				}
+			}
+		} else if err != nil {
+			renderErr = err
+		}
+
+		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
+			if vanillaItem := vanillaRenderItem(itemMap, id); vanillaItem != nil {
+				customTexture, err = renderer.RenderItemNBTWithPackIDs(vanillaItem, textureCtx.EnabledPackIDs)
+				if err == nil && customTexture != nil && customTexture.Path != "" {
+					outputTexture := AppliedItemTexture{
+						Texture:     publicCacheTextureURL(customTexture.Path),
+						TexturePack: customTexture.TexturePackID,
+					}
+					if !texturePackDisabled(outputTexture.TexturePack, textureCtx.DisabledPacks) {
+						if skullFallback.Texture == "" || outputTexture.TexturePack != "" && outputTexture.TexturePack != "vanilla" {
+							setCachedTextureForInput(input, textureCtx, outputTexture)
+							return outputTexture
+						}
+					}
+				} else if err != nil {
+					renderErr = err
+				}
+			}
+		}
+	}
+
+	if skullFallback.Texture != "" {
+		return skullFallback
+	}
+
+	if input.NumericID >= 298 && input.NumericID <= 301 {
+		armorType := constants.ARMOR_TYPES[input.NumericID-298]
+		armorColor := ""
+		if input.DisplayColor != 0 {
+			armorColor = fmt.Sprintf("%06X", input.DisplayColor)
+		}
+		if armorColor == "" && input.SkyBlockID != "" {
+			if defaultHexColor := constants.ITEMS[input.SkyBlockID].Color; defaultHexColor != "" {
+				armorColor = defaultHexColor
+			}
+		}
+		if armorColor == "" {
+			armorColor = "A06540"
+		}
+		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", textureCtx.Domain, armorType, armorColor)}
+	}
+
+	if input.NumericID > 0 && shouldUseLegacyNumericFallback(id) {
+		textureID := constants.GetVanillaItemId(constants.ItemModel{
+			NumericId:  input.NumericID,
+			ItemDamage: input.Damage,
+		})
+		if textureID != "" && "minecraft:"+textureID != id {
+			input.ID = "minecraft:" + textureID
+			input.NumericID = 0
+			return ApplyTextureInput(input, textureCtx)
+		}
+	}
+
+	if vanillaTexture := vanillaTextureURL(id); vanillaTexture.Texture != "" {
+		return vanillaTexture
+	}
+
+	if renderErr != nil {
+		fmt.Printf("[CUSTOM_RESOURCES] RenderItemNBT failed id=%q skyblock_id=%q error=%v\n", id, input.SkyBlockID, renderErr)
+	}
+
+	fmt.Printf("[CUSTOM_RESOURCES] No texture found for item id=%q skyblock_id=%q item_id=%d damage=%d\n", id, input.SkyBlockID, input.NumericID, input.Damage)
+	return AppliedItemTexture{Texture: barrierTextureURL()}
+}
+
+func ApplyTexture(item any, disabledPacksParam ...[]string) AppliedItemTexture {
+	textureCtx := NewTextureApplyContext(disabledPacksParam...)
+	disabledPacks := textureCtx.DisabledPacks
+	if itemMap, ok := item.(map[string]any); ok {
+		input := itemTextureInputFromMap(itemMap)
+		if skullIdentityFromInput(input) == "" {
+			if cachedTexture, ok := cachedTextureFromRawMap(itemMap, disabledPacks); ok {
+				return cachedTexture
+			}
+		}
+		if cachedTexture, ok := cachedTextureForInput(input, textureCtx); ok {
+			return cachedTexture
+		}
+		return ApplyTextureInput(input, textureCtx)
+	}
+
+	itemMap, ok := normalizeTextureItem(item)
+	if !ok {
+		return AppliedItemTexture{Texture: barrierTextureURL()}
+	}
+	return ApplyTextureInput(itemTextureInputFromMap(itemMap), textureCtx)
 }

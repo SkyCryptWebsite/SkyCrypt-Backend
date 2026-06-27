@@ -74,7 +74,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	utility.LogVerbose("Returning /api/combined/%s in %s", uuid, time.Since(timeNow))
+	utility.LogVerbose("Returning /api/combined/%s in %s pid=%d", uuid, time.Since(timeNow), os.Getpid())
 	return sendAndCacheJSON(c, reqCtx, cacheKey, result, 5*60)
 }
 
