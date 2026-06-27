@@ -1157,6 +1157,26 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 	return texture
 }
 
+func vanillaSpecialHeadTextureURL(id string) AppliedItemTexture {
+	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	switch id {
+	case "zombie_head":
+		return vanillaAssetTextureURL("entity/zombie/zombie")
+	case "skeleton_skull":
+		return vanillaAssetTextureURL("entity/skeleton/skeleton")
+	case "wither_skeleton_skull":
+		return vanillaAssetTextureURL("entity/skeleton/wither_skeleton")
+	case "creeper_head":
+		return vanillaAssetTextureURL("entity/creeper/creeper")
+	case "dragon_head":
+		return vanillaAssetTextureURL("entity/enderdragon/dragon")
+	case "piglin_head":
+		return vanillaAssetTextureURL("entity/piglin/piglin")
+	default:
+		return AppliedItemTexture{}
+	}
+}
+
 func readVanillaJSON(path string) map[string]any {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -2149,6 +2169,13 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 			stats.VanillaModelFallbacks++
 		}
 		return finishFallback("vanilla_model_fallback", "", vanillaTexture)
+	}
+	if vanillaTexture := vanillaSpecialHeadTextureURL(id); vanillaTexture.Texture != "" {
+		if stats != nil {
+			stats.VanillaFallbacks++
+			stats.VanillaModelFallbacks++
+		}
+		return finishFallback("vanilla_special_head_fallback", "", vanillaTexture)
 	}
 
 	if renderErr != nil {

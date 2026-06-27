@@ -737,6 +737,31 @@ func TestApplyTextureRendersVanillaSpecialHeadModel(t *testing.T) {
 	}
 }
 
+func TestApplyTextureInputDisableRuntimeRenderUsesStaticSpecialHeadFallback(t *testing.T) {
+	withRealRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	textureCtx := NewTextureApplyContext()
+	textureCtx.DisableRuntimeRender = true
+	texture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:zombie_head",
+		NumericID:  397,
+		Damage:     2,
+		SkyBlockID: "ZOMBIE_HAT",
+		Tag:        map[string]any{"ExtraAttributes": map[string]any{"id": "ZOMBIE_HAT"}},
+	}, textureCtx)
+
+	if texture.Texture != testDomain()+"/assets/resourcepacks/Vanilla/assets/minecraft/textures/entity/zombie/zombie.png" {
+		t.Fatalf("ApplyTextureInput() = %q, want static zombie head fallback", texture.Texture)
+	}
+	if textureCtx.Stats.BarrierFallbacks != 0 {
+		t.Fatalf("barrier fallbacks = %d, want 0", textureCtx.Stats.BarrierFallbacks)
+	}
+	if textureCtx.Stats.VanillaModelFallbacks != 1 {
+		t.Fatalf("vanilla model fallbacks = %d, want 1", textureCtx.Stats.VanillaModelFallbacks)
+	}
+}
+
 func TestApplyTexturePlayerHeadDoesNotFallBackToSoulSand(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})

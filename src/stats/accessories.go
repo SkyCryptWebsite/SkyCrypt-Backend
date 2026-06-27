@@ -14,6 +14,22 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
+func loreContains(lore []string, text string) bool {
+	for _, line := range lore {
+		if strings.Contains(line, text) {
+			return true
+		}
+	}
+	return false
+}
+
+func appendInactiveLore(accessory *models.InsertAccessory, text string) {
+	if loreContains(accessory.Lore, "§7Inactive:") {
+		return
+	}
+	accessory.Lore = append(accessory.Lore, "", text)
+}
+
 func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string][]models.ProcessedItem, disabledPacks ...[]string) *models.GetMissingAccessoresOutput {
 	if processedItems == nil {
 		return &models.GetMissingAccessoresOutput{}
@@ -95,15 +111,11 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 				if utility.RarityNameToInt(duplicateRarity) < utility.RarityNameToInt(rarity) {
 					duplicates[i].IsInactive = true
 
-					if !strings.Contains(strings.Join(duplicates[i].Lore, "\n"), "§7Inactive:") {
-						duplicates[i].Lore = append(duplicates[i].Lore, "", fmt.Sprintf("§7Inactive: §cLower rarity duplicate of %s", accessory.DisplayName))
-					}
+					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cLower rarity duplicate of %s", accessory.DisplayName))
 				} else if duplicate.Rarity == rarity {
 					duplicates[i].IsInactive = true
 
-					if !strings.Contains(strings.Join(duplicates[i].Lore, "\n"), "§7Inactive:") {
-						duplicates[i].Lore = append(duplicates[i].Lore, "", fmt.Sprintf("§7Inactive: §cDuplicate of %s", accessory.DisplayName))
-					}
+					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cDuplicate of %s", accessory.DisplayName))
 
 				}
 			}
@@ -116,13 +128,13 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 
 						// NOTE: This could be done better but it works for now (cba to refactor)
 						for _, lore := range dup.Lore {
-							if strings.HasPrefix(lore, "§7Obtained:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Obtained:") {
+							if strings.HasPrefix(lore, "§7Obtained:") && !loreContains(accessories[j].Lore, "§7Obtained:") {
 								accessories[j].Lore = append(accessories[j].Lore, "")
 								accessories[j].Lore = append(accessories[j].Lore, lore)
-							} else if strings.HasPrefix(lore, "§7Item Value:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Item Value:") {
+							} else if strings.HasPrefix(lore, "§7Item Value:") && !loreContains(accessories[j].Lore, "§7Item Value:") {
 								accessories[j].Lore = append(accessories[j].Lore, "")
 								accessories[j].Lore = append(accessories[j].Lore, lore)
-							} else if strings.HasPrefix(lore, "§7Inactive:") && !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Inactive:") {
+							} else if strings.HasPrefix(lore, "§7Inactive:") && !loreContains(accessories[j].Lore, "§7Inactive:") {
 								accessories[j].Lore = append(accessories[j].Lore, "")
 								accessories[j].Lore = append(accessories[j].Lore, lore)
 							}
@@ -174,9 +186,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 				for j, acc := range accessories {
 					if acc.Id == upgrade {
 						accessories[j].IsInactive = true
-						if !strings.Contains(strings.Join(accessories[j].Lore, "\n"), "§7Inactive:") {
-							accessories[j].Lore = append(accessories[j].Lore, "", fmt.Sprintf("§7Inactive: §cUpgraded to %s", accessory.DisplayName))
-						}
+						appendInactiveLore(&accessories[j], fmt.Sprintf("§7Inactive: §cUpgraded to %s", accessory.DisplayName))
 					}
 				}
 			}

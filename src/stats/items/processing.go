@@ -89,21 +89,11 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 	}
 
 	var stageStart time.Time
-	if recordStats {
-		stageStart = time.Now()
-	}
-	rawLore := make([]string, len(processedItem.Lore))
-	for i, lore := range processedItem.Lore {
-		rawLore[i] = utility.GetRawLore(lore)
-	}
-	if recordStats {
-		itemStats.recordStageDuration(itemProcessingStageRawLore, time.Since(stageStart))
-	}
 
 	if recordStats {
 		stageStart = time.Now()
 	}
-	itemType := ParseItemTypeFromLore(rawLore, *item)
+	itemType := ParseItemTypeFromLore(processedItem.Lore, *item)
 	if recordStats {
 		itemStats.recordStageDuration(itemProcessingStageTypeParse, time.Since(stageStart))
 	}
