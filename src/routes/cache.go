@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
+	"skycrypt/src/lib"
 	"skycrypt/src/localcache"
 	"skycrypt/src/utility"
 	"strings"
@@ -44,10 +45,11 @@ func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 }
 
 func disabledPacksCachePart(disabledPacks []string) string {
-	if len(disabledPacks) == 0 {
+	normalized := lib.NormalizeDisabledPacks(disabledPacks)
+	if len(normalized) == 0 {
 		return ""
 	}
-	return strings.Join(disabledPacks, ",")
+	return strings.Join(normalized, ",")
 }
 
 func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {

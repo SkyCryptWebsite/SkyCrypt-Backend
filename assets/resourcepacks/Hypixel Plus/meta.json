@@ -1,8 +1,8 @@
 {
-    "id": "hplus",
+    "id": "HYPIXEL_PLUS",
     "name": "Hypixel Plus",
-    "downloadUrl": "https://modrinth.com/resourcepack/hypixel-plus",
-    "authors": [
-        "ic22487"
-    ]
+    "version": "v0.23.4",
+    "author": "ic22487",
+    "url": "https://modrinth.com/resourcepack/hypixel-plus",
+    "icon": "https://sky.shiiyu.moe/assets/resourcepacks/Hypixel_Plus/pack.png"
 }

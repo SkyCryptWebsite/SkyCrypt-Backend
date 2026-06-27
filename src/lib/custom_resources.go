@@ -11,6 +11,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,14 +31,16 @@ var renderedSkyBlockIndex = make(map[string]struct{})
 var renderedSkyBlockIndexMu sync.RWMutex
 var customResourcesOnce sync.Once
 var customResourcesErr error
+var resourcePackConfigsOnce sync.Once
+var resourcePackConfigs []models.ResourcePackConfig
+var resourcePackConfigsErr error
 
 var vanillaTextureCache sync.Map
 var vanillaAssetTextureCache sync.Map
 var vanillaModelTextureCache sync.Map
 var vanillaItemExistsCache sync.Map
 
-var defaultResourcePackIDs = []string{"hplus", "fsr"}
-var defaultPackSignature = strings.Join(defaultResourcePackIDs, ",")
+var fallbackResourcePackIDs = []string{"FSR", "HYPIXEL_PLUS"}
 
 type AppliedItemTexture struct {
 	Texture     string
@@ -76,6 +79,149 @@ type TextureApplyStats struct {
 	LeatherFallbacks int
 	VanillaFallbacks int
 	BarrierFallbacks int
+}
+
+type resourcePackMeta struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Version     string   `json:"version"`
+	Author      string   `json:"author"`
+	DownloadURL string   `json:"downloadUrl"`
+	URL         string   `json:"url"`
+	Icon        string   `json:"icon"`
+	Authors     []string `json:"authors"`
+	Priority    int      `json:"priority"`
+}
+
+func ResourcePackConfigs() ([]models.ResourcePackConfig, error) {
+	resourcePackConfigsOnce.Do(func() {
+		appRoot, err := appRootDir()
+		if err != nil {
+			resourcePackConfigsErr = err
+			return
+		}
+
+		resourcePackConfigs, resourcePackConfigsErr = loadResourcePackConfigs(filepath.Join(appRoot, "assets", "resourcepacks"))
+	})
+
+	return cloneResourcePackConfigs(resourcePackConfigs), resourcePackConfigsErr
+}
+
+func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackConfig, error) {
+	files, err := os.ReadDir(resourcePacksPath)
+	if err != nil {
+		return nil, err
+	}
+
+	configs := make([]models.ResourcePackConfig, 0, len(files))
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+
+		metaPath := filepath.Join(resourcePacksPath, file.Name(), "meta.json")
+		metaFile, err := os.Open(metaPath)
+		if err != nil {
+			continue
+		}
+
+		var meta resourcePackMeta
+		decodeErr := json.NewDecoder(metaFile).Decode(&meta)
+		_ = metaFile.Close()
+		if decodeErr != nil {
+			continue
+		}
+
+		id := strings.TrimSpace(meta.ID)
+		if id == "" || strings.EqualFold(id, "vanilla") {
+			continue
+		}
+		downloadURL := strings.TrimSpace(meta.DownloadURL)
+		if downloadURL == "" {
+			downloadURL = strings.TrimSpace(meta.URL)
+		}
+		authors := append([]string(nil), meta.Authors...)
+		if len(authors) == 0 && strings.TrimSpace(meta.Author) != "" {
+			authors = []string{strings.TrimSpace(meta.Author)}
+		}
+		icon := strings.TrimSpace(meta.Icon)
+		if icon == "" {
+			icon = fmt.Sprintf("%s/assets/resourcepacks/%s/pack.webp", utility.GetDomain(), file.Name())
+		}
+		priority := meta.Priority
+		if priority == 0 {
+			priority = defaultResourcePackPriority(id)
+		}
+
+		config := models.ResourcePackConfig{
+			Id:          id,
+			Name:        strings.TrimSpace(meta.Name),
+			Version:     strings.TrimSpace(meta.Version),
+			Priority:    priority,
+			Authors:     authors,
+			DownloadURL: downloadURL,
+			Url:         downloadURL,
+			Icon:        icon,
+		}
+		if len(config.Authors) > 0 {
+			config.Author = config.Authors[0]
+		}
+		configs = append(configs, config)
+	}
+
+	sortResourcePackConfigs(configs)
+	return configs, nil
+}
+
+func sortResourcePackConfigs(configs []models.ResourcePackConfig) {
+	sort.SliceStable(configs, func(i, j int) bool {
+		if configs[i].Priority != configs[j].Priority {
+			return configs[i].Priority > configs[j].Priority
+		}
+		return configs[i].Id < configs[j].Id
+	})
+}
+
+func defaultResourcePackPriority(packID string) int {
+	switch canonicalPackAlias(packID) {
+	case "fsr":
+		return 100
+	case "hplus":
+		return 50
+	default:
+		return 0
+	}
+}
+
+func cloneResourcePackConfigs(configs []models.ResourcePackConfig) []models.ResourcePackConfig {
+	cloned := make([]models.ResourcePackConfig, len(configs))
+	copy(cloned, configs)
+	for i := range cloned {
+		cloned[i].Authors = append([]string(nil), configs[i].Authors...)
+	}
+	return cloned
+}
+
+func defaultResourcePackIDs() []string {
+	configs, err := ResourcePackConfigs()
+	if err == nil && len(configs) > 0 {
+		ids := make([]string, 0, len(configs))
+		for _, config := range configs {
+			id := strings.TrimSpace(config.Id)
+			if id != "" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) > 0 {
+			return ids
+		}
+	}
+
+	return append([]string(nil), fallbackResourcePackIDs...)
+}
+
+func defaultPackSignature() string {
+	return strings.Join(defaultResourcePackIDs(), ",")
 }
 
 func NewTextureApplyContext(disabledPacksParam ...[]string) TextureApplyContext {
@@ -124,17 +270,68 @@ func cachedItemTexture(id string, disabledPacks map[string]struct{}) (AppliedIte
 		return AppliedItemTexture{}, false
 	}
 
-	packSignature := packSignatureFromDisabled(disabledPacks)
-	for _, key := range []string{
-		textureCacheKey(packSignature, "skyblock:"+id),
-		textureCacheKey(defaultPackSignature, "skyblock:"+id),
-		id,
-	} {
-		if texture, ok := cachedTextureByKey(key, disabledPacks); ok {
+	return cachedTextureForStableKey("skyblock:"+id, packSignatureFromDisabled(disabledPacks), enabledPackIDs(disabledPacks), disabledPacks, id)
+}
+
+func cachedTextureForStableKey(stableKey string, packSignature string, enabledPackIDs []string, disabledPacks map[string]struct{}, legacyKeys ...string) (AppliedItemTexture, bool) {
+	stableKey = strings.TrimSpace(stableKey)
+	if stableKey == "" || len(enabledPackIDs) == 0 {
+		return AppliedItemTexture{}, false
+	}
+
+	seenKeys := map[string]struct{}{}
+	if texture, ok := cachedTextureByKeyOnce(textureCacheKey(packSignature, stableKey), disabledPacks, seenKeys); ok {
+		return texture, true
+	}
+
+	for _, packID := range enabledPackIDs {
+		if texture, ok := cachedTextureByPackVariant(packID, stableKey, disabledPacks, seenKeys); ok {
 			return texture, true
 		}
 	}
 
+	if packSignature != defaultPackSignature() {
+		if texture, ok := cachedTextureByKeyOnce(textureCacheKey(defaultPackSignature(), stableKey), disabledPacks, seenKeys); ok {
+			return texture, true
+		}
+	}
+
+	for _, legacyKey := range legacyKeys {
+		if texture, ok := cachedTextureByKeyOnce(legacyKey, disabledPacks, seenKeys); ok {
+			return texture, true
+		}
+	}
+	return AppliedItemTexture{}, false
+}
+
+func cachedTextureByKeyOnce(key string, disabledPacks map[string]struct{}, seenKeys map[string]struct{}) (AppliedItemTexture, bool) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return AppliedItemTexture{}, false
+	}
+	if _, seen := seenKeys[key]; seen {
+		return AppliedItemTexture{}, false
+	}
+	seenKeys[key] = struct{}{}
+	return cachedTextureByKey(key, disabledPacks)
+}
+
+func cachedTextureByPackVariant(packID string, stableKey string, disabledPacks map[string]struct{}, seenKeys map[string]struct{}) (AppliedItemTexture, bool) {
+	packID = strings.TrimSpace(packID)
+	if packID == "" {
+		return AppliedItemTexture{}, false
+	}
+
+	for _, alias := range texturePackAliases(packID) {
+		texture, ok := cachedTextureByKeyOnce(textureCacheKey(alias, stableKey), disabledPacks, seenKeys)
+		if !ok {
+			continue
+		}
+		if !sameTexturePack(texture.TexturePack, packID) {
+			continue
+		}
+		return texture, true
+	}
 	return AppliedItemTexture{}, false
 }
 
@@ -161,11 +358,7 @@ func setCachedItemTexture(id string, texture AppliedItemTexture) {
 		return
 	}
 
-	itemTextureCacheMu.Lock()
-	ITEM_TEXTURE_CACHE[id] = texture
-	ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, "skyblock:"+id)] = texture
-	itemTextureCacheMu.Unlock()
-	rememberRenderedSkyBlockID(id)
+	setCachedTextureForStableKey("", "skyblock:"+id, texture)
 }
 
 func setCachedTextureForStableKey(packSignature string, stableKey string, texture AppliedItemTexture) {
@@ -175,22 +368,27 @@ func setCachedTextureForStableKey(packSignature string, stableKey string, textur
 	}
 	packSignature = strings.TrimSpace(packSignature)
 	if packSignature == "" {
-		packSignature = defaultPackSignature
+		packSignature = strings.ToLower(strings.TrimSpace(texture.TexturePack))
+	}
+	if packSignature == "" {
+		packSignature = defaultPackSignature()
 	}
 
 	itemTextureCacheMu.Lock()
 	ITEM_TEXTURE_CACHE[textureCacheKey(packSignature, stableKey)] = texture
-	if packSignature == defaultPackSignature {
-		ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, stableKey)] = texture
+	for _, alias := range texturePackAliases(texture.TexturePack) {
+		ITEM_TEXTURE_CACHE[textureCacheKey(alias, stableKey)] = texture
 	}
 	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
 		ITEM_TEXTURE_CACHE[skyblockID] = texture
-		ITEM_TEXTURE_CACHE[textureCacheKey(defaultPackSignature, stableKey)] = texture
 	}
 	itemTextureCacheMu.Unlock()
 
 	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
-		rememberRenderedSkyBlockID(skyblockID)
+		rememberRenderedSkyBlockID(skyblockID, packSignature)
+		if texture.TexturePack != "" && !strings.EqualFold(texture.TexturePack, packSignature) {
+			rememberRenderedSkyBlockID(skyblockID, texture.TexturePack)
+		}
 	}
 }
 
@@ -460,26 +658,129 @@ func disabledPackSet(disabledPacksParam ...[]string) map[string]struct{} {
 		return disabledPacks
 	}
 
-	for _, pack := range disabledPacksParam[0] {
-		pack = strings.TrimSpace(pack)
-		if pack == "" {
-			continue
-		}
+	for _, pack := range NormalizeDisabledPacks(disabledPacksParam[0]) {
 		disabledPacks[pack] = struct{}{}
 	}
 
 	return disabledPacks
 }
 
+func NormalizeDisabledPacks(disabledPacks []string) []string {
+	if len(disabledPacks) == 0 {
+		return nil
+	}
+
+	knownPacks := knownResourcePackAliases()
+	disabledSet := map[string]struct{}{}
+	for _, rawPack := range disabledPacks {
+		for _, pack := range strings.Split(rawPack, ",") {
+			canonicalPack := canonicalPackAlias(pack)
+			if canonicalPack == "" {
+				continue
+			}
+			if _, known := knownPacks[canonicalPack]; !known {
+				continue
+			}
+			disabledSet[canonicalPack] = struct{}{}
+		}
+	}
+	if len(disabledSet) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(disabledSet))
+	for _, packID := range defaultResourcePackIDs() {
+		if _, disabled := disabledSet[canonicalPackAlias(packID)]; disabled {
+			normalized = append(normalized, packID)
+		}
+	}
+	return normalized
+}
+
+func knownResourcePackAliases() map[string]struct{} {
+	known := map[string]struct{}{}
+	for _, packID := range defaultResourcePackIDs() {
+		if canonicalPack := canonicalPackAlias(packID); canonicalPack != "" {
+			known[canonicalPack] = struct{}{}
+		}
+	}
+	return known
+}
+
+func canonicalPackAlias(packID string) string {
+	packID = strings.ToLower(strings.TrimSpace(packID))
+	packID = strings.ReplaceAll(packID, "-", "_")
+	packID = strings.ReplaceAll(packID, " ", "_")
+	switch packID {
+	case "hypixel_plus", "hplus", "hypixel+":
+		return "hplus"
+	case "fur_sky_reborn", "fursky_reborn", "fursky", "fsr":
+		return "fsr"
+	default:
+		return packID
+	}
+}
+
+func texturePackAliases(packID string) []string {
+	packID = strings.TrimSpace(packID)
+	if packID == "" {
+		return nil
+	}
+
+	aliases := []string{packID}
+	switch canonicalPackAlias(packID) {
+	case "hplus":
+		aliases = append(aliases, "HYPIXEL_PLUS", "hypixel_plus", "hplus")
+	case "fsr":
+		aliases = append(aliases, "FSR", "fsr", "FURSKY_REBORN", "fursky_reborn")
+	}
+
+	seen := map[string]struct{}{}
+	output := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		if _, ok := seen[alias]; ok {
+			continue
+		}
+		seen[alias] = struct{}{}
+		output = append(output, alias)
+	}
+	return output
+}
+
+func sameTexturePack(a string, b string) bool {
+	return canonicalPackAlias(a) == canonicalPackAlias(b)
+}
+
 func enabledPackIDs(disabledPacks map[string]struct{}) []string {
-	enabled := make([]string, 0, len(defaultResourcePackIDs))
-	for _, packID := range defaultResourcePackIDs {
-		if _, disabled := disabledPacks[packID]; disabled {
+	allPackIDs := defaultResourcePackIDs()
+	enabled := make([]string, 0, len(allPackIDs))
+	for _, packID := range allPackIDs {
+		if packDisabled(packID, disabledPacks) {
 			continue
 		}
 		enabled = append(enabled, packID)
 	}
 	return enabled
+}
+
+func packDisabled(packID string, disabledPacks map[string]struct{}) bool {
+	if len(disabledPacks) == 0 {
+		return false
+	}
+	canonicalPack := canonicalPackAlias(packID)
+	if canonicalPack == "" {
+		return false
+	}
+	for disabledPack := range disabledPacks {
+		if canonicalPackAlias(disabledPack) == canonicalPack {
+			return true
+		}
+	}
+	return false
 }
 
 func packSignatureFromDisabled(disabledPacks map[string]struct{}) string {
@@ -490,21 +791,46 @@ func packSignatureFromDisabled(disabledPacks map[string]struct{}) string {
 	return strings.Join(enabled, ",")
 }
 
+func packSignatureFromPackIDs(packIDs []string) string {
+	normalized := normalizePackIDs(packIDs)
+	if len(normalized) == 0 {
+		return "vanilla"
+	}
+	return strings.Join(normalized, ",")
+}
+
+func normalizePackIDs(packIDs []string) []string {
+	if len(packIDs) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(packIDs))
+	for _, packID := range packIDs {
+		packID = strings.TrimSpace(packID)
+		if packID == "" {
+			continue
+		}
+		seenKey := canonicalPackAlias(packID)
+		if _, ok := seen[seenKey]; ok {
+			continue
+		}
+		seen[seenKey] = struct{}{}
+		normalized = append(normalized, packID)
+	}
+	return normalized
+}
+
 func textureCacheKey(packSignature string, stableKey string) string {
 	packSignature = strings.TrimSpace(packSignature)
 	if packSignature == "" {
-		packSignature = defaultPackSignature
+		packSignature = defaultPackSignature()
 	}
 	return packSignature + "|" + stableKey
 }
 
 func texturePackDisabled(texturePack string, disabledPacks map[string]struct{}) bool {
-	if strings.TrimSpace(texturePack) == "" {
-		return false
-	}
-
-	_, disabled := disabledPacks[texturePack]
-	return disabled
+	return packDisabled(texturePack, disabledPacks)
 }
 
 func validCachedTexture(texture AppliedItemTexture, disabledPacks map[string]struct{}) bool {
@@ -530,29 +856,52 @@ func isStaleVanillaChestParticleRender(texture string) bool {
 	return false
 }
 
-func rememberRenderedSkyBlockID(id string) {
+func rememberRenderedSkyBlockID(id string, packID string) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return
 	}
+	packID = strings.TrimSpace(packID)
+	if packID == "" {
+		packID = defaultPackSignature()
+	}
+
 	renderedSkyBlockIndexMu.Lock()
-	renderedSkyBlockIndex[id] = struct{}{}
+	renderedSkyBlockIndex[renderedSkyBlockIndexKey(packID, id)] = struct{}{}
 	renderedSkyBlockIndexMu.Unlock()
 }
 
-func renderedSkyBlockIDKnown(id string) bool {
+func renderedSkyBlockIDKnown(id string, packID string) bool {
 	id = strings.TrimSpace(id)
-	if id == "" {
+	packID = strings.TrimSpace(packID)
+	if id == "" || packID == "" {
 		return false
 	}
 	renderedSkyBlockIndexMu.RLock()
-	_, ok := renderedSkyBlockIndex[id]
+	_, ok := renderedSkyBlockIndex[renderedSkyBlockIndexKey(packID, id)]
 	renderedSkyBlockIndexMu.RUnlock()
 	if ok {
 		return true
 	}
-	_, ok = cachedTextureByKey(textureCacheKey(defaultPackSignature, "skyblock:"+id), nil)
-	return ok
+
+	if strings.Contains(packID, ",") {
+		_, ok := cachedTextureByKey(textureCacheKey(packID, "skyblock:"+id), nil)
+		return ok
+	}
+	for _, alias := range texturePackAliases(packID) {
+		texture, ok := cachedTextureByKey(textureCacheKey(alias, "skyblock:"+id), nil)
+		if ok && sameTexturePack(texture.TexturePack, packID) {
+			return true
+		}
+	}
+	return false
+}
+
+func renderedSkyBlockIndexKey(packID string, id string) string {
+	if !strings.Contains(packID, ",") {
+		packID = canonicalPackAlias(packID)
+	}
+	return strings.TrimSpace(packID) + "|" + strings.TrimSpace(id)
 }
 
 func skyblockIDFromItem(itemMap map[string]any) string {
@@ -597,19 +946,6 @@ func vanillaRenderItem(itemMap map[string]any, id string) map[string]any {
 	}
 
 	return vanillaItem
-}
-
-func skullTextureHashFromItem(itemMap map[string]any) string {
-	if hash := skullTextureHashFromValues(itemMap); hash != "" {
-		return hash
-	}
-
-	tag, ok := textureMap(itemMap, "tag", "Tag")
-	if !ok {
-		return ""
-	}
-
-	return skullTextureHashFromValues(tag)
 }
 
 func skullTextureHashFromValues(values map[string]any) string {
@@ -1043,7 +1379,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 			} else if strings.HasPrefix(part, "itemmodel=") {
 				itemModel = debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
 			} else if strings.HasPrefix(part, "pack=") {
-				texturePack = strings.TrimPrefix(part, "pack=")
+				texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
 			}
 		}
 
@@ -1055,15 +1391,15 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 			continue
 		}
 		if itemId != "" && texturePack != "" {
-			setCachedItemTexture(itemId, texture)
+			setCachedTextureForStableKey(texturePack, "skyblock:"+itemId, texture)
 			loaded++
 		}
 		if texturePack != "" {
 			if itemModel != "" {
-				setCachedTextureForStableKey(defaultPackSignature, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+				setCachedTextureForStableKey(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
 			}
 			if minecraftID != "" {
-				setCachedTextureForStableKey(defaultPackSignature, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
+				setCachedTextureForStableKey(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
 			}
 		}
 	}
@@ -1124,7 +1460,7 @@ func startCustomResources() error {
 
 	// Render textures only on main thread; generated files are shared in cache/rendered.
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		if err := WarmMissingSkyBlockTextures(ctx, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{}); err != nil {
+		if err := WarmConfiguredSkyBlockTextures(ctx, cacheDir, resourcePacksPath, assetsPath, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{}); err != nil {
 			return err
 		}
 	} else if !renderedDirExists && os.IsNotExist(renderedDirErr) {
@@ -1139,13 +1475,7 @@ func startCustomResources() error {
 }
 
 func InitRenderer(cacheDir string, resourcePacksPath string, assetsPath string, preload bool) error {
-	renderer, err := mr.NewRendererWithOptions(mr.Options{
-		AssetsRoot:        assetsPath,
-		ResourcePacksRoot: resourcePacksPath,
-		PackIDs:           defaultResourcePackIDs,
-		Preload:           preload,
-		CacheDir:          cacheDir,
-	})
+	renderer, err := newRendererForPackIDs(cacheDir, resourcePacksPath, assetsPath, defaultResourcePackIDs(), preload)
 	if err != nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: %v", err)
 	}
@@ -1153,18 +1483,58 @@ func InitRenderer(cacheDir string, resourcePacksPath string, assetsPath string, 
 	return nil
 }
 
+func newRendererForPackIDs(cacheDir string, resourcePacksPath string, assetsPath string, packIDs []string, preload bool) (*mr.Renderer, error) {
+	return mr.NewRendererWithOptions(mr.Options{
+		AssetsRoot:        assetsPath,
+		ResourcePacksRoot: resourcePacksPath,
+		PackIDs:           packIDs,
+		Preload:           preload,
+		CacheDir:          cacheDir,
+	})
+}
+
+func WarmConfiguredSkyBlockTextures(ctx context.Context, cacheDir string, resourcePacksPath string, assetsPath string, itemIDs []string, options mr.PreRenderOptions) error {
+	for _, packID := range defaultResourcePackIDs() {
+		renderer := SkyCryptRender
+		if len(rendererPackIDs(renderer)) != 1 || rendererPackIDs(renderer)[0] != packID {
+			var err error
+			renderer, err = newRendererForPackIDs(cacheDir, resourcePacksPath, assetsPath, []string{packID}, false)
+			if err != nil {
+				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize %s renderer: %v", packID, err)
+			}
+		}
+
+		if err := warmMissingSkyBlockTexturesWithRenderer(ctx, renderer, []string{packID}, itemIDs, options); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func WarmMissingSkyBlockTextures(ctx context.Context, itemIDs []string, options mr.PreRenderOptions) error {
+	if SkyCryptRender == nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] renderer is not initialized")
+	}
+	return warmMissingSkyBlockTexturesWithRenderer(ctx, SkyCryptRender, rendererPackIDs(SkyCryptRender), itemIDs, options)
+}
+
+func warmMissingSkyBlockTexturesWithRenderer(ctx context.Context, renderer *mr.Renderer, packIDs []string, itemIDs []string, options mr.PreRenderOptions) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if SkyCryptRender == nil {
+	if renderer == nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] renderer is not initialized")
+	}
+	packSignature := packSignatureFromPackIDs(packIDs)
+	indexPackID := packSignature
+	if len(packIDs) == 1 {
+		indexPackID = strings.TrimSpace(packIDs[0])
 	}
 
 	missing := make([]string, 0, len(itemIDs))
 	for _, id := range itemIDs {
 		id = strings.TrimSpace(id)
-		if id == "" || renderedSkyBlockIDKnown(id) {
+		if id == "" || renderedSkyBlockIDKnown(id, indexPackID) {
 			continue
 		}
 		missing = append(missing, id)
@@ -1181,28 +1551,35 @@ func WarmMissingSkyBlockTextures(ctx context.Context, itemIDs []string, options 
 	}
 
 	timeNow := time.Now()
-	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendering %s missing SkyBlock items with %d workers...\n", utility.AddCommas(len(missing)), options.Workers)
+	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendering %s missing SkyBlock items for packs %s with %d workers...\n", utility.AddCommas(len(missing)), packSignature, options.Workers)
 	if len(missing) == 0 {
-		fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered 0 SkyBlock items, skipped 0, failed 0 in %s\n", time.Since(timeNow))
+		fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered 0 SkyBlock items for packs %s, skipped 0, failed 0 in %s\n", packSignature, time.Since(timeNow))
 		return nil
 	}
 
-	output, err := SkyCryptRender.PreRenderSkyBlockItemIDs(ctx, missing, options)
+	output, err := renderer.PreRenderSkyBlockItemIDs(ctx, missing, options)
 	if err != nil {
-		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to pre-render SkyBlock items: %v", err)
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to pre-render SkyBlock items for packs %s: %v", packSignature, err)
 	}
 
 	for _, item := range output.Entries {
 		if item.Error == "" && !item.Skipped {
-			setCachedItemTexture(item.InputID, AppliedItemTexture{
+			setCachedTextureForStableKey(packSignature, "skyblock:"+item.InputID, AppliedItemTexture{
 				Texture:     publicCacheTextureURL(item.Path),
 				TexturePack: item.TexturePackID,
 			})
 		}
 	}
 
-	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered %d SkyBlock items, skipped %d, failed %d in %s\n", output.Succeeded, output.Skipped, output.Failed, time.Since(timeNow))
+	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered %d SkyBlock items for packs %s, skipped %d, failed %d in %s\n", output.Succeeded, packSignature, output.Skipped, output.Failed, time.Since(timeNow))
 	return nil
+}
+
+func rendererPackIDs(renderer *mr.Renderer) []string {
+	if renderer == nil {
+		return nil
+	}
+	return normalizePackIDs(renderer.PackIDs())
 }
 
 func stableTextureKeysFromInput(input ItemTextureInput) []string {
@@ -1233,13 +1610,8 @@ func stableTextureKeysFromInput(input ItemTextureInput) []string {
 func cachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {
 	hasSkullIdentity := skullIdentityFromInput(input) != ""
 	for _, stableKey := range stableTextureKeysFromInput(input) {
-		if texture, ok := cachedTextureByKey(textureCacheKey(textureCtx.PackSignature, stableKey), textureCtx.DisabledPacks); ok {
+		if texture, ok := cachedTextureForStableKey(stableKey, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.DisabledPacks); ok {
 			return texture, true
-		}
-		if textureCtx.PackSignature != defaultPackSignature {
-			if texture, ok := cachedTextureByKey(textureCacheKey(defaultPackSignature, stableKey), textureCtx.DisabledPacks); ok {
-				return texture, true
-			}
 		}
 	}
 	if input.SkyBlockID != "" && !hasSkullIdentity {

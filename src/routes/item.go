@@ -1,11 +1,8 @@
 package routes
 
 import (
-	"encoding/json"
-	"os"
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -33,20 +30,7 @@ func ItemHandlers(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidItemProvidedError)
 	}
 
-	disabledPacks := []string{""}
-	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
-	if disabledPacksCookies != "FAILED" {
-		var parsedPacks []string
-		err := json.Unmarshal([]byte(disabledPacksCookies), &parsedPacks)
-		if err == nil {
-			disabledPacks = append(disabledPacks, parsedPacks...)
-		}
-	} else if os.Getenv("DEV") == "true" {
-		disabledResourcePacks := c.Query("disabledPacks", "")
-		if disabledResourcePacks != "" {
-			disabledPacks = strings.Split(disabledResourcePacks, ",")
-		}
-	}
+	disabledPacks := disabledPacksFromRequest(c)
 
 	textureBytes, err := lib.RenderItem(textureId, disabledPacks, false)
 	if err != nil {

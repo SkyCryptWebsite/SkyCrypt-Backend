@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"skycrypt/src/api"
@@ -44,20 +43,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 	timeNow := time.Now()
 
-	disabledPacks := []string{""}
-	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
-	if disabledPacksCookies != "FAILED" {
-		var parsedPacks []string
-		err := json.Unmarshal([]byte(disabledPacksCookies), &parsedPacks)
-		if err == nil {
-			disabledPacks = append(disabledPacks, parsedPacks...)
-		}
-	} else if os.Getenv("DEV") == "true" {
-		disabledResourcePacks := c.Query("disabledPacks", "")
-		if disabledResourcePacks != "" {
-			disabledPacks = strings.Split(disabledResourcePacks, ",")
-		}
-	}
+	disabledPacks := disabledPacksFromRequest(c)
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
@@ -204,7 +190,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		if err != nil {
 			fmt.Printf("Error marshaling items for caching: %v\n", err)
 		} else {
-			_ = db.Set(fmt.Sprintf("items:%s:%s:%s", profileId, uuid, strings.Join(disabledPacks, ",")), string(jsonData), 5*60) // Cache for 5 minutes
+			_ = db.Set(fmt.Sprintf("items:%s:%s:%s", profileId, uuid, disabledPacksCachePart(disabledPacks)), string(jsonData), 5*60) // Cache for 5 minutes
 		}
 	}()
 

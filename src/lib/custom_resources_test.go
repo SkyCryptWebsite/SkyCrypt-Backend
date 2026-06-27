@@ -124,7 +124,7 @@ func withRealRenderer(t *testing.T) {
 	renderer, err := mr.NewRendererWithOptions(mr.Options{
 		AssetsRoot:        filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft"),
 		ResourcePacksRoot: filepath.Join(appRoot, "assets", "resourcepacks"),
-		PackIDs:           []string{"hplus", "fsr"},
+		PackIDs:           defaultResourcePackIDs(),
 		CacheDir:          filepath.Join(appRoot, "cache"),
 	})
 	if err != nil {
@@ -136,6 +136,50 @@ func withRealRenderer(t *testing.T) {
 	t.Cleanup(func() {
 		SkyCryptRender = previous
 	})
+}
+
+func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
+	root := t.TempDir()
+	packs := map[string]string{
+		"Low Pack":  `{"id":"low","name":"Low","downloadUrl":"https://example.test/low","priority":10,"authors":["Low Author"]}`,
+		"High Pack": `{"id":"high","name":"High","downloadUrl":"https://example.test/high","priority":100,"authors":["High Author"]}`,
+		"Same Pack": `{"id":"same","name":"Same","downloadUrl":"https://example.test/same","priority":100,"authors":["Same Author"]}`,
+		"Vanilla":   `{"id":"vanilla","name":"Vanilla","priority":1000}`,
+	}
+	for dir, meta := range packs {
+		packDir := filepath.Join(root, dir)
+		if err := os.MkdirAll(packDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(packDir, "meta.json"), []byte(meta), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	configs, err := loadResourcePackConfigs(root)
+	if err != nil {
+		t.Fatalf("loadResourcePackConfigs returned error: %v", err)
+	}
+
+	got := []string{}
+	for _, config := range configs {
+		got = append(got, config.Id)
+	}
+	want := []string{"high", "same", "low"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("pack order = %v, want %v", got, want)
+	}
+	if configs[0].Author != "High Author" || configs[0].DownloadURL != "https://example.test/high" || configs[0].Url != configs[0].DownloadURL {
+		t.Fatalf("config compatibility fields not populated: %#v", configs[0])
+	}
+}
+
+func TestNormalizeDisabledPacksCanonicalizesInput(t *testing.T) {
+	got := NormalizeDisabledPacks([]string{" HPLUS ", "fsr", "", "unknown", "FSR", "hplus,fsr"})
+	want := []string{"FSR", "HYPIXEL_PLUS"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("NormalizeDisabledPacks() = %v, want %v", got, want)
+	}
 }
 
 func TestLoadRenderedTextureIndexPopulatesDefaultCacheWithoutRenderer(t *testing.T) {
@@ -168,11 +212,50 @@ func TestLoadRenderedTextureIndexPopulatesDefaultCacheWithoutRenderer(t *testing
 	}
 }
 
+func TestLoadRenderedTextureIndexKeepsPerPackVariants(t *testing.T) {
+	withNoRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+	withRenderedSkyBlockIndex(t, map[string]struct{}{})
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		"skyblock=DUAL_INDEXED__pack=hplus__hash=hplus.webp",
+		"skyblock=DUAL_INDEXED__pack=fsr__hash=fsr.webp",
+	}
+	for _, fileName := range files {
+		if err := os.WriteFile(filepath.Join(renderedDir, fileName), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatalf("LoadRenderedTextureIndex returned error: %v", err)
+	}
+	if loaded != 2 {
+		t.Fatalf("loaded = %d, want 2", loaded)
+	}
+
+	defaultTexture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "DUAL_INDEXED"}, NewTextureApplyContext())
+	if defaultTexture.TexturePack != "fsr" {
+		t.Fatalf("default texture pack = %q, want fsr", defaultTexture.TexturePack)
+	}
+
+	hplusTexture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "DUAL_INDEXED"}, NewTextureApplyContext([]string{"fsr"}))
+	if hplusTexture.TexturePack != "hplus" {
+		t.Fatalf("disabled fsr texture pack = %q, want hplus", hplusTexture.TexturePack)
+	}
+}
+
 func TestApplyTextureInputReturnsHotCachedSkyBlockTexture(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:FAST_ITEM", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:FAST_ITEM", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/skyblock=FAST_ITEM.webp",
 		TexturePack: "hplus",
 	})
@@ -184,11 +267,62 @@ func TestApplyTextureInputReturnsHotCachedSkyBlockTexture(t *testing.T) {
 	}
 }
 
+func TestApplyTextureInputSelectsPerPackVariantByDisabledPacks(t *testing.T) {
+	withNoRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	setCachedTextureForStableKey("hplus", "skyblock:DUAL_ITEM", AppliedItemTexture{
+		Texture:     testDomain() + "/cache/rendered/skyblock=DUAL_ITEM__pack=hplus.webp",
+		TexturePack: "hplus",
+	})
+	setCachedTextureForStableKey("fsr", "skyblock:DUAL_ITEM", AppliedItemTexture{
+		Texture:     testDomain() + "/cache/rendered/skyblock=DUAL_ITEM__pack=fsr.webp",
+		TexturePack: "fsr",
+	})
+
+	defaultTexture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "DUAL_ITEM"}, NewTextureApplyContext())
+	if defaultTexture.TexturePack != "fsr" {
+		t.Fatalf("default texture pack = %q, want fsr", defaultTexture.TexturePack)
+	}
+
+	hplusTexture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "DUAL_ITEM"}, NewTextureApplyContext([]string{"fsr"}))
+	if hplusTexture.TexturePack != "hplus" {
+		t.Fatalf("disabled fsr texture pack = %q, want hplus", hplusTexture.TexturePack)
+	}
+
+	fallbackTexture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:player_head",
+		SkyBlockID: "DUAL_ITEM",
+		Texture:    "dual-fallback-hash",
+	}, NewTextureApplyContext([]string{"fsr", "hplus"}))
+	want := testDomain() + "/api/head/dual-fallback-hash"
+	if fallbackTexture.Texture != want {
+		t.Fatalf("all packs disabled texture = %q, want %q", fallbackTexture.Texture, want)
+	}
+}
+
+func TestRenderedSkyBlockIndexTracksPackSeparately(t *testing.T) {
+	withTextureCache(t, map[string]AppliedItemTexture{})
+	withRenderedSkyBlockIndex(t, map[string]struct{}{})
+
+	setCachedTextureForStableKey("hplus", "skyblock:PACK_TRACKED", AppliedItemTexture{
+		Texture:     testDomain() + "/cache/rendered/skyblock=PACK_TRACKED__pack=hplus.webp",
+		TexturePack: "hplus",
+	})
+
+	if !renderedSkyBlockIDKnown("PACK_TRACKED", "hplus") {
+		t.Fatal("hplus render was not tracked")
+	}
+	if renderedSkyBlockIDKnown("PACK_TRACKED", "fsr") {
+		t.Fatal("hplus render incorrectly satisfied fsr render tracking")
+	}
+}
+
 func TestApplyTextureInputAllPacksDisabledSkipsCustomCache(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:DISABLED_ITEM", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:DISABLED_ITEM", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/skyblock=DISABLED_ITEM.webp",
 		TexturePack: "fsr",
 	})
@@ -218,7 +352,7 @@ func TestRendererNotReadyFallbackDoesNotPoisonLaterCacheHit(t *testing.T) {
 		t.Fatalf("first ApplyTextureInput() = %q", first.Texture)
 	}
 
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:LATE_RENDER", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:LATE_RENDER", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/skyblock=LATE_RENDER.webp",
 		TexturePack: "hplus",
 	})
@@ -325,7 +459,7 @@ func TestApplyTextureMapSkullIgnoresGenericPlayerHeadCache(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 
-	setCachedTextureForStableKey(defaultPackSignature, "itemmodel:minecraft:player_head", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "itemmodel:minecraft:player_head", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/generic-player-head.webp",
 		TexturePack: "hplus",
 	})
@@ -468,8 +602,8 @@ func TestApplyTextureSkipsStaleVanillaChestParticleCache(t *testing.T) {
 		Texture:     testDomain() + "/cache/rendered/skyblock=CHEST__mc=minecraft_chest__itemmodel=minecraft_chest__pack=vanilla__model=minecraft_item_chest__tex1=minecraft_block_oak_planks__hash=old.webp",
 		TexturePack: "vanilla",
 	}
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:CHEST", stale)
-	setCachedTextureForStableKey(defaultPackSignature, "itemmodel:minecraft:chest", stale)
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:CHEST", stale)
+	setCachedTextureForStableKey(defaultPackSignature(), "itemmodel:minecraft:chest", stale)
 
 	texture := ApplyTextureInput(ItemTextureInput{
 		ID:         "minecraft:chest",
@@ -496,8 +630,8 @@ func TestApplyTextureSkipsStaleVanillaEnderChestParticleCache(t *testing.T) {
 		Texture:     testDomain() + "/cache/rendered/skyblock=ENDER_CHEST__mc=minecraft_ender_chest__itemmodel=minecraft_ender_chest__pack=vanilla__model=minecraft_item_ender_chest__tex1=minecraft_block_obsidian__hash=old.webp",
 		TexturePack: "vanilla",
 	}
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:ENDER_CHEST", stale)
-	setCachedTextureForStableKey(defaultPackSignature, "itemmodel:minecraft:ender_chest", stale)
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:ENDER_CHEST", stale)
+	setCachedTextureForStableKey(defaultPackSignature(), "itemmodel:minecraft:ender_chest", stale)
 
 	texture := ApplyTextureInput(ItemTextureInput{
 		ID:         "minecraft:ender_chest",
@@ -657,7 +791,7 @@ func BenchmarkApplyTextureInputHotCache(b *testing.B) {
 		ITEM_TEXTURE_CACHE = previousCache
 	}()
 
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:BENCH_ITEM", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:BENCH_ITEM", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/skyblock=BENCH_ITEM.webp",
 		TexturePack: "hplus",
 	})
@@ -683,7 +817,7 @@ func BenchmarkApplyTextureMapCompatibility(b *testing.B) {
 		ITEM_TEXTURE_CACHE = previousCache
 	}()
 
-	setCachedTextureForStableKey(defaultPackSignature, "skyblock:BENCH_MAP_ITEM", AppliedItemTexture{
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:BENCH_MAP_ITEM", AppliedItemTexture{
 		Texture:     testDomain() + "/cache/rendered/skyblock=BENCH_MAP_ITEM.webp",
 		TexturePack: "hplus",
 	})

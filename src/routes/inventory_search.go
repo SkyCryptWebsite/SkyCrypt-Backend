@@ -1,9 +1,7 @@
 package routes
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
@@ -39,26 +37,13 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 
 	timeNow := time.Now()
 
-	disabledPacks := []string{""}
-	disabledPacksCookies := c.Cookies("disabledPacks", "FAILED")
-	if disabledPacksCookies != "FAILED" {
-		var parsedPacks []string
-		err := json.Unmarshal([]byte(disabledPacksCookies), &parsedPacks)
-		if err == nil {
-			disabledPacks = append(disabledPacks, parsedPacks...)
-		}
-	} else if os.Getenv("DEV") == "true" {
-		disabledResourcePacks := c.Query("disabledPacks", "")
-		if disabledResourcePacks != "" {
-			disabledPacks = strings.Split(disabledResourcePacks, ",")
-		}
-	}
+	disabledPacks := disabledPacksFromRequest(c)
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 	searchParam := c.Params("searchParam")
 
-	cache, err := db.GetContext(c.UserContext(), fmt.Sprintf("items:%s:%s:%s", profileId, uuid, strings.Join(disabledPacks, ",")))
+	cache, err := db.GetContext(c.UserContext(), fmt.Sprintf("items:%s:%s:%s", profileId, uuid, disabledPacksCachePart(disabledPacks)))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get items: %v", err),
