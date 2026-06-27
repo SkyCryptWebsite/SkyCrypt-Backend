@@ -33,15 +33,11 @@ type itemDataType struct {
 }
 
 func ParseItemTypeFromLore(lore []string, item skycrypttypes.Item) itemDataType {
-	loreCopy := make([]string, len(lore))
-	copy(loreCopy, lore)
-
-	for i, j := 0, len(loreCopy)-1; i < j; i, j = i+1, j-1 {
-		loreCopy[i], loreCopy[j] = loreCopy[j], loreCopy[i]
-	}
-
-	for _, line := range loreCopy {
-		rawLine := utility.GetRawLore(line)
+	for i := len(lore) - 1; i >= 0; i-- {
+		rawLine := lore[i]
+		if strings.Contains(rawLine, "§") {
+			rawLine = utility.GetRawLore(rawLine)
+		}
 		match := rarityPattern.FindStringSubmatch(rawLine)
 
 		if len(match) > 0 {

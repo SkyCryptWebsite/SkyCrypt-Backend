@@ -129,32 +129,43 @@ func InventoryHandler(c *fiber.Ctx) error {
 	}
 
 	output := []models.Inventory{}
+	var itemProcessingStats *statsItems.ItemProcessingStats
+	if statsItems.ItemProcessingDebugEnabled() {
+		itemProcessingStats = statsItems.NewItemProcessingStats("inventory", uuid, profile.ProfileID, disabledPacks)
+	}
+	neuItemCache := map[string]models.NEUItem{}
 	for _, inventoryId := range constants.INVENTORY_ORDER {
 		inventoryData := constants.INVENTORY[inventoryId]
 		if inventoryId == "museum" {
 			museumItems := statsItems.GetMuseum(profileMuseum[uuid], disabledPacks)
+			stripStart := time.Now()
+			strippedItems := statsItems.StripItems(&museumItems)
+			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
 
 			output = append(output, models.Inventory{
 				Name:           inventoryData.Name,
 				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
 				SeparatorAfter: inventoryData.SeparatorAfter,
-				Items:          statsItems.StripItems(&museumItems),
+				Items:          strippedItems,
 			})
 			continue
 		} else if inventoryId == "sacks" {
 			itemSlice := stats.GetInventory(&userProfile, "sacks")
 			sackItems := userProfile.Inventory.Sacks
 
-			parsedSacks := statsItems.ProcessItems(itemSlice, "sacks", disabledPacks)
+			parsedSacks := statsItems.ProcessItemsWithNEUCacheAndStats(itemSlice, "sacks", neuItemCache, itemProcessingStats, disabledPacks)
 			processedSacks := statsItems.ProcessSacks(parsedSacks, sackItems)
+			stripStart := time.Now()
+			strippedItems := statsItems.StripItems(&processedSacks, models.StripOptions{
+				Nested: true,
+			})
+			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
 
 			output = append(output, models.Inventory{
 				Name:           inventoryData.Name,
 				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
 				SeparatorAfter: inventoryData.SeparatorAfter,
-				Items: statsItems.StripItems(&processedSacks, models.StripOptions{
-					Nested: true,
-				}),
+				Items:          strippedItems,
 			})
 			continue
 		}
@@ -165,8 +176,10 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 
 		inventoryItems := stats.GetInventory(&userProfile, inventoryId)
-		processedItems := statsItems.ProcessItems(inventoryItems, inventoryId, disabledPacks)
+		processedItems := statsItems.ProcessItemsWithNEUCacheAndStats(inventoryItems, inventoryId, neuItemCache, itemProcessingStats, disabledPacks)
+		stripStart := time.Now()
 		strippedItems := statsItems.StripItems(&processedItems)
+		itemProcessingStats.RecordStripDuration(time.Since(stripStart))
 		if strings.HasSuffix(inventoryId, "inventory") { // Move hotbar to end of inventory
 			if len(strippedItems) > 9 {
 				strippedItems = append(strippedItems[9:], strippedItems[:9]...)
@@ -181,6 +194,9 @@ func InventoryHandler(c *fiber.Ctx) error {
 		})
 	}
 
+	if itemProcessingStats != nil {
+		itemProcessingStats.LogIfEnabled(time.Since(itemProcessingStats.Started))
+	}
 	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
 
 	// Cache the full inventory for search functionality

@@ -407,13 +407,14 @@ func TestApplyTextureInputDoesNotReuseGenericPlayerHeadCacheForDifferentSkulls(t
 	}
 }
 
-func TestApplyTextureInputSkullOwnerIgnoresSkyBlockAliasCache(t *testing.T) {
+func TestApplyTextureInputSkullOwnerUsesPreloadedSkyBlockCache(t *testing.T) {
 	withNoRenderer(t)
 	withTextureCache(t, map[string]AppliedItemTexture{})
 
-	setCachedItemTexture("SHARED_SKULL_ITEM", AppliedItemTexture{
-		Texture:     testDomain() + "/cache/rendered/wrong-shared-skull.webp",
-		TexturePack: "hplus",
+	want := testDomain() + "/cache/rendered/skyblock=SHARED_SKULL_ITEM__pack=fsr.webp"
+	setCachedTextureForStableKey("fsr", "skyblock:SHARED_SKULL_ITEM", AppliedItemTexture{
+		Texture:     want,
+		TexturePack: "fsr",
 	})
 
 	texture := ApplyTextureInput(ItemTextureInput{
@@ -426,11 +427,13 @@ func TestApplyTextureInputSkullOwnerIgnoresSkyBlockAliasCache(t *testing.T) {
 				Textures: []skycrypttypes.Texture{{Value: testSkinValue("specific-skull-hash")}},
 			},
 		},
-	}, NewTextureApplyContext())
+	}, NewTextureApplyContext([]string{"hplus"}))
 
-	want := testDomain() + "/api/head/specific-skull-hash"
 	if texture.Texture != want {
 		t.Fatalf("skull texture = %q, want %q", texture.Texture, want)
+	}
+	if strings.Contains(texture.Texture, "/api/head/") {
+		t.Fatalf("skull texture = %q, want preloaded cache texture", texture.Texture)
 	}
 }
 
@@ -680,6 +683,31 @@ func TestApplyTextureUsesVanillaModelFallbacks(t *testing.T) {
 	}
 }
 
+func TestApplyTextureInputDisableRuntimeRenderUsesStaticFallback(t *testing.T) {
+	withRealRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	textureCtx := NewTextureApplyContext()
+	textureCtx.DisableRuntimeRender = true
+	texture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:polished_diorite",
+		NumericID:  1,
+		Damage:     4,
+		SkyBlockID: "STONE:4",
+		Tag:        map[string]any{"ExtraAttributes": map[string]any{"id": "STONE:4"}},
+	}, textureCtx)
+
+	if texture.Texture == "" || strings.HasSuffix(texture.Texture, "/barrier.png") {
+		t.Fatalf("ApplyTextureInput() = %q, want static fallback texture", texture.Texture)
+	}
+	if strings.Contains(texture.Texture, "/cache/rendered/") {
+		t.Fatalf("ApplyTextureInput() = %q, runtime renderer should be skipped", texture.Texture)
+	}
+	if !strings.Contains(texture.Texture, "/assets/resourcepacks/Vanilla/assets/minecraft/textures/block/polished_diorite.png") {
+		t.Fatalf("ApplyTextureInput() = %q, want polished diorite static texture", texture.Texture)
+	}
+}
+
 func TestVanillaItemResourceExistsForModelOnlyBlockItem(t *testing.T) {
 	if !vanillaItemResourceExists("polished_diorite") {
 		t.Fatal("vanillaItemResourceExists(polished_diorite) = false, want true")
@@ -781,6 +809,143 @@ func TestApplyTextureReturnsBarrierForInvalidItem(t *testing.T) {
 	}
 }
 
+func TestApplyTextureInputStatsHotSkyBlockCache(t *testing.T) {
+	withNoRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	setCachedTextureForStableKey(defaultPackSignature(), "skyblock:STATS_CACHE", AppliedItemTexture{
+		Texture:     testDomain() + "/cache/rendered/skyblock=STATS_CACHE.webp",
+		TexturePack: "hplus",
+	})
+
+	textureCtx := NewTextureApplyContext()
+	texture := ApplyTextureInput(ItemTextureInput{SkyBlockID: "STATS_CACHE"}, textureCtx)
+	if texture.Texture == "" {
+		t.Fatal("ApplyTextureInput() returned empty texture")
+	}
+	if textureCtx.Stats.Total != 1 || textureCtx.Stats.CacheHits != 1 || textureCtx.Stats.StableSkyBlockHits != 1 {
+		t.Fatalf("stats total/cache/stable = %d/%d/%d, want 1/1/1", textureCtx.Stats.Total, textureCtx.Stats.CacheHits, textureCtx.Stats.StableSkyBlockHits)
+	}
+	if textureCtx.Stats.CacheMisses != 0 || textureCtx.Stats.RenderAttempts != 0 {
+		t.Fatalf("stats misses/render attempts = %d/%d, want 0/0", textureCtx.Stats.CacheMisses, textureCtx.Stats.RenderAttempts)
+	}
+}
+
+func TestApplyTextureInputStatsDisabledRuntimeRenderStaticFallback(t *testing.T) {
+	withNoRenderer(t)
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	textureCtx := NewTextureApplyContext()
+	textureCtx.DisableRuntimeRender = true
+	texture := ApplyTextureInput(ItemTextureInput{ID: "minecraft:apple"}, textureCtx)
+	if texture.Texture != testDomain()+"/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png" {
+		t.Fatalf("ApplyTextureInput() = %q, want vanilla apple texture", texture.Texture)
+	}
+	if textureCtx.Stats.CacheMisses != 1 || textureCtx.Stats.RuntimeRenderSkippedDisabled != 1 || textureCtx.Stats.VanillaTextureFallbacks != 1 {
+		t.Fatalf(
+			"stats misses/render disabled/vanilla texture = %d/%d/%d, want 1/1/1",
+			textureCtx.Stats.CacheMisses,
+			textureCtx.Stats.RuntimeRenderSkippedDisabled,
+			textureCtx.Stats.VanillaTextureFallbacks,
+		)
+	}
+}
+
+func TestApplyTextureInputStatsFallbackCounters(t *testing.T) {
+	tests := []struct {
+		name  string
+		input ItemTextureInput
+		check func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture)
+	}{
+		{
+			name: "skull head",
+			input: ItemTextureInput{
+				ID: "minecraft:player_head",
+				SkullOwner: &skycrypttypes.SkullOwner{
+					Properties: skycrypttypes.Properties{
+						Textures: []skycrypttypes.Texture{{Value: testSkinValue("stats-head-hash")}},
+					},
+				},
+			},
+			check: func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture) {
+				t.Helper()
+				if texture.Texture != testDomain()+"/api/head/stats-head-hash" {
+					t.Fatalf("texture = %q, want head fallback", texture.Texture)
+				}
+				if stats.SkullFallbacks != 1 || stats.HeadFallbacks != 1 {
+					t.Fatalf("skull/head fallbacks = %d/%d, want 1/1", stats.SkullFallbacks, stats.HeadFallbacks)
+				}
+			},
+		},
+		{
+			name:  "leather",
+			input: ItemTextureInput{NumericID: 298, DisplayColor: 0x112233},
+			check: func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture) {
+				t.Helper()
+				if texture.Texture != testDomain()+"/api/leather/helmet/112233" {
+					t.Fatalf("texture = %q, want leather fallback", texture.Texture)
+				}
+				if stats.LeatherFallbacks != 1 {
+					t.Fatalf("leather fallbacks = %d, want 1", stats.LeatherFallbacks)
+				}
+			},
+		},
+		{
+			name:  "vanilla texture",
+			input: ItemTextureInput{ID: "minecraft:apple"},
+			check: func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture) {
+				t.Helper()
+				if texture.Texture != testDomain()+"/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png" {
+					t.Fatalf("texture = %q, want vanilla texture", texture.Texture)
+				}
+				if stats.VanillaFallbacks != 1 || stats.VanillaTextureFallbacks != 1 {
+					t.Fatalf("vanilla/texture fallbacks = %d/%d, want 1/1", stats.VanillaFallbacks, stats.VanillaTextureFallbacks)
+				}
+			},
+		},
+		{
+			name:  "vanilla model",
+			input: ItemTextureInput{ID: "minecraft:polished_diorite"},
+			check: func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture) {
+				t.Helper()
+				if !strings.Contains(texture.Texture, "/assets/resourcepacks/Vanilla/assets/minecraft/textures/block/polished_diorite.png") {
+					t.Fatalf("texture = %q, want polished diorite model fallback", texture.Texture)
+				}
+				if stats.VanillaFallbacks != 1 || stats.VanillaModelFallbacks != 1 {
+					t.Fatalf("vanilla/model fallbacks = %d/%d, want 1/1", stats.VanillaFallbacks, stats.VanillaModelFallbacks)
+				}
+			},
+		},
+		{
+			name:  "barrier",
+			input: ItemTextureInput{ID: ""},
+			check: func(t *testing.T, stats *TextureApplyStats, texture AppliedItemTexture) {
+				t.Helper()
+				if !strings.HasSuffix(texture.Texture, "/barrier.png") {
+					t.Fatalf("texture = %q, want barrier", texture.Texture)
+				}
+				if stats.BarrierFallbacks != 1 {
+					t.Fatalf("barrier fallbacks = %d, want 1", stats.BarrierFallbacks)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			withNoRenderer(t)
+			withTextureCache(t, map[string]AppliedItemTexture{})
+			textureCtx := NewTextureApplyContext()
+			textureCtx.DisableRuntimeRender = true
+			texture := ApplyTextureInput(test.input, textureCtx)
+			if textureCtx.Stats.Total != 1 {
+				t.Fatalf("stats total = %d, want 1", textureCtx.Stats.Total)
+			}
+			test.check(t, textureCtx.Stats, texture)
+		})
+	}
+}
+
 func BenchmarkApplyTextureInputHotCache(b *testing.B) {
 	previousRenderer := SkyCryptRender
 	previousCache := ITEM_TEXTURE_CACHE
@@ -803,6 +968,43 @@ func BenchmarkApplyTextureInputHotCache(b *testing.B) {
 		texture := ApplyTextureInput(input, textureCtx)
 		if texture.Texture == "" {
 			b.Fatal("empty texture")
+		}
+	}
+}
+
+func BenchmarkApplyTextureInputHotSkyBlockSkullCache(b *testing.B) {
+	previousRenderer := SkyCryptRender
+	previousCache := ITEM_TEXTURE_CACHE
+	SkyCryptRender = nil
+	ITEM_TEXTURE_CACHE = map[string]AppliedItemTexture{}
+	defer func() {
+		SkyCryptRender = previousRenderer
+		ITEM_TEXTURE_CACHE = previousCache
+	}()
+
+	want := testDomain() + "/cache/rendered/skyblock=BENCH_SKULL_ITEM__pack=fsr.webp"
+	setCachedTextureForStableKey("fsr", "skyblock:BENCH_SKULL_ITEM", AppliedItemTexture{
+		Texture:     want,
+		TexturePack: "fsr",
+	})
+	input := ItemTextureInput{
+		ID:         "minecraft:player_head",
+		ItemModel:  "minecraft:player_head",
+		SkyBlockID: "BENCH_SKULL_ITEM",
+		SkullOwner: &skycrypttypes.SkullOwner{
+			ID: "bench-skull-id",
+			Properties: skycrypttypes.Properties{
+				Textures: []skycrypttypes.Texture{{Value: testSkinValue("bench-skull-hash")}},
+			},
+		},
+	}
+	textureCtx := NewTextureApplyContext([]string{"hplus"})
+
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		texture := ApplyTextureInput(input, textureCtx)
+		if texture.Texture != want {
+			b.Fatalf("texture = %q, want %q", texture.Texture, want)
 		}
 	}
 }

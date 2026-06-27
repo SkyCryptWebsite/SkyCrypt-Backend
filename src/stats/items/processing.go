@@ -10,27 +10,44 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
+	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 )
 
 func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[]string) []models.ProcessedItem {
-	return ProcessItemsWithNEUCache(items, source, map[string]models.NEUItem{}, disabledPacks...)
+	return ProcessItemsWithNEUCacheAndStats(items, source, map[string]models.NEUItem{}, nil, disabledPacks...)
 }
 
 func ProcessItemsWithNEUCache(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, disabledPacks ...[]string) []models.ProcessedItem {
+	return ProcessItemsWithNEUCacheAndStats(items, source, neuItemCache, nil, disabledPacks...)
+}
+
+func ProcessItemsWithNEUCacheAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, disabledPacks ...[]string) []models.ProcessedItem {
 	if neuItemCache == nil {
 		neuItemCache = map[string]models.NEUItem{}
 	}
 	textureCtx := lib.NewTextureApplyContext(disabledPacks...)
-	return processItemsWithTextureContext(items, source, neuItemCache, textureCtx)
+	textureCtx.DisableRuntimeRender = true
+	if itemStats != nil {
+		itemStats.ensure()
+		textureCtx.Stats = itemStats.TextureStats
+	} else {
+		textureCtx.DisableStats = true
+		textureCtx.Stats = nil
+	}
+	return processItemsWithTextureContextAndStats(items, source, neuItemCache, textureCtx, itemStats, 0)
 }
 
 func processItemsWithTextureContext(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) []models.ProcessedItem {
+	return processItemsWithTextureContextAndStats(items, source, neuItemCache, textureCtx, nil, 0)
+}
+
+func processItemsWithTextureContextAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) []models.ProcessedItem {
 	processedItems := make([]models.ProcessedItem, 0, len(items))
 	for _, item := range items {
-		processedItem := processItem(item, source, neuItemCache, textureCtx)
+		processedItem := processItemWithStats(item, source, neuItemCache, textureCtx, itemStats, depth)
 		processedItem.ItemIndex = len(processedItems)
 
 		processedItems = append(processedItems, processedItem)
@@ -40,12 +57,28 @@ func processItemsWithTextureContext(items []*skycrypttypes.Item, source string, 
 }
 
 func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]string) models.ProcessedItem {
-	return processItem(item, source, map[string]models.NEUItem{}, lib.NewTextureApplyContext(disabledPacks...))
+	textureCtx := lib.NewTextureApplyContext(disabledPacks...)
+	textureCtx.DisableRuntimeRender = true
+	textureCtx.DisableStats = true
+	textureCtx.Stats = nil
+	return processItemWithStats(item, source, map[string]models.NEUItem{}, textureCtx, nil, 0)
 }
 
 func processItem(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) models.ProcessedItem {
+	return processItemWithStats(item, source, neuItemCache, textureCtx, nil, 0)
+}
+
+func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) models.ProcessedItem {
 	if item == nil || item.Tag == nil {
 		return models.ProcessedItem{}
+	}
+	recordStats := itemStats != nil
+	if recordStats {
+		itemStats.recordItemStart(source, item, depth)
+		itemStart := time.Now()
+		defer func() {
+			itemStats.recordItemDuration(source, item, depth, time.Since(itemStart))
+		}()
 	}
 
 	processedItem := models.ProcessedItem{
@@ -55,12 +88,25 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 		Source:      source,
 	}
 
+	var stageStart time.Time
+	if recordStats {
+		stageStart = time.Now()
+	}
 	rawLore := make([]string, len(processedItem.Lore))
 	for i, lore := range processedItem.Lore {
 		rawLore[i] = utility.GetRawLore(lore)
 	}
+	if recordStats {
+		itemStats.recordStageDuration(itemProcessingStageRawLore, time.Since(stageStart))
+	}
 
+	if recordStats {
+		stageStart = time.Now()
+	}
 	itemType := ParseItemTypeFromLore(rawLore, *item)
+	if recordStats {
+		itemStats.recordStageDuration(itemProcessingStageTypeParse, time.Since(stageStart))
+	}
 	processedItem.Rarity = itemType.Rarity
 	processedItem.Categories = itemType.Categories
 	if processedItem.Recombobulated {
@@ -68,6 +114,9 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 	}
 
 	if item.Tag.ExtraAttributes != nil {
+		if recordStats {
+			stageStart = time.Now()
+		}
 		processedItem.Recombobulated = item.Tag.ExtraAttributes.Recombobulated == 1
 		if item.Tag.SkullOwner == nil {
 			// Do not apply shiny effecet to skulls
@@ -146,30 +195,19 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 		if item.Tag.ExtraAttributes.CompactBlocks != 0 {
 			AddLevelableEnchantmentsToLore(item.Tag.ExtraAttributes.CompactBlocks, constants.ENCHANTMENT_LADDERS["compact_blocks"], &processedItem.Lore)
 		}
-
-		// Wiki links
-		NEUItem, ok := neuItemCache[item.Tag.ExtraAttributes.Id]
-		neuItemFound := ok
-		if !ok {
-			var err error
-			NEUItem, err = notenoughupdates.GetItem(item.Tag.ExtraAttributes.Id)
-			if err == nil {
-				neuItemCache[item.Tag.ExtraAttributes.Id] = NEUItem
-				neuItemFound = true
-			}
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageExtra, time.Since(stageStart))
 		}
-		if neuItemFound && len(NEUItem.Wiki) > 0 {
-			if len(NEUItem.Wiki) == 1 {
-				if !strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					processedItem.Wiki = &NEUItem.Wiki[0]
-				}
-			} else {
-				if strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
-					processedItem.Wiki = &NEUItem.Wiki[1]
-				} else {
-					processedItem.Wiki = &NEUItem.Wiki[0]
-				}
-			}
+
+		if recordStats {
+			stageStart = time.Now()
+		}
+		wiki, ok, wikiCacheHit := getNEUItemWiki(item.Tag.ExtraAttributes.Id, neuItemCache)
+		if recordStats {
+			itemStats.recordNEUWikiLookup(wikiCacheHit, time.Since(stageStart))
+		}
+		if ok {
+			processedItem.Wiki = selectWikiLink(wiki)
 		}
 	}
 
@@ -199,6 +237,9 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 	}
 
 	if processedItem.Texture == "" {
+		if recordStats {
+			stageStart = time.Now()
+		}
 		numericId := 0
 		if item.ID != nil {
 			numericId = *item.ID
@@ -233,8 +274,7 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 				textureID = itemData.TextureId
 			}
 		}
-
-		appliedTexture := lib.ApplyTextureInput(lib.ItemTextureInput{
+		textureInput := lib.ItemTextureInput{
 			ID:           fmt.Sprintf("minecraft:%s", itemId),
 			ItemModel:    itemModel,
 			SkyBlockID:   skyblockId,
@@ -244,7 +284,18 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 			DisplayColor: item.Tag.Display.Color,
 			SkullOwner:   item.Tag.SkullOwner,
 			Tag:          item.Tag,
-		}, textureCtx)
+		}
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageTextureInput, time.Since(stageStart))
+		}
+
+		if recordStats {
+			stageStart = time.Now()
+		}
+		appliedTexture := lib.ApplyTextureInput(textureInput, textureCtx)
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageTextureApply, time.Since(stageStart))
+		}
 		processedItem.Texture = appliedTexture.Texture
 		if appliedTexture.TexturePack != "" {
 			processedItem.TexturePack = appliedTexture.TexturePack
@@ -256,6 +307,9 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 	}
 
 	if item.ContainsItems != nil {
+		if recordStats {
+			stageStart = time.Now()
+		}
 		containerValue := 0.0
 		for _, containedItem := range item.ContainsItems {
 			if containedItem != nil && containedItem.Price > 0 {
@@ -266,17 +320,60 @@ func processItem(item *skycrypttypes.Item, source string, neuItemCache map[strin
 		if containerValue > 0 {
 			processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Container Value: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(containerValue)), utility.FormatNumber(containerValue)))
 		}
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageValueLore, time.Since(stageStart))
+		}
 
-		processedItem.ContainsItems = processItemsWithTextureContext(item.ContainsItems, source, neuItemCache, textureCtx)
+		if recordStats {
+			stageStart = time.Now()
+		}
+		processedItem.ContainsItems = processItemsWithTextureContextAndStats(item.ContainsItems, source, neuItemCache, textureCtx, itemStats, depth+1)
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageNested, time.Since(stageStart))
+		}
 	}
 
 	if item.Price > 0 {
+		if recordStats {
+			stageStart = time.Now()
+		}
 		processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Item Value: §6%s Coins §7(§6%s§7)", utility.AddCommas(int(item.Price)), utility.FormatNumber(item.Price)))
+		if recordStats {
+			itemStats.recordStageDuration(itemProcessingStageValueLore, time.Since(stageStart))
+		}
 	}
 
 	// TODO: add cake bag & legacy backpack support
 
 	return processedItem
+}
+
+func getNEUItemWiki(itemID string, neuItemCache map[string]models.NEUItem) ([]string, bool, bool) {
+	if itemID == "" {
+		return nil, false, false
+	}
+	if NEUItem, ok := neuItemCache[itemID]; ok {
+		return NEUItem.Wiki, len(NEUItem.Wiki) > 0, true
+	}
+	wiki, ok := notenoughupdates.GetItemWiki(itemID)
+	neuItemCache[itemID] = models.NEUItem{Wiki: wiki}
+	return wiki, ok && len(wiki) > 0, false
+}
+
+func selectWikiLink(wiki []string) *string {
+	if len(wiki) == 0 {
+		return nil
+	}
+	if len(wiki) == 1 {
+		if !strings.HasPrefix(wiki[0], "https://wiki.hypixel.net/") {
+			return &wiki[0]
+		}
+		return nil
+	}
+	if strings.HasPrefix(wiki[0], "https://wiki.hypixel.net/") {
+		return &wiki[1]
+	}
+	return &wiki[0]
 }
 
 func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []models.ProcessedItem {

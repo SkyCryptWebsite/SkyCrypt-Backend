@@ -60,25 +60,55 @@ type ItemTextureInput struct {
 }
 
 type TextureApplyContext struct {
-	DisabledPacks  map[string]struct{}
-	EnabledPackIDs []string
-	PackSignature  string
-	Domain         string
-	Stats          *TextureApplyStats
+	DisabledPacks        map[string]struct{}
+	EnabledPackIDs       []string
+	PackSignature        string
+	Domain               string
+	DisableRuntimeRender bool
+	DisableStats         bool
+	Stats                *TextureApplyStats
 }
 
 type TextureApplyStats struct {
-	Total            int
-	CacheHits        int
-	RenderAttempts   int
-	RenderHits       int
-	RenderErrors     int
-	RenderDuration   time.Duration
-	SkullFallbacks   int
-	HeadFallbacks    int
-	LeatherFallbacks int
-	VanillaFallbacks int
-	BarrierFallbacks int
+	Total                            int
+	CacheHits                        int
+	CacheMisses                      int
+	StableSkyBlockHits               int
+	StableKeyHits                    int
+	LegacySkyBlockHits               int
+	RawMapHits                       int
+	RenderAttempts                   int
+	RenderHits                       int
+	RenderErrors                     int
+	RenderDuration                   time.Duration
+	RuntimeRenderSkipped             int
+	RuntimeRenderSkippedDisabled     int
+	RuntimeRenderSkippedRendererNil  int
+	RuntimeRenderSkippedNoPacks      int
+	RuntimeRenderSkippedGenericSkull int
+	SkullFallbacks                   int
+	HeadFallbacks                    int
+	LeatherFallbacks                 int
+	VanillaFallbacks                 int
+	VanillaTextureFallbacks          int
+	VanillaModelFallbacks            int
+	NumericFallbacks                 int
+	BarrierFallbacks                 int
+	TotalDuration                    time.Duration
+	CacheDuration                    time.Duration
+	FallbackDuration                 time.Duration
+	Samples                          []TextureDecisionSample
+}
+
+type TextureDecisionSample struct {
+	SkyBlockID  string
+	MinecraftID string
+	ItemModel   string
+	Texture     string
+	TexturePack string
+	StableKey   string
+	Reason      string
+	Duration    time.Duration
 }
 
 type resourcePackMeta struct {
@@ -243,7 +273,9 @@ func normalizeTextureApplyContext(textureCtx TextureApplyContext) TextureApplyCo
 	if textureCtx.Domain == "" {
 		textureCtx.Domain = utility.GetDomain()
 	}
-	if textureCtx.Stats == nil {
+	if textureCtx.DisableStats {
+		textureCtx.Stats = nil
+	} else if textureCtx.Stats == nil {
 		textureCtx.Stats = &TextureApplyStats{}
 	}
 	return textureCtx
@@ -382,6 +414,10 @@ func itemTextureCacheLen() int {
 	length := len(ITEM_TEXTURE_CACHE)
 	itemTextureCacheMu.RUnlock()
 	return length
+}
+
+func ItemTextureCacheLen() int {
+	return itemTextureCacheLen()
 }
 
 func cachedTextureFromRawMap(itemMap map[string]any, disabledPacks map[string]struct{}) (AppliedItemTexture, bool) {
@@ -1593,17 +1629,54 @@ func stableTextureKeysFromInput(input ItemTextureInput) []string {
 	return keys
 }
 
+type textureCacheLookupDetail struct {
+	Reason    string
+	StableKey string
+}
+
 func cachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {
-	hasSkullIdentity := skullIdentityFromInput(input) != ""
-	for _, stableKey := range stableTextureKeysFromInput(input) {
-		if texture, ok := cachedTextureForStableKey(stableKey, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.DisabledPacks); ok {
-			return texture, true
+	texture, ok, _ := cachedTextureForInputDetailed(input, textureCtx)
+	return texture, ok
+}
+
+func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool, textureCacheLookupDetail) {
+	skyblockID := strings.TrimSpace(input.SkyBlockID)
+	if texture, ok := cachedStableSkyBlockTexture(skyblockID, textureCtx); ok {
+		return texture, true, textureCacheLookupDetail{
+			Reason:    "stable_skyblock_cache",
+			StableKey: "skyblock:" + skyblockID,
 		}
 	}
-	if input.SkyBlockID != "" && !hasSkullIdentity {
-		return cachedItemTexture(input.SkyBlockID, textureCtx.DisabledPacks)
+
+	hasSkullIdentity := skullIdentityFromInput(input) != ""
+	for _, stableKey := range stableTextureKeysFromInput(input) {
+		if skyblockID != "" && stableKey == "skyblock:"+skyblockID {
+			continue
+		}
+		if texture, ok := cachedTextureForStableKey(stableKey, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.DisabledPacks); ok {
+			return texture, true, textureCacheLookupDetail{
+				Reason:    "stable_key_cache",
+				StableKey: stableKey,
+			}
+		}
 	}
-	return AppliedItemTexture{}, false
+	if skyblockID != "" && !hasSkullIdentity {
+		if texture, ok := cachedItemTexture(skyblockID, textureCtx.DisabledPacks); ok {
+			return texture, true, textureCacheLookupDetail{
+				Reason:    "legacy_skyblock_cache",
+				StableKey: skyblockID,
+			}
+		}
+	}
+	return AppliedItemTexture{}, false, textureCacheLookupDetail{}
+}
+
+func cachedStableSkyBlockTexture(skyblockID string, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {
+	skyblockID = strings.TrimSpace(skyblockID)
+	if skyblockID == "" {
+		return AppliedItemTexture{}, false
+	}
+	return cachedTextureForStableKey("skyblock:"+skyblockID, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.DisabledPacks)
 }
 
 func setCachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext, texture AppliedItemTexture) {
@@ -1766,6 +1839,105 @@ func skullFallbackTexture(input ItemTextureInput, textureCtx TextureApplyContext
 	return AppliedItemTexture{}
 }
 
+const textureDecisionSampleLimit = 50
+
+func textureDebugTraceEnabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("ITEM_PROCESSING_DEBUG")), "trace")
+}
+
+func addTextureDecisionSample(stats *TextureApplyStats, sample TextureDecisionSample) {
+	if stats == nil {
+		return
+	}
+	if len(stats.Samples) < textureDecisionSampleLimit {
+		stats.Samples = append(stats.Samples, sample)
+		return
+	}
+
+	shortestIndex := 0
+	for index := 1; index < len(stats.Samples); index++ {
+		if stats.Samples[index].Duration < stats.Samples[shortestIndex].Duration {
+			shortestIndex = index
+		}
+	}
+	if sample.Duration > stats.Samples[shortestIndex].Duration {
+		stats.Samples[shortestIndex] = sample
+	}
+}
+
+func recordTextureDecision(stats *TextureApplyStats, input ItemTextureInput, texture AppliedItemTexture, reason string, stableKey string, duration time.Duration) {
+	if stats == nil {
+		return
+	}
+
+	sample := TextureDecisionSample{
+		SkyBlockID:  strings.TrimSpace(input.SkyBlockID),
+		MinecraftID: normalizeMinecraftItemID(input.ID),
+		ItemModel:   normalizeMinecraftItemID(input.ItemModel),
+		Texture:     texture.Texture,
+		TexturePack: texture.TexturePack,
+		StableKey:   stableKey,
+		Reason:      reason,
+		Duration:    duration,
+	}
+
+	if !strings.HasPrefix(reason, "cache_hit") || duration >= time.Millisecond {
+		addTextureDecisionSample(stats, sample)
+	}
+
+	if textureDebugTraceEnabled() {
+		fmt.Printf(
+			"[TEXTURE_DEBUG] reason=%s skyblock_id=%q minecraft_id=%q item_model=%q texture_pack=%q duration=%s texture=%q\n",
+			reason,
+			sample.SkyBlockID,
+			sample.MinecraftID,
+			sample.ItemModel,
+			sample.TexturePack,
+			duration,
+			sample.Texture,
+		)
+	}
+}
+
+func recordTextureCacheHit(stats *TextureApplyStats, detail textureCacheLookupDetail) {
+	if stats == nil {
+		return
+	}
+	stats.CacheHits++
+	switch detail.Reason {
+	case "stable_skyblock_cache":
+		stats.StableSkyBlockHits++
+	case "stable_key_cache":
+		stats.StableKeyHits++
+	case "legacy_skyblock_cache":
+		stats.LegacySkyBlockHits++
+	case "raw_map_cache":
+		stats.RawMapHits++
+	}
+}
+
+func recordRuntimeRenderSkip(stats *TextureApplyStats, renderer *mr.Renderer, textureCtx TextureApplyContext, isGenericSkullInput bool) {
+	if stats == nil {
+		return
+	}
+	stats.RuntimeRenderSkipped++
+	if textureCtx.DisableRuntimeRender {
+		stats.RuntimeRenderSkippedDisabled++
+		return
+	}
+	if renderer == nil {
+		stats.RuntimeRenderSkippedRendererNil++
+		return
+	}
+	if len(textureCtx.EnabledPackIDs) == 0 {
+		stats.RuntimeRenderSkippedNoPacks++
+		return
+	}
+	if isGenericSkullInput {
+		stats.RuntimeRenderSkippedGenericSkull++
+	}
+}
+
 func skullOwnerIDFromTag(tag any) string {
 	if tag == nil {
 		return ""
@@ -1801,10 +1973,42 @@ func skullTextureHashFromTag(tag any) string {
 }
 
 func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) AppliedItemTexture {
+	timeNow := time.Now()
 	textureCtx = normalizeTextureApplyContext(textureCtx)
+	stats := textureCtx.Stats
+	if stats != nil {
+		stats.Total++
+	}
 
-	if cachedTexture, ok := cachedTextureForInput(input, textureCtx); ok {
-		return cachedTexture
+	finish := func(reason string, stableKey string, texture AppliedItemTexture) AppliedItemTexture {
+		duration := time.Since(timeNow)
+		if stats != nil {
+			stats.TotalDuration += duration
+		}
+		recordTextureDecision(stats, input, texture, reason, stableKey, duration)
+		return texture
+	}
+
+	cacheStart := time.Now()
+	cachedTexture, ok, cacheDetail := cachedTextureForInputDetailed(input, textureCtx)
+	cacheDuration := time.Since(cacheStart)
+	if stats != nil {
+		stats.CacheDuration += cacheDuration
+	}
+	if ok {
+		recordTextureCacheHit(stats, cacheDetail)
+		return finish("cache_hit:"+cacheDetail.Reason, cacheDetail.StableKey, cachedTexture)
+	}
+	if stats != nil {
+		stats.CacheMisses++
+	}
+
+	fallbackStart := time.Now()
+	finishFallback := func(reason string, stableKey string, texture AppliedItemTexture) AppliedItemTexture {
+		if stats != nil {
+			stats.FallbackDuration += time.Since(fallbackStart)
+		}
+		return finish(reason, stableKey, texture)
 	}
 
 	skullFallback := skullFallbackTexture(input, textureCtx)
@@ -1817,9 +2021,19 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	itemMap := map[string]any(nil)
 	var renderErr error
 	renderer := SkyCryptRender
-	if renderer != nil && len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput {
+	canRuntimeRender := renderer != nil && len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput && !textureCtx.DisableRuntimeRender
+	if !canRuntimeRender {
+		recordRuntimeRenderSkip(stats, renderer, textureCtx, isGenericSkullInput)
+	}
+	if canRuntimeRender {
 		itemMap = itemTextureInputRenderMap(input)
+		renderStart := time.Now()
 		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, textureCtx.EnabledPackIDs)
+		renderDuration := time.Since(renderStart)
+		if stats != nil {
+			stats.RenderAttempts++
+			stats.RenderDuration += renderDuration
+		}
 		if err == nil && customTexture != nil && customTexture.Path != "" {
 			outputTexture := AppliedItemTexture{
 				Texture:     publicCacheTextureURL(customTexture.Path),
@@ -1827,17 +2041,29 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 			}
 			if !texturePackDisabled(outputTexture.TexturePack, textureCtx.DisabledPacks) {
 				if skullFallback.Texture == "" || outputTexture.TexturePack != "" && outputTexture.TexturePack != "vanilla" {
+					if stats != nil {
+						stats.RenderHits++
+					}
 					setCachedTextureForInput(input, textureCtx, outputTexture)
-					return outputTexture
+					return finishFallback("runtime_render_hit", "", outputTexture)
 				}
 			}
 		} else if err != nil {
+			if stats != nil {
+				stats.RenderErrors++
+			}
 			renderErr = err
 		}
 
 		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
 			if vanillaItem := vanillaRenderItem(itemMap, id); vanillaItem != nil {
+				renderStart = time.Now()
 				customTexture, err = renderer.RenderItemNBTWithPackIDs(vanillaItem, textureCtx.EnabledPackIDs)
+				renderDuration = time.Since(renderStart)
+				if stats != nil {
+					stats.RenderAttempts++
+					stats.RenderDuration += renderDuration
+				}
 				if err == nil && customTexture != nil && customTexture.Path != "" {
 					outputTexture := AppliedItemTexture{
 						Texture:     publicCacheTextureURL(customTexture.Path),
@@ -1845,11 +2071,17 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 					}
 					if !texturePackDisabled(outputTexture.TexturePack, textureCtx.DisabledPacks) {
 						if skullFallback.Texture == "" || outputTexture.TexturePack != "" && outputTexture.TexturePack != "vanilla" {
+							if stats != nil {
+								stats.RenderHits++
+							}
 							setCachedTextureForInput(input, textureCtx, outputTexture)
-							return outputTexture
+							return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
 						}
 					}
 				} else if err != nil {
+					if stats != nil {
+						stats.RenderErrors++
+					}
 					renderErr = err
 				}
 			}
@@ -1857,7 +2089,13 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	}
 
 	if skullFallback.Texture != "" {
-		return skullFallback
+		if stats != nil {
+			stats.SkullFallbacks++
+			if strings.Contains(skullFallback.Texture, "/api/head/") {
+				stats.HeadFallbacks++
+			}
+		}
+		return finishFallback("skull_head_fallback", "", skullFallback)
 	}
 
 	if input.NumericID >= 298 && input.NumericID <= 301 {
@@ -1875,7 +2113,11 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 		if armorColor == "" {
 			armorColor = "A06540"
 		}
-		return AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", textureCtx.Domain, armorType, armorColor)}
+		texture := AppliedItemTexture{Texture: fmt.Sprintf("%s/api/leather/%s/%s", textureCtx.Domain, armorType, armorColor)}
+		if stats != nil {
+			stats.LeatherFallbacks++
+		}
+		return finishFallback("leather_fallback", "", texture)
 	}
 
 	if input.NumericID > 0 && shouldUseLegacyNumericFallback(id) {
@@ -1884,14 +2126,29 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 			ItemDamage: input.Damage,
 		})
 		if textureID != "" && "minecraft:"+textureID != id {
+			if stats != nil {
+				stats.NumericFallbacks++
+			}
 			input.ID = "minecraft:" + textureID
 			input.NumericID = 0
-			return ApplyTextureInput(input, textureCtx)
+			texture := ApplyTextureInput(input, textureCtx)
+			return finishFallback("numeric_fallback", "", texture)
 		}
 	}
 
 	if vanillaTexture := vanillaTextureURL(id); vanillaTexture.Texture != "" {
-		return vanillaTexture
+		if stats != nil {
+			stats.VanillaFallbacks++
+			stats.VanillaTextureFallbacks++
+		}
+		return finishFallback("vanilla_texture_fallback", "", vanillaTexture)
+	}
+	if vanillaTexture := vanillaModelTextureURL(id); vanillaTexture.Texture != "" {
+		if stats != nil {
+			stats.VanillaFallbacks++
+			stats.VanillaModelFallbacks++
+		}
+		return finishFallback("vanilla_model_fallback", "", vanillaTexture)
 	}
 
 	if renderErr != nil {
@@ -1899,20 +2156,47 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	}
 
 	fmt.Printf("[CUSTOM_RESOURCES] No texture found for item id=%q skyblock_id=%q item_id=%d damage=%d\n", id, input.SkyBlockID, input.NumericID, input.Damage)
-	return AppliedItemTexture{Texture: barrierTextureURL()}
+	texture := AppliedItemTexture{Texture: barrierTextureURL()}
+	if stats != nil {
+		stats.BarrierFallbacks++
+	}
+	return finishFallback("barrier_fallback", "", texture)
 }
 
 func ApplyTexture(item any, disabledPacksParam ...[]string) AppliedItemTexture {
+	timeNow := time.Now()
 	textureCtx := NewTextureApplyContext(disabledPacksParam...)
+	stats := textureCtx.Stats
 	disabledPacks := textureCtx.DisabledPacks
 	if itemMap, ok := item.(map[string]any); ok {
 		input := itemTextureInputFromMap(itemMap)
 		if skullIdentityFromInput(input) == "" {
 			if cachedTexture, ok := cachedTextureFromRawMap(itemMap, disabledPacks); ok {
+				if stats != nil {
+					stats.Total++
+					recordTextureCacheHit(stats, textureCacheLookupDetail{Reason: "raw_map_cache"})
+					duration := time.Since(timeNow)
+					stats.TotalDuration += duration
+					stats.CacheDuration += duration
+					recordTextureDecision(stats, input, cachedTexture, "cache_hit:raw_map_cache", "", duration)
+				}
 				return cachedTexture
 			}
 		}
-		if cachedTexture, ok := cachedTextureForInput(input, textureCtx); ok {
+		cacheStart := time.Now()
+		cachedTexture, ok, cacheDetail := cachedTextureForInputDetailed(input, textureCtx)
+		cacheDuration := time.Since(cacheStart)
+		if stats != nil {
+			stats.CacheDuration += cacheDuration
+		}
+		if ok {
+			if stats != nil {
+				stats.Total++
+				recordTextureCacheHit(stats, cacheDetail)
+				duration := time.Since(timeNow)
+				stats.TotalDuration += duration
+				recordTextureDecision(stats, input, cachedTexture, "cache_hit:"+cacheDetail.Reason, cacheDetail.StableKey, duration)
+			}
 			return cachedTexture
 		}
 		return ApplyTextureInput(input, textureCtx)

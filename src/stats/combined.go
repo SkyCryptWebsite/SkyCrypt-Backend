@@ -114,6 +114,10 @@ func GetCombinedContext(
 	neuItemCache := map[string]models.NEUItem{}
 
 	timeNow := time.Now()
+	var itemProcessingStats *statsItems.ItemProcessingStats
+	if statsItems.ItemProcessingDebugEnabled() {
+		itemProcessingStats = statsItems.NewItemProcessingStats("combined", mowojang.UUID, profile.ProfileID, disabledPacks)
+	}
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
 		if invType == nil || len(invType.Items) == 0 {
@@ -129,7 +133,7 @@ func GetCombinedContext(
 			}
 		}
 
-		processed := statsItems.ProcessItemsWithNEUCache(buf, inventoryId, neuItemCache, disabledPacks)
+		processed := statsItems.ProcessItemsWithNEUCacheAndStats(buf, inventoryId, neuItemCache, itemProcessingStats, disabledPacks)
 
 		if strings.HasPrefix(inventoryId, "wardrobe_") {
 			parts := strings.Split(inventoryId, "_")
@@ -152,7 +156,11 @@ func GetCombinedContext(
 
 	processedItems["wardrobe"] = wardrobeSlice
 
-	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), time.Since(timeNow), os.Getpid())
+	itemProcessingDuration := time.Since(timeNow)
+	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), itemProcessingDuration, os.Getpid())
+	if itemProcessingStats != nil {
+		itemProcessingStats.LogIfEnabled(itemProcessingDuration)
+	}
 
 	sectionsStart := time.Now()
 	sectionStart := time.Now()

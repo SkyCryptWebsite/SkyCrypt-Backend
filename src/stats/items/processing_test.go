@@ -1,10 +1,14 @@
 package stats
 
 import (
+	"bytes"
 	"encoding/base64"
 	"skycrypt/src/lib"
+	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"strings"
 	"testing"
+	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -97,6 +101,121 @@ func TestProcessItemsTextureOutputsForVanillaLeatherAndSkull(t *testing.T) {
 	}
 	if processed[2].Texture != testDomain()+"/api/head/head-texture-hash" {
 		t.Fatalf("head texture = %q", processed[2].Texture)
+	}
+}
+
+func TestProcessItemsUsesSkyBlockCacheForSkullItem(t *testing.T) {
+	previousRenderer := lib.SkyCryptRender
+	previousCache := lib.ITEM_TEXTURE_CACHE
+	lib.SkyCryptRender = nil
+	want := testDomain() + "/cache/rendered/skyblock=PROCESS_SKULL_CACHE__pack=fsr.webp"
+	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
+		"FSR|skyblock:PROCESS_SKULL_CACHE": {Texture: want, TexturePack: "fsr"},
+	}
+	t.Cleanup(func() {
+		lib.SkyCryptRender = previousRenderer
+		lib.ITEM_TEXTURE_CACHE = previousCache
+	})
+
+	head := testItem(397, "PROCESS_SKULL_CACHE")
+	head.Tag.ItemModel = "minecraft:player_head"
+	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		ID: "process-skull-id",
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: testSkinValue("process-skull-hash")}},
+		},
+	}
+
+	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{"hplus"})
+	if len(processed) != 1 {
+		t.Fatalf("processed length = %d, want 1", len(processed))
+	}
+	if processed[0].Texture != want {
+		t.Fatalf("skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
+func TestProcessItemsWithStatsCountsNestedItemsAndTextures(t *testing.T) {
+	previousRenderer := lib.SkyCryptRender
+	previousCache := lib.ITEM_TEXTURE_CACHE
+	lib.SkyCryptRender = nil
+	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
+		"PARENT_STATS": {Texture: testDomain() + "/cache/rendered/skyblock=PARENT_STATS.webp", TexturePack: "hplus"},
+		"NESTED_STATS": {Texture: testDomain() + "/cache/rendered/skyblock=NESTED_STATS.webp", TexturePack: "hplus"},
+	}
+	t.Cleanup(func() {
+		lib.SkyCryptRender = previousRenderer
+		lib.ITEM_TEXTURE_CACHE = previousCache
+	})
+
+	parent := testItem(1, "PARENT_STATS")
+	parent.ContainsItems = []*skycrypttypes.Item{testItem(1, "NESTED_STATS")}
+	itemStats := NewItemProcessingStats("test", "uuid", "profile", nil)
+	processed := ProcessItemsWithNEUCacheAndStats([]*skycrypttypes.Item{parent}, "inventory", map[string]models.NEUItem{}, itemStats)
+
+	if len(processed) != 1 || len(processed[0].ContainsItems) != 1 {
+		t.Fatalf("processed nested output lengths = %d/%d, want 1/1", len(processed), len(processed[0].ContainsItems))
+	}
+	if itemStats.TotalItems != 2 || itemStats.TopLevelItems != 1 || itemStats.NestedItems != 1 || itemStats.ContainerItems != 1 {
+		t.Fatalf(
+			"item counts total/top/nested/containers = %d/%d/%d/%d, want 2/1/1/1",
+			itemStats.TotalItems,
+			itemStats.TopLevelItems,
+			itemStats.NestedItems,
+			itemStats.ContainerItems,
+		)
+	}
+	if itemStats.TextureStats.Total != 2 || itemStats.TextureStats.CacheHits != 2 {
+		t.Fatalf("texture stats total/cache hits = %d/%d, want 2/2", itemStats.TextureStats.Total, itemStats.TextureStats.CacheHits)
+	}
+}
+
+func TestProcessItemsWithStatsTracksNEUWikiRouteCache(t *testing.T) {
+	previousRenderer := lib.SkyCryptRender
+	previousCache := lib.ITEM_TEXTURE_CACHE
+	lib.SkyCryptRender = nil
+	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{}
+	t.Cleanup(func() {
+		lib.SkyCryptRender = previousRenderer
+		lib.ITEM_TEXTURE_CACHE = previousCache
+	})
+
+	items := []*skycrypttypes.Item{
+		testItem(1, "WIKI_STATS_MISSING_ITEM"),
+		testItem(1, "WIKI_STATS_MISSING_ITEM"),
+	}
+	itemStats := NewItemProcessingStats("test", "uuid", "profile", nil)
+	ProcessItemsWithNEUCacheAndStats(items, "inventory", map[string]models.NEUItem{}, itemStats)
+
+	if itemStats.NEUWikiCacheMisses != 1 || itemStats.NEUWikiCacheHits != 1 {
+		t.Fatalf("wiki cache misses/hits = %d/%d, want 1/1", itemStats.NEUWikiCacheMisses, itemStats.NEUWikiCacheHits)
+	}
+	if itemStats.NEUWikiDuration <= 0 {
+		t.Fatal("NEU wiki duration was not recorded")
+	}
+}
+
+func TestItemProcessingDebugSummaryEnvGate(t *testing.T) {
+	itemStats := NewItemProcessingStats("test", "uuid", "profile", nil)
+	itemStats.TotalItems = 1
+
+	t.Setenv("ITEM_PROCESSING_DEBUG", "off")
+	var disabled bytes.Buffer
+	if itemStats.WriteDebugSummary(&disabled, time.Second) {
+		t.Fatal("WriteDebugSummary returned true with debug disabled")
+	}
+	if disabled.Len() != 0 {
+		t.Fatalf("disabled debug output = %q, want empty", disabled.String())
+	}
+
+	t.Setenv("ITEM_PROCESSING_DEBUG", "summary")
+	t.Setenv("ITEM_PROCESSING_DEBUG_SLOW_MS", "0")
+	var enabled bytes.Buffer
+	if !itemStats.WriteDebugSummary(&enabled, time.Millisecond) {
+		t.Fatal("WriteDebugSummary returned false with debug enabled")
+	}
+	if !strings.Contains(enabled.String(), "[ITEM_PROCESSING_DEBUG]") {
+		t.Fatalf("enabled debug output = %q, want item processing tag", enabled.String())
 	}
 }
 

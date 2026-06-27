@@ -23,17 +23,14 @@ var RESOURCE_PACKS = []models.ResourcePackConfig{}
 func ResourcePackHandler(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 
-	if len(RESOURCE_PACKS) == 0 {
-		configs, err := lib.ResourcePackConfigs()
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Failed to read resource packs directory",
-			})
-		}
-		RESOURCE_PACKS = configs
+	configs, err := lib.ResourcePackConfigs()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to read resource packs directory",
+		})
 	}
 
 	// utility.LogVerbose("Returning /api/resourcepacks in %s", time.Since(timeNow))
 
-	return c.JSON(RESOURCE_PACKS)
+	return c.JSON(configs)
 }
