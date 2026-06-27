@@ -40,10 +40,6 @@ func ProcessItemsWithNEUCacheAndStats(items []*skycrypttypes.Item, source string
 	return processItemsWithTextureContextAndStats(items, source, neuItemCache, textureCtx, itemStats, 0)
 }
 
-func processItemsWithTextureContext(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) []models.ProcessedItem {
-	return processItemsWithTextureContextAndStats(items, source, neuItemCache, textureCtx, nil, 0)
-}
-
 func processItemsWithTextureContextAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) []models.ProcessedItem {
 	processedItems := make([]models.ProcessedItem, 0, len(items))
 	for _, item := range items {
@@ -62,10 +58,6 @@ func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]str
 	textureCtx.DisableStats = true
 	textureCtx.Stats = nil
 	return processItemWithStats(item, source, map[string]models.NEUItem{}, textureCtx, nil, 0)
-}
-
-func processItem(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext) models.ProcessedItem {
-	return processItemWithStats(item, source, neuItemCache, textureCtx, nil, 0)
 }
 
 func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) models.ProcessedItem {

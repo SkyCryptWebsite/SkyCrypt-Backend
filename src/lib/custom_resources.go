@@ -369,15 +369,6 @@ func cachedTextureByKey(key string, disabledPacks map[string]struct{}) (AppliedI
 	return texture, true
 }
 
-func setCachedItemTexture(id string, texture AppliedItemTexture) {
-	id = strings.TrimSpace(id)
-	if id == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
-		return
-	}
-
-	setCachedTextureForStableKey("", "skyblock:"+id, texture)
-}
-
 func setCachedTextureForStableKey(packSignature string, stableKey string, texture AppliedItemTexture) {
 	stableKey = strings.TrimSpace(stableKey)
 	if stableKey == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
@@ -1652,11 +1643,6 @@ func stableTextureKeysFromInput(input ItemTextureInput) []string {
 type textureCacheLookupDetail struct {
 	Reason    string
 	StableKey string
-}
-
-func cachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {
-	texture, ok, _ := cachedTextureForInputDetailed(input, textureCtx)
-	return texture, ok
 }
 
 func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool, textureCacheLookupDetail) {

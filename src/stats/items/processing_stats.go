@@ -242,7 +242,7 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		unattributed = 0
 	}
 
-	fmt.Fprintf(
+	if _, err := fmt.Fprintf(
 		writer,
 		"[ITEM_PROCESSING_DEBUG] route=%s uuid=%s profile=%s pid=%d duration=%s per_item=%s items=%d top_level=%d nested=%d containers=%d sources=%s disabled_packs=%s cache_size=%d->%d stages raw_lore=%s type_parse=%s extra=%s wiki=%s texture_input=%s texture_apply=%s nested=%s value_lore=%s strip=%s unattributed=%s neu_wiki_cache_hits=%d neu_wiki_cache_misses=%d\n",
 		emptyDebugValue(s.Route),
@@ -271,11 +271,13 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		unattributed,
 		s.NEUWikiCacheHits,
 		s.NEUWikiCacheMisses,
-	)
+	); err != nil {
+		return false
+	}
 
 	textureStats := s.TextureStats
 	if textureStats != nil {
-		fmt.Fprintf(
+		if _, err := fmt.Fprintf(
 			writer,
 			"[ITEM_PROCESSING_DEBUG] route=%s texture total=%d cache_hits=%d cache_misses=%d stable_skyblock_hits=%d stable_key_hits=%d legacy_skyblock_hits=%d raw_map_hits=%d render_attempts=%d render_hits=%d render_errors=%d render_duration=%s render_skipped=%d render_skipped_disabled=%d render_skipped_renderer_nil=%d render_skipped_no_packs=%d render_skipped_generic_skull=%d skull_fallbacks=%d head_fallbacks=%d leather_fallbacks=%d vanilla_fallbacks=%d vanilla_texture_fallbacks=%d vanilla_model_fallbacks=%d numeric_fallbacks=%d barrier_fallbacks=%d total_duration=%s cache_duration=%s fallback_duration=%s\n",
 			emptyDebugValue(s.Route),
@@ -306,13 +308,19 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 			textureStats.TotalDuration,
 			textureStats.CacheDuration,
 			textureStats.FallbackDuration,
-		)
+		); err != nil {
+			return false
+		}
 	}
 
 	if mode >= itemProcessingDebugDetail {
-		writeSlowItemSamples(writer, s.SlowItems, topN)
+		if err := writeSlowItemSamples(writer, s.SlowItems, topN); err != nil {
+			return false
+		}
 		if textureStats != nil {
-			writeTextureSamples(writer, textureStats.Samples, topN)
+			if err := writeTextureSamples(writer, textureStats.Samples, topN); err != nil {
+				return false
+			}
 		}
 	}
 
@@ -349,7 +357,7 @@ func itemProcessingDebugConfig() (itemProcessingDebugMode, time.Duration, int) {
 	return mode, threshold, topN
 }
 
-func writeSlowItemSamples(writer io.Writer, samples []ItemProcessingSample, topN int) {
+func writeSlowItemSamples(writer io.Writer, samples []ItemProcessingSample, topN int) error {
 	sorted := append([]ItemProcessingSample(nil), samples...)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Duration > sorted[j].Duration
@@ -358,7 +366,7 @@ func writeSlowItemSamples(writer io.Writer, samples []ItemProcessingSample, topN
 		sorted = sorted[:topN]
 	}
 	for index, sample := range sorted {
-		fmt.Fprintf(
+		if _, err := fmt.Fprintf(
 			writer,
 			"[ITEM_PROCESSING_DEBUG] slow_item rank=%d source=%s skyblock_id=%q minecraft_id=%q item_model=%q name=%q depth=%d contains_items=%d duration=%s\n",
 			index+1,
@@ -370,11 +378,14 @@ func writeSlowItemSamples(writer io.Writer, samples []ItemProcessingSample, topN
 			sample.Depth,
 			sample.ContainsItems,
 			sample.Duration,
-		)
+		); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func writeTextureSamples(writer io.Writer, samples []lib.TextureDecisionSample, topN int) {
+func writeTextureSamples(writer io.Writer, samples []lib.TextureDecisionSample, topN int) error {
 	sorted := append([]lib.TextureDecisionSample(nil), samples...)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Duration > sorted[j].Duration
@@ -383,7 +394,7 @@ func writeTextureSamples(writer io.Writer, samples []lib.TextureDecisionSample, 
 		sorted = sorted[:topN]
 	}
 	for index, sample := range sorted {
-		fmt.Fprintf(
+		if _, err := fmt.Fprintf(
 			writer,
 			"[TEXTURE_DEBUG] sample rank=%d reason=%s skyblock_id=%q minecraft_id=%q item_model=%q stable_key=%q texture_pack=%q duration=%s texture=%q\n",
 			index+1,
@@ -395,8 +406,11 @@ func writeTextureSamples(writer io.Writer, samples []lib.TextureDecisionSample, 
 			sample.TexturePack,
 			sample.Duration,
 			sample.Texture,
-		)
+		); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func sourceCountsDebugString(sourceCounts map[string]int) string {
