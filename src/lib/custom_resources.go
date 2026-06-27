@@ -82,15 +82,13 @@ type TextureApplyStats struct {
 }
 
 type resourcePackMeta struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Version     string   `json:"version"`
-	Author      string   `json:"author"`
-	DownloadURL string   `json:"downloadUrl"`
-	URL         string   `json:"url"`
-	Icon        string   `json:"icon"`
-	Authors     []string `json:"authors"`
-	Priority    int      `json:"priority"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Author   string `json:"author"`
+	URL      string `json:"url"`
+	Icon     string `json:"icon"`
+	Priority int    `json:"priority"`
 }
 
 func ResourcePackConfigs() ([]models.ResourcePackConfig, error) {
@@ -136,14 +134,8 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 		if id == "" || strings.EqualFold(id, "vanilla") {
 			continue
 		}
-		downloadURL := strings.TrimSpace(meta.DownloadURL)
-		if downloadURL == "" {
-			downloadURL = strings.TrimSpace(meta.URL)
-		}
-		authors := append([]string(nil), meta.Authors...)
-		if len(authors) == 0 && strings.TrimSpace(meta.Author) != "" {
-			authors = []string{strings.TrimSpace(meta.Author)}
-		}
+		url := strings.TrimSpace(meta.URL)
+		author := strings.TrimSpace(meta.Author)
 		icon := strings.TrimSpace(meta.Icon)
 		if icon == "" {
 			icon = fmt.Sprintf("%s/assets/resourcepacks/%s/pack.webp", utility.GetDomain(), file.Name())
@@ -154,17 +146,13 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 		}
 
 		config := models.ResourcePackConfig{
-			Id:          id,
-			Name:        strings.TrimSpace(meta.Name),
-			Version:     strings.TrimSpace(meta.Version),
-			Priority:    priority,
-			Authors:     authors,
-			DownloadURL: downloadURL,
-			Url:         downloadURL,
-			Icon:        icon,
-		}
-		if len(config.Authors) > 0 {
-			config.Author = config.Authors[0]
+			Id:       id,
+			Name:     strings.TrimSpace(meta.Name),
+			Version:  strings.TrimSpace(meta.Version),
+			Priority: priority,
+			Author:   author,
+			Url:      url,
+			Icon:     icon,
 		}
 		configs = append(configs, config)
 	}
@@ -196,9 +184,6 @@ func defaultResourcePackPriority(packID string) int {
 func cloneResourcePackConfigs(configs []models.ResourcePackConfig) []models.ResourcePackConfig {
 	cloned := make([]models.ResourcePackConfig, len(configs))
 	copy(cloned, configs)
-	for i := range cloned {
-		cloned[i].Authors = append([]string(nil), configs[i].Authors...)
-	}
 	return cloned
 }
 

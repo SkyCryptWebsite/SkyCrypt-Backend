@@ -43,7 +43,7 @@ func TestResourcePackHandlerReturnsMetaBackedPacks(t *testing.T) {
 	if packs[1].Id != "HYPIXEL_PLUS" || packs[1].Priority != 50 {
 		t.Fatalf("second pack = %#v, want HYPIXEL_PLUS priority 50", packs[1])
 	}
-	if packs[0].DownloadURL == "" || packs[0].Url != packs[0].DownloadURL || len(packs[0].Authors) == 0 || packs[0].Author == "" {
-		t.Fatalf("compatibility fields missing: %#v", packs[0])
+	if packs[0].Url == "" || packs[0].Author == "" {
+		t.Fatalf("resource pack fields missing: %#v", packs[0])
 	}
 }

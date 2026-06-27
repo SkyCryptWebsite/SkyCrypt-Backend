@@ -141,9 +141,9 @@ func withRealRenderer(t *testing.T) {
 func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
 	root := t.TempDir()
 	packs := map[string]string{
-		"Low Pack":  `{"id":"low","name":"Low","downloadUrl":"https://example.test/low","priority":10,"authors":["Low Author"]}`,
-		"High Pack": `{"id":"high","name":"High","downloadUrl":"https://example.test/high","priority":100,"authors":["High Author"]}`,
-		"Same Pack": `{"id":"same","name":"Same","downloadUrl":"https://example.test/same","priority":100,"authors":["Same Author"]}`,
+		"Low Pack":  `{"id":"low","name":"Low","url":"https://example.test/low","priority":10,"author":"Low Author"}`,
+		"High Pack": `{"id":"high","name":"High","url":"https://example.test/high","priority":100,"author":"High Author"}`,
+		"Same Pack": `{"id":"same","name":"Same","url":"https://example.test/same","priority":100,"author":"Same Author"}`,
 		"Vanilla":   `{"id":"vanilla","name":"Vanilla","priority":1000}`,
 	}
 	for dir, meta := range packs {
@@ -169,7 +169,7 @@ func TestLoadResourcePackConfigsSortsByPriority(t *testing.T) {
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("pack order = %v, want %v", got, want)
 	}
-	if configs[0].Author != "High Author" || configs[0].DownloadURL != "https://example.test/high" || configs[0].Url != configs[0].DownloadURL {
+	if configs[0].Author != "High Author" || configs[0].Url != "https://example.test/high" {
 		t.Fatalf("config compatibility fields not populated: %#v", configs[0])
 	}
 }

@@ -1461,15 +1461,8 @@ components:
       properties:
         author:
           type: string
-        authors:
-          items:
-            type: string
-          type: array
-          uniqueItems: false
         disabled:
           type: boolean
-        downloadUrl:
-          type: string
         icon:
           type: string
         id:
