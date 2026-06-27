@@ -1,7 +1,0 @@
-# Go
-/bin/
-/vendor/
-*.exe
-*.log
-.cache
-packs/

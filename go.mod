@@ -3,7 +3,7 @@ module skycrypt
 go 1.26.4
 
 require (
-	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.1.30
+	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.0
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.20
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18
 	github.com/gofiber/fiber/v2 v2.52.13
