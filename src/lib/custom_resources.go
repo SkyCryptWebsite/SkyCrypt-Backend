@@ -1566,7 +1566,10 @@ func startCustomResources() error {
 
 	// Render textures only on main thread; generated files are shared in cache/rendered.
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		if err := WarmConfiguredSkyBlockTextures(ctx, cacheDir, resourcePacksPath, assetsPath, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{}); err != nil {
+		if err := WarmConfiguredSkyBlockTextures(ctx, cacheDir, resourcePacksPath, assetsPath, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{
+			ProgressWriter: os.Stdout,
+			ShowProgress:   true,
+		}); err != nil {
 			return err
 		}
 	} else if !renderedDirExists && os.IsNotExist(renderedDirErr) {
@@ -1596,6 +1599,7 @@ func newRendererForPackIDs(cacheDir string, resourcePacksPath string, assetsPath
 		PackIDs:           packIDs,
 		Preload:           preload,
 		CacheDir:          cacheDir,
+		VerboseLogging:    false,
 	})
 }
 
