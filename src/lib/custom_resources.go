@@ -2,8 +2,11 @@ package lib
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -46,6 +49,12 @@ var vanillaItemExistsCache sync.Map
 
 var fallbackResourcePackIDs = []string{"FSR", "HYPIXEL_PLUS"}
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
+
+const (
+	renderedResourcePackManifestSchemaVersion  = 1
+	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.1"
+	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
+)
 
 type AppliedItemTexture struct {
 	Texture     string
@@ -124,6 +133,41 @@ type resourcePackMeta struct {
 	URL      string `json:"url"`
 	Icon     string `json:"icon"`
 	Priority int    `json:"priority"`
+}
+
+type renderedResourcePackManifest struct {
+	SchemaVersion      int                         `json:"schemaVersion"`
+	GeneratedAtUnix    int64                       `json:"generatedAtUnix"`
+	RendererModule     string                      `json:"rendererModule"`
+	ResourcePackHash   string                      `json:"resourcePackHash"`
+	ItemIDHash         string                      `json:"itemIdHash"`
+	ItemIDCount        int                         `json:"itemIdCount"`
+	RenderedIndexCount int                         `json:"renderedIndexCount"`
+	PackOrder          []string                    `json:"packOrder"`
+	Packs              []renderedResourcePackEntry `json:"packs"`
+}
+
+type renderedResourcePackEntry struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Version     string `json:"version,omitempty"`
+	MetaHash    string `json:"metaHash,omitempty"`
+	ArchiveHash string `json:"archiveHash,omitempty"`
+	ArchiveName string `json:"archiveName,omitempty"`
+}
+
+type renderedResourcePackFingerprintEntry struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Version     string `json:"version,omitempty"`
+	Priority    int    `json:"priority,omitempty"`
+	MetaHash    string `json:"metaHash,omitempty"`
+	ArchiveHash string `json:"archiveHash,omitempty"`
+	ArchiveName string `json:"archiveName,omitempty"`
+}
+
+type skyBlockTextureWarmResult struct {
+	OutputPaths map[string]struct{}
 }
 
 func ResourcePackConfigs() ([]models.ResourcePackConfig, error) {
@@ -1418,6 +1462,420 @@ func preRenderSkyBlockItemIDs() []string {
 	return itemIDs
 }
 
+func renderedResourcePackManifestPath(cacheDir string) string {
+	return filepath.Join(cacheDir, "rendered", renderedResourcePackManifestFileName)
+}
+
+func buildRenderedResourcePackManifest(resourcePacksPath string, itemIDs []string, renderedIndexCount int, generatedAt time.Time) (renderedResourcePackManifest, error) {
+	resourcePackHash, packOrder, packs, err := renderedResourcePackFingerprint(resourcePacksPath)
+	if err != nil {
+		return renderedResourcePackManifest{}, err
+	}
+	itemIDHash, itemIDCount := resourcePackItemIDHash(itemIDs)
+
+	if generatedAt.IsZero() {
+		generatedAt = time.Now()
+	}
+	return renderedResourcePackManifest{
+		SchemaVersion:      renderedResourcePackManifestSchemaVersion,
+		GeneratedAtUnix:    generatedAt.Unix(),
+		RendererModule:     renderedResourcePackManifestRendererModule,
+		ResourcePackHash:   resourcePackHash,
+		ItemIDHash:         itemIDHash,
+		ItemIDCount:        itemIDCount,
+		RenderedIndexCount: renderedIndexCount,
+		PackOrder:          packOrder,
+		Packs:              packs,
+	}, nil
+}
+
+func renderedResourcePackFingerprint(resourcePacksPath string) (string, []string, []renderedResourcePackEntry, error) {
+	configs, err := loadResourcePackConfigs(resourcePacksPath)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	dirsByPackID, err := resourcePackDirsByCanonicalID(resourcePacksPath)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	packOrder := make([]string, 0, len(configs))
+	packs := make([]renderedResourcePackEntry, 0, len(configs)+1)
+	fingerprintPacks := make([]renderedResourcePackFingerprintEntry, 0, len(configs)+1)
+	for _, config := range configs {
+		id := strings.TrimSpace(config.Id)
+		if id == "" {
+			continue
+		}
+
+		packOrder = append(packOrder, id)
+		packDirName := dirsByPackID[canonicalPackAlias(id)]
+		metaHash := ""
+		archiveName := ""
+		archiveHash := ""
+		if packDirName != "" {
+			packDir := filepath.Join(resourcePacksPath, packDirName)
+			metaHash, err = optionalFileSHA256(filepath.Join(packDir, "meta.json"))
+			if err != nil {
+				return "", nil, nil, err
+			}
+			archiveName, archiveHash, err = resourcePackArchivesFingerprint(packDir)
+			if err != nil {
+				return "", nil, nil, err
+			}
+		}
+
+		entry := renderedResourcePackEntry{
+			ID:          id,
+			Name:        strings.TrimSpace(config.Name),
+			Version:     strings.TrimSpace(config.Version),
+			MetaHash:    metaHash,
+			ArchiveHash: archiveHash,
+			ArchiveName: archiveName,
+		}
+		packs = append(packs, entry)
+		fingerprintPacks = append(fingerprintPacks, renderedResourcePackFingerprintEntry{
+			ID:          entry.ID,
+			Name:        entry.Name,
+			Version:     entry.Version,
+			Priority:    config.Priority,
+			MetaHash:    entry.MetaHash,
+			ArchiveHash: entry.ArchiveHash,
+			ArchiveName: entry.ArchiveName,
+		})
+	}
+
+	vanillaEntry, vanillaFingerprintEntry, err := vanillaResourcePackFingerprintEntry(resourcePacksPath)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	packs = append(packs, vanillaEntry)
+	fingerprintPacks = append(fingerprintPacks, vanillaFingerprintEntry)
+
+	payload := struct {
+		Packs []renderedResourcePackFingerprintEntry `json:"packs"`
+	}{
+		Packs: fingerprintPacks,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	sum := sha256.Sum256(payloadBytes)
+	return hex.EncodeToString(sum[:]), packOrder, packs, nil
+}
+
+func resourcePackDirsByCanonicalID(resourcePacksPath string) (map[string]string, error) {
+	files, err := os.ReadDir(resourcePacksPath)
+	if err != nil {
+		return nil, err
+	}
+
+	dirs := map[string]string{}
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+
+		metaPath := filepath.Join(resourcePacksPath, file.Name(), "meta.json")
+		metaFile, err := os.Open(metaPath)
+		if err != nil {
+			continue
+		}
+		var meta resourcePackMeta
+		decodeErr := json.NewDecoder(metaFile).Decode(&meta)
+		_ = metaFile.Close()
+		if decodeErr != nil {
+			continue
+		}
+
+		id := strings.TrimSpace(meta.ID)
+		if id == "" || strings.EqualFold(id, "vanilla") {
+			continue
+		}
+		dirs[canonicalPackAlias(id)] = file.Name()
+	}
+	return dirs, nil
+}
+
+func vanillaResourcePackFingerprintEntry(resourcePacksPath string) (renderedResourcePackEntry, renderedResourcePackFingerprintEntry, error) {
+	vanillaDir := filepath.Join(resourcePacksPath, "Vanilla")
+	versionPath := filepath.Join(vanillaDir, "version.txt")
+	version := ""
+	if versionBytes, err := os.ReadFile(versionPath); err == nil {
+		version = strings.TrimSpace(string(versionBytes))
+	} else if !os.IsNotExist(err) {
+		return renderedResourcePackEntry{}, renderedResourcePackFingerprintEntry{}, err
+	}
+
+	versionHash, err := optionalFileSHA256(versionPath)
+	if err != nil {
+		return renderedResourcePackEntry{}, renderedResourcePackFingerprintEntry{}, err
+	}
+	archiveName, archiveHash, err := resourcePackArchivesFingerprint(vanillaDir)
+	if err != nil {
+		return renderedResourcePackEntry{}, renderedResourcePackFingerprintEntry{}, err
+	}
+
+	entry := renderedResourcePackEntry{
+		ID:          "vanilla",
+		Name:        "Vanilla",
+		Version:     version,
+		MetaHash:    versionHash,
+		ArchiveHash: archiveHash,
+		ArchiveName: archiveName,
+	}
+	return entry, renderedResourcePackFingerprintEntry{
+		ID:          entry.ID,
+		Name:        entry.Name,
+		Version:     entry.Version,
+		MetaHash:    entry.MetaHash,
+		ArchiveHash: entry.ArchiveHash,
+		ArchiveName: entry.ArchiveName,
+	}, nil
+}
+
+func resourcePackArchivesFingerprint(packDir string) (string, string, error) {
+	files, err := os.ReadDir(packDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", "", nil
+		}
+		return "", "", err
+	}
+
+	archiveNames := make([]string, 0, len(files))
+	for _, file := range files {
+		if file.IsDir() || !resourcePackArchiveCandidate(file.Name()) {
+			continue
+		}
+		archiveNames = append(archiveNames, file.Name())
+	}
+	sort.Strings(archiveNames)
+	if len(archiveNames) == 0 {
+		return "", "", nil
+	}
+
+	archiveHashes := make([]string, len(archiveNames))
+	for i, archiveName := range archiveNames {
+		hash, err := optionalFileSHA256(filepath.Join(packDir, archiveName))
+		if err != nil {
+			return "", "", err
+		}
+		archiveHashes[i] = hash
+	}
+	if len(archiveNames) == 1 {
+		return archiveNames[0], archiveHashes[0], nil
+	}
+
+	combined := sha256.New()
+	for i, archiveName := range archiveNames {
+		_, _ = combined.Write([]byte(archiveName))
+		_, _ = combined.Write([]byte{0})
+		_, _ = combined.Write([]byte(archiveHashes[i]))
+		_, _ = combined.Write([]byte{'\n'})
+	}
+	return strings.Join(archiveNames, ","), hex.EncodeToString(combined.Sum(nil)), nil
+}
+
+func resourcePackArchiveCandidate(fileName string) bool {
+	lowerName := strings.ToLower(strings.TrimSpace(fileName))
+	return strings.HasSuffix(lowerName, ".zip") || strings.HasSuffix(lowerName, ".jar")
+}
+
+func optionalFileSHA256(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func resourcePackItemIDHash(itemIDs []string) (string, int) {
+	seen := map[string]struct{}{}
+	normalized := make([]string, 0, len(itemIDs))
+	for _, id := range itemIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	sort.Strings(normalized)
+
+	hash := sha256.New()
+	for _, id := range normalized {
+		_, _ = hash.Write([]byte(id))
+		_, _ = hash.Write([]byte{0})
+	}
+	return hex.EncodeToString(hash.Sum(nil)), len(normalized)
+}
+
+func readRenderedResourcePackManifest(cacheDir string) (*renderedResourcePackManifest, error) {
+	manifestBytes, err := os.ReadFile(renderedResourcePackManifestPath(cacheDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var manifest renderedResourcePackManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, err
+	}
+	return &manifest, nil
+}
+
+func shouldSkipSkyBlockPreRender(current renderedResourcePackManifest, saved *renderedResourcePackManifest, loadedRenderedCount int) (bool, string) {
+	if saved == nil {
+		return false, "manifest is missing"
+	}
+	if saved.SchemaVersion != renderedResourcePackManifestSchemaVersion {
+		return false, fmt.Sprintf("manifest schema changed from %d to %d", saved.SchemaVersion, renderedResourcePackManifestSchemaVersion)
+	}
+	if strings.TrimSpace(saved.RendererModule) != renderedResourcePackManifestRendererModule {
+		return false, "renderer manifest version changed"
+	}
+	if strings.TrimSpace(saved.ResourcePackHash) != current.ResourcePackHash {
+		return false, "resource pack fingerprint changed"
+	}
+	if strings.TrimSpace(saved.ItemIDHash) != current.ItemIDHash {
+		return false, "SkyBlock item ID fingerprint changed"
+	}
+	if saved.ItemIDCount != current.ItemIDCount {
+		return false, fmt.Sprintf("SkyBlock item ID count changed from %d to %d", saved.ItemIDCount, current.ItemIDCount)
+	}
+	if saved.RenderedIndexCount <= 0 {
+		return false, "manifest has no completed rendered textures"
+	}
+	if loadedRenderedCount < saved.RenderedIndexCount {
+		return false, fmt.Sprintf("rendered cache has %d indexed textures, manifest expects at least %d", loadedRenderedCount, saved.RenderedIndexCount)
+	}
+	return true, fmt.Sprintf("manifest current with %s indexed textures", utility.AddCommas(loadedRenderedCount))
+}
+
+func forceSkyBlockPreRender() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv("SKYCRYPT_FORCE_RESOURCEPACK_PRERENDER")))
+	return value == "1" || value == "true" || value == "yes"
+}
+
+func writeRenderedResourcePackManifest(cacheDir string, manifest renderedResourcePackManifest) error {
+	manifestPath := renderedResourcePackManifestPath(cacheDir)
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
+		return err
+	}
+
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	manifestBytes = append(manifestBytes, '\n')
+
+	tmpPath := manifestPath + ".tmp"
+	if err := os.WriteFile(tmpPath, manifestBytes, 0644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, manifestPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
+func cleanupStaleRenderedPackFiles(renderedDir string, packIDs []string, keepPaths map[string]struct{}) (int, error) {
+	files, err := os.ReadDir(renderedDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	targetPacks := map[string]struct{}{}
+	for _, packID := range packIDs {
+		canonicalPack := canonicalPackAlias(packID)
+		if canonicalPack == "" || canonicalPack == "vanilla" {
+			continue
+		}
+		targetPacks[canonicalPack] = struct{}{}
+	}
+	if len(targetPacks) == 0 {
+		return 0, nil
+	}
+
+	removed := 0
+	for _, file := range files {
+		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".webp") {
+			continue
+		}
+		packID := packIDFromRenderedFilename(file.Name())
+		canonicalPack := canonicalPackAlias(packID)
+		if canonicalPack == "" || canonicalPack == "vanilla" {
+			continue
+		}
+		if _, ok := targetPacks[canonicalPack]; !ok {
+			continue
+		}
+
+		targetPath := filepath.Join(renderedDir, file.Name())
+		if _, keep := keepPaths[renderedOutputPathKey(targetPath)]; keep {
+			continue
+		}
+		if err := os.Remove(targetPath); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
+}
+
+func renderedOutputPathKey(path string) string {
+	return filepath.Clean(strings.TrimSpace(path))
+}
+
+func packIDFromRenderedFilename(fileName string) string {
+	for _, part := range strings.Split(fileName, "__") {
+		if !strings.HasPrefix(part, "pack=") {
+			continue
+		}
+		packID := strings.TrimSpace(strings.TrimPrefix(part, "pack="))
+		if ext := filepath.Ext(packID); ext != "" {
+			packID = strings.TrimSuffix(packID, ext)
+		}
+		return packID
+	}
+	return ""
+}
+
+func resetRenderedTextureIndex() {
+	itemTextureCacheMu.Lock()
+	ITEM_TEXTURE_CACHE = make(map[string]AppliedItemTexture)
+	itemTextureCacheMu.Unlock()
+
+	renderedSkyBlockIndexMu.Lock()
+	renderedSkyBlockIndex = make(map[string]struct{})
+	renderedSkyBlockIndexMu.Unlock()
+}
+
 func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	if strings.TrimSpace(cacheDir) == "" {
 		cwd, err := os.Getwd()
@@ -1566,11 +2024,56 @@ func startCustomResources() error {
 
 	// Render textures only on main thread; generated files are shared in cache/rendered.
 	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		if err := WarmConfiguredSkyBlockTextures(ctx, cacheDir, resourcePacksPath, assetsPath, preRenderSkyBlockItemIDs(), mr.PreRenderOptions{
-			ProgressWriter: os.Stdout,
-			ShowProgress:   true,
-		}); err != nil {
-			return err
+		itemIDs := preRenderSkyBlockItemIDs()
+		manifest, err := buildRenderedResourcePackManifest(resourcePacksPath, itemIDs, loaded, time.Now())
+		if err != nil {
+			return fmt.Errorf("[CUSTOM_RESOURCES] Failed to build resource pack pre-render manifest: %v", err)
+		}
+
+		savedManifest, manifestErr := readRenderedResourcePackManifest(cacheDir)
+		shouldSkip := false
+		reason := ""
+		if forceSkyBlockPreRender() {
+			reason = "forced by SKYCRYPT_FORCE_RESOURCEPACK_PRERENDER"
+		} else if manifestErr != nil {
+			reason = fmt.Sprintf("manifest cannot be read: %v", manifestErr)
+		} else {
+			shouldSkip, reason = shouldSkipSkyBlockPreRender(manifest, savedManifest, loaded)
+		}
+
+		if shouldSkip {
+			fmt.Printf("[CUSTOM_RESOURCES] Skipping SkyBlock pre-render; resource pack manifest is current (%s)\n", reason)
+		} else {
+			fmt.Printf("[CUSTOM_RESOURCES] SkyBlock pre-render required; %s\n", reason)
+			warmResult, err := warmConfiguredSkyBlockTexturesWithResult(ctx, cacheDir, resourcePacksPath, assetsPath, itemIDs, mr.PreRenderOptions{
+				ProgressWriter: os.Stdout,
+				ShowProgress:   true,
+				Overwrite:      true,
+			})
+			if err != nil {
+				return err
+			}
+
+			removed, err := cleanupStaleRenderedPackFiles(renderedDir, defaultResourcePackIDs(), warmResult.OutputPaths)
+			if err != nil {
+				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to clean stale rendered textures: %v", err)
+			}
+			if removed > 0 {
+				fmt.Printf("[CUSTOM_RESOURCES] Removed %s stale rendered textures after resource pack warm\n", utility.AddCommas(removed))
+			}
+
+			resetRenderedTextureIndex()
+			reloaded, err := LoadRenderedTextureIndex(cacheDir)
+			if err != nil {
+				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to reload rendered texture index after warm: %v", err)
+			}
+			manifest.RenderedIndexCount = reloaded
+			manifest.GeneratedAtUnix = time.Now().Unix()
+			if err := writeRenderedResourcePackManifest(cacheDir, manifest); err != nil {
+				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to write resource pack pre-render manifest: %v", err)
+			}
+			loaded = reloaded
+			fmt.Printf("[CUSTOM_RESOURCES] Wrote resource pack pre-render manifest with %s indexed textures\n", utility.AddCommas(loaded))
 		}
 	} else if !renderedDirExists && os.IsNotExist(renderedDirErr) {
 		fmt.Printf("[CUSTOM_RESOURCES] cache/rendered is missing; child process will serve fallbacks until the main process warms textures\n")
@@ -1604,21 +2107,31 @@ func newRendererForPackIDs(cacheDir string, resourcePacksPath string, assetsPath
 }
 
 func WarmConfiguredSkyBlockTextures(ctx context.Context, cacheDir string, resourcePacksPath string, assetsPath string, itemIDs []string, options mr.PreRenderOptions) error {
+	_, err := warmConfiguredSkyBlockTexturesWithResult(ctx, cacheDir, resourcePacksPath, assetsPath, itemIDs, options)
+	return err
+}
+
+func warmConfiguredSkyBlockTexturesWithResult(ctx context.Context, cacheDir string, resourcePacksPath string, assetsPath string, itemIDs []string, options mr.PreRenderOptions) (skyBlockTextureWarmResult, error) {
+	result := skyBlockTextureWarmResult{OutputPaths: map[string]struct{}{}}
 	for _, packID := range defaultResourcePackIDs() {
 		renderer := SkyCryptRender
 		if len(rendererPackIDs(renderer)) != 1 || rendererPackIDs(renderer)[0] != packID {
 			var err error
 			renderer, err = newRendererForPackIDs(cacheDir, resourcePacksPath, assetsPath, []string{packID}, false)
 			if err != nil {
-				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize %s renderer: %v", packID, err)
+				return result, fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize %s renderer: %v", packID, err)
 			}
 		}
 
-		if err := warmMissingSkyBlockTexturesWithRenderer(ctx, renderer, []string{packID}, itemIDs, options); err != nil {
-			return err
+		packResult, err := warmMissingSkyBlockTexturesWithRendererResult(ctx, renderer, []string{packID}, itemIDs, options)
+		if err != nil {
+			return result, err
+		}
+		for path := range packResult.OutputPaths {
+			result.OutputPaths[path] = struct{}{}
 		}
 	}
-	return nil
+	return result, nil
 }
 
 func WarmMissingSkyBlockTextures(ctx context.Context, itemIDs []string, options mr.PreRenderOptions) error {
@@ -1629,11 +2142,17 @@ func WarmMissingSkyBlockTextures(ctx context.Context, itemIDs []string, options 
 }
 
 func warmMissingSkyBlockTexturesWithRenderer(ctx context.Context, renderer *mr.Renderer, packIDs []string, itemIDs []string, options mr.PreRenderOptions) error {
+	_, err := warmMissingSkyBlockTexturesWithRendererResult(ctx, renderer, packIDs, itemIDs, options)
+	return err
+}
+
+func warmMissingSkyBlockTexturesWithRendererResult(ctx context.Context, renderer *mr.Renderer, packIDs []string, itemIDs []string, options mr.PreRenderOptions) (skyBlockTextureWarmResult, error) {
+	result := skyBlockTextureWarmResult{OutputPaths: map[string]struct{}{}}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if renderer == nil {
-		return fmt.Errorf("[CUSTOM_RESOURCES] renderer is not initialized")
+		return result, fmt.Errorf("[CUSTOM_RESOURCES] renderer is not initialized")
 	}
 	packSignature := packSignatureFromPackIDs(packIDs)
 	indexPackID := packSignature
@@ -1641,14 +2160,7 @@ func warmMissingSkyBlockTexturesWithRenderer(ctx context.Context, renderer *mr.R
 		indexPackID = strings.TrimSpace(packIDs[0])
 	}
 
-	missing := make([]string, 0, len(itemIDs))
-	for _, id := range itemIDs {
-		id = strings.TrimSpace(id)
-		if id == "" || renderedSkyBlockIDKnown(id, indexPackID) {
-			continue
-		}
-		missing = append(missing, id)
-	}
+	missing := skyBlockItemIDsToPreRender(itemIDs, indexPackID, options.Overwrite)
 
 	if options.Workers <= 0 {
 		options.Workers = runtime.GOMAXPROCS(0)
@@ -1664,16 +2176,19 @@ func warmMissingSkyBlockTexturesWithRenderer(ctx context.Context, renderer *mr.R
 	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendering %s missing SkyBlock items for packs %s with %d workers...\n", utility.AddCommas(len(missing)), packSignature, options.Workers)
 	if len(missing) == 0 {
 		fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered 0 SkyBlock items for packs %s, skipped 0, failed 0 in %s\n", packSignature, time.Since(timeNow))
-		return nil
+		return result, nil
 	}
 
 	output, err := renderer.PreRenderSkyBlockItemIDs(ctx, missing, options)
 	if err != nil {
-		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to pre-render SkyBlock items for packs %s: %v", packSignature, err)
+		return result, fmt.Errorf("[CUSTOM_RESOURCES] Failed to pre-render SkyBlock items for packs %s: %v", packSignature, err)
 	}
 
 	for _, item := range output.Entries {
 		if item.Error == "" && !item.Skipped {
+			if strings.TrimSpace(item.Path) != "" {
+				result.OutputPaths[renderedOutputPathKey(item.Path)] = struct{}{}
+			}
 			setCachedTextureForStableKey(packSignature, "skyblock:"+item.InputID, AppliedItemTexture{
 				Texture:     publicCacheTextureURL(item.Path),
 				TexturePack: item.TexturePackID,
@@ -1682,7 +2197,22 @@ func warmMissingSkyBlockTexturesWithRenderer(ctx context.Context, renderer *mr.R
 	}
 
 	fmt.Printf("[CUSTOM_RESOURCES] Pre-rendered %d SkyBlock items for packs %s, skipped %d, failed %d in %s\n", output.Succeeded, packSignature, output.Skipped, output.Failed, time.Since(timeNow))
-	return nil
+	return result, nil
+}
+
+func skyBlockItemIDsToPreRender(itemIDs []string, indexPackID string, overwrite bool) []string {
+	missing := make([]string, 0, len(itemIDs))
+	for _, id := range itemIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if !overwrite && renderedSkyBlockIDKnown(id, indexPackID) {
+			continue
+		}
+		missing = append(missing, id)
+	}
+	return missing
 }
 
 func rendererPackIDs(renderer *mr.Renderer) []string {

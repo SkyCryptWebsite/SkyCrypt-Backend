@@ -223,6 +223,206 @@ func TestLoadResourcePackConfigsDefaultsMissingIconToPackPNG(t *testing.T) {
 	}
 }
 
+func TestRenderedResourcePackManifestPathUsesRenderedCacheDir(t *testing.T) {
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	got := renderedResourcePackManifestPath(cacheDir)
+	want := filepath.Join(cacheDir, "rendered", "resourcepacks-manifest.json")
+	if got != want {
+		t.Fatalf("renderedResourcePackManifestPath() = %q, want %q", got, want)
+	}
+}
+
+func TestRenderedResourcePackFingerprintChangesWhenMetaVersionChanges(t *testing.T) {
+	root := t.TempDir()
+	writeTestPack(t, root, "High Pack", `{"id":"HIGH","name":"High","version":"v1","priority":100}`, "high.zip", "same archive")
+	writeTestPack(t, root, "Low Pack", `{"id":"LOW","name":"Low","version":"v1","priority":10}`, "low.zip", "same archive")
+	writeTestVanillaPack(t, root, "1.21.11", "vanilla jar")
+
+	first, _, _, err := renderedResourcePackFingerprint(root)
+	if err != nil {
+		t.Fatalf("renderedResourcePackFingerprint returned error: %v", err)
+	}
+
+	writeTestPack(t, root, "High Pack", `{"id":"HIGH","name":"High","version":"v2","priority":100}`, "high.zip", "same archive")
+	second, _, _, err := renderedResourcePackFingerprint(root)
+	if err != nil {
+		t.Fatalf("renderedResourcePackFingerprint returned error: %v", err)
+	}
+
+	if first == second {
+		t.Fatal("resource pack fingerprint did not change after meta version changed")
+	}
+}
+
+func TestRenderedResourcePackFingerprintChangesWhenArchiveChanges(t *testing.T) {
+	root := t.TempDir()
+	writeTestPack(t, root, "High Pack", `{"id":"HIGH","name":"High","version":"v1","priority":100}`, "high.zip", "archive v1")
+	writeTestVanillaPack(t, root, "1.21.11", "vanilla jar")
+
+	first, _, _, err := renderedResourcePackFingerprint(root)
+	if err != nil {
+		t.Fatalf("renderedResourcePackFingerprint returned error: %v", err)
+	}
+
+	writeTestPack(t, root, "High Pack", `{"id":"HIGH","name":"High","version":"v1","priority":100}`, "high.zip", "archive v2")
+	second, _, _, err := renderedResourcePackFingerprint(root)
+	if err != nil {
+		t.Fatalf("renderedResourcePackFingerprint returned error: %v", err)
+	}
+
+	if first == second {
+		t.Fatal("resource pack fingerprint did not change after archive content changed")
+	}
+}
+
+func TestResourcePackItemIDHashIsStable(t *testing.T) {
+	firstHash, firstCount := resourcePackItemIDHash([]string{" B ", "A", "A", "", "C"})
+	secondHash, secondCount := resourcePackItemIDHash([]string{"C", "A", "B"})
+
+	if firstHash != secondHash {
+		t.Fatalf("item ID hash changed with order/duplicates: %q != %q", firstHash, secondHash)
+	}
+	if firstCount != 3 || secondCount != 3 {
+		t.Fatalf("item ID counts = %d/%d, want 3/3", firstCount, secondCount)
+	}
+}
+
+func TestShouldSkipSkyBlockPreRenderWhenManifestMatches(t *testing.T) {
+	current := testRenderedResourcePackManifest("packs", "items", 3, 10)
+	saved := testRenderedResourcePackManifest("packs", "items", 3, 8)
+
+	skip, reason := shouldSkipSkyBlockPreRender(current, &saved, 8)
+	if !skip {
+		t.Fatalf("shouldSkipSkyBlockPreRender() skip = false, reason %q", reason)
+	}
+}
+
+func TestShouldSkipSkyBlockPreRenderRejectsStaleManifest(t *testing.T) {
+	current := testRenderedResourcePackManifest("packs", "items", 3, 10)
+	tests := []struct {
+		name   string
+		saved  renderedResourcePackManifest
+		loaded int
+	}{
+		{
+			name:   "pack hash changed",
+			saved:  testRenderedResourcePackManifest("old-packs", "items", 3, 10),
+			loaded: 10,
+		},
+		{
+			name:   "item hash changed",
+			saved:  testRenderedResourcePackManifest("packs", "old-items", 3, 10),
+			loaded: 10,
+		},
+		{
+			name:   "cache count below saved manifest",
+			saved:  testRenderedResourcePackManifest("packs", "items", 3, 10),
+			loaded: 9,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			skip, _ := shouldSkipSkyBlockPreRender(current, &test.saved, test.loaded)
+			if skip {
+				t.Fatal("shouldSkipSkyBlockPreRender() skip = true, want false")
+			}
+		})
+	}
+}
+
+func TestSkyBlockItemIDsToPreRenderIncludesKnownIDsWhenOverwriteTrue(t *testing.T) {
+	withRenderedSkyBlockIndex(t, map[string]struct{}{
+		renderedSkyBlockIndexKey("fsr", "KNOWN"): {},
+	})
+	withTextureCache(t, map[string]AppliedItemTexture{})
+
+	withoutOverwrite := skyBlockItemIDsToPreRender([]string{"KNOWN", "NEW", " "}, "fsr", false)
+	if strings.Join(withoutOverwrite, ",") != "NEW" {
+		t.Fatalf("without overwrite = %v, want [NEW]", withoutOverwrite)
+	}
+
+	withOverwrite := skyBlockItemIDsToPreRender([]string{"KNOWN", "NEW", " "}, "fsr", true)
+	if strings.Join(withOverwrite, ",") != "KNOWN,NEW" {
+		t.Fatalf("with overwrite = %v, want [KNOWN NEW]", withOverwrite)
+	}
+}
+
+func TestCleanupStaleRenderedPackFilesDeletesOnlyAffectedStaleCustomFiles(t *testing.T) {
+	renderedDir := filepath.Join(t.TempDir(), "rendered")
+	if err := os.MkdirAll(renderedDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	staleFSR := filepath.Join(renderedDir, "skyblock=OLD__pack=FSR__hash=old.webp")
+	keepFSR := filepath.Join(renderedDir, "skyblock=KEEP__pack=FSR__hash=new.webp")
+	vanilla := filepath.Join(renderedDir, "skyblock=VANILLA__pack=vanilla__hash=old.webp")
+	for _, path := range []string{staleFSR, keepFSR, vanilla} {
+		if err := os.WriteFile(path, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	removed, err := cleanupStaleRenderedPackFiles(renderedDir, []string{"FSR"}, map[string]struct{}{
+		renderedOutputPathKey(keepFSR): {},
+	})
+	if err != nil {
+		t.Fatalf("cleanupStaleRenderedPackFiles returned error: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed = %d, want 1", removed)
+	}
+	if _, err := os.Stat(staleFSR); !os.IsNotExist(err) {
+		t.Fatalf("stale FSR file still exists or stat failed unexpectedly: %v", err)
+	}
+	for _, path := range []string{keepFSR, vanilla} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected %s to remain: %v", path, err)
+		}
+	}
+}
+
+func writeTestPack(t *testing.T, root string, dir string, meta string, archiveName string, archiveBody string) {
+	t.Helper()
+	packDir := filepath.Join(root, dir)
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, "meta.json"), []byte(meta), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if archiveName != "" {
+		if err := os.WriteFile(filepath.Join(packDir, archiveName), []byte(archiveBody), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func writeTestVanillaPack(t *testing.T, root string, version string, jarBody string) {
+	t.Helper()
+	vanillaDir := filepath.Join(root, "Vanilla")
+	if err := os.MkdirAll(vanillaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vanillaDir, "version.txt"), []byte(version), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vanillaDir, version+"_client.jar"), []byte(jarBody), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testRenderedResourcePackManifest(packHash string, itemHash string, itemCount int, renderedCount int) renderedResourcePackManifest {
+	return renderedResourcePackManifest{
+		SchemaVersion:      renderedResourcePackManifestSchemaVersion,
+		RendererModule:     renderedResourcePackManifestRendererModule,
+		ResourcePackHash:   packHash,
+		ItemIDHash:         itemHash,
+		ItemIDCount:        itemCount,
+		RenderedIndexCount: renderedCount,
+	}
+}
+
 func TestNormalizeDisabledPacksCanonicalizesInput(t *testing.T) {
 	got := NormalizeDisabledPacks([]string{" HPLUS ", "fsr", "", "unknown", "FSR", "hplus,fsr"})
 	want := []string{"FSR", "HYPIXEL_PLUS"}
