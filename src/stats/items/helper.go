@@ -274,7 +274,7 @@ func AddLevelableEnchantmentsToLore(amount int, constant constants.EnchantmentLa
 }
 
 func GetId(item models.ProcessedItem) string {
-	if item.Tag == nil || item.Tag.ExtraAttributes.Id == "" {
+	if item.Tag == nil || item.Tag.ExtraAttributes == nil || item.Tag.ExtraAttributes.Id == "" {
 		return ""
 	}
 
