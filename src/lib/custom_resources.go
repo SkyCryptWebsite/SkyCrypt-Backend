@@ -38,6 +38,9 @@ var renderedTextureIndexCacheDir string
 var renderedTextureIndexLastLazyReload time.Time
 var customResourcesOnce sync.Once
 var customResourcesErr error
+var customResourceRendererMu sync.Mutex
+var customResourceRendererConfigMu sync.RWMutex
+var customResourceRendererConfig customResourceRendererSettings
 var resourcePackConfigsOnce sync.Once
 var resourcePackConfigs []models.ResourcePackConfig
 var resourcePackConfigsErr error
@@ -55,6 +58,12 @@ const (
 	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.1"
 	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
 )
+
+type customResourceRendererSettings struct {
+	CacheDir          string
+	ResourcePacksPath string
+	AssetsPath        string
+}
 
 type AppliedItemTexture struct {
 	Texture     string
@@ -1755,17 +1764,14 @@ func shouldSkipSkyBlockPreRender(current renderedResourcePackManifest, saved *re
 	if strings.TrimSpace(saved.ResourcePackHash) != current.ResourcePackHash {
 		return false, "resource pack fingerprint changed"
 	}
-	if strings.TrimSpace(saved.ItemIDHash) != current.ItemIDHash {
-		return false, "SkyBlock item ID fingerprint changed"
-	}
-	if saved.ItemIDCount != current.ItemIDCount {
-		return false, fmt.Sprintf("SkyBlock item ID count changed from %d to %d", saved.ItemIDCount, current.ItemIDCount)
-	}
 	if saved.RenderedIndexCount <= 0 {
 		return false, "manifest has no completed rendered textures"
 	}
 	if loadedRenderedCount < saved.RenderedIndexCount {
 		return false, fmt.Sprintf("rendered cache has %d indexed textures, manifest expects at least %d", loadedRenderedCount, saved.RenderedIndexCount)
+	}
+	if strings.TrimSpace(saved.ItemIDHash) != current.ItemIDHash || saved.ItemIDCount != current.ItemIDCount {
+		return true, fmt.Sprintf("resource pack fingerprint current with %s indexed textures; SkyBlock item IDs changed and will render lazily", utility.AddCommas(loadedRenderedCount))
 	}
 	return true, fmt.Sprintf("manifest current with %s indexed textures", utility.AddCommas(loadedRenderedCount))
 }
@@ -1982,6 +1988,82 @@ func debugFilenameIdentifier(value string) string {
 	return strings.ReplaceAll(value, "_", ":")
 }
 
+func isPreforkChildProcess() bool {
+	return os.Getenv("FIBER_PREFORK_CHILD") != ""
+}
+
+func logCustomResourceRoutine(format string, args ...any) {
+	if isPreforkChildProcess() {
+		if utility.IsVerboseLogging() || strings.EqualFold(os.Getenv("VERBOSE_LOGGING"), "true") {
+			fmt.Printf(format+"\n", args...)
+		}
+		return
+	}
+	fmt.Printf(format+"\n", args...)
+}
+
+func resolveCustomResourceRendererConfig() (customResourceRendererSettings, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return customResourceRendererSettings{}, fmt.Errorf("failed to get current working directory: %v", err)
+	}
+
+	cacheDir := filepath.Join(cwd, "cache")
+	resourcePacksPath := filepath.Join(cwd, "assets", "resourcepacks")
+	return customResourceRendererSettings{
+		CacheDir:          cacheDir,
+		ResourcePacksPath: resourcePacksPath,
+		AssetsPath:        filepath.Join(resourcePacksPath, "Vanilla", "assets", "minecraft"),
+	}, nil
+}
+
+func rememberCustomResourceRendererConfig(config customResourceRendererSettings) {
+	customResourceRendererConfigMu.Lock()
+	customResourceRendererConfig = config
+	customResourceRendererConfigMu.Unlock()
+}
+
+func currentCustomResourceRendererConfig() (customResourceRendererSettings, bool) {
+	customResourceRendererConfigMu.RLock()
+	config := customResourceRendererConfig
+	customResourceRendererConfigMu.RUnlock()
+	if strings.TrimSpace(config.CacheDir) == "" || strings.TrimSpace(config.ResourcePacksPath) == "" || strings.TrimSpace(config.AssetsPath) == "" {
+		return customResourceRendererSettings{}, false
+	}
+	return config, true
+}
+
+func customResourceRendererConfigForInit() (customResourceRendererSettings, error) {
+	if config, ok := currentCustomResourceRendererConfig(); ok {
+		return config, nil
+	}
+	return customResourceRendererSettings{}, fmt.Errorf("[CUSTOM_RESOURCES] renderer config is not initialized")
+}
+
+func currentCustomResourceRenderer() *mr.Renderer {
+	customResourceRendererMu.Lock()
+	renderer := SkyCryptRender
+	customResourceRendererMu.Unlock()
+	return renderer
+}
+
+func PrepareCustomResourceCache() error {
+	config, err := resolveCustomResourceRendererConfig()
+	if err != nil {
+		return err
+	}
+	rememberCustomResourceRendererConfig(config)
+
+	renderedDir := filepath.Join(config.CacheDir, "rendered")
+	timeNow := time.Now()
+	loaded, err := LoadRenderedTextureIndex(config.CacheDir)
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
+	}
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s", utility.AddCommas(loaded), renderedDir, time.Since(timeNow))
+	return nil
+}
+
 func StartCustomResources() error {
 	customResourcesOnce.Do(func() {
 		customResourcesErr = startCustomResources()
@@ -1991,14 +2073,15 @@ func StartCustomResources() error {
 
 func startCustomResources() error {
 	timeNow := time.Now()
-	cwd, err := os.Getwd()
+	config, err := resolveCustomResourceRendererConfig()
 	if err != nil {
-		return fmt.Errorf("failed to get current working directory: %v", err)
+		return err
 	}
+	rememberCustomResourceRendererConfig(config)
 
-	cacheDir := filepath.Join(cwd, "cache")
-	resourcePacksPath := filepath.Join(cwd, "assets", "resourcepacks")
-	assetsPath := filepath.Join(resourcePacksPath, "Vanilla", "assets", "minecraft")
+	cacheDir := config.CacheDir
+	resourcePacksPath := config.ResourcePacksPath
+	assetsPath := config.AssetsPath
 	renderedDir := filepath.Join(cacheDir, "rendered")
 	_, renderedDirErr := os.Stat(renderedDir)
 	if renderedDirErr != nil && !os.IsNotExist(renderedDirErr) {
@@ -2011,19 +2094,17 @@ func startCustomResources() error {
 	if err != nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
 	}
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" || loaded > 0 {
-		fmt.Printf("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s\n", utility.AddCommas(loaded), renderedDir, time.Since(timeNowv2))
-	}
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s", utility.AddCommas(loaded), renderedDir, time.Since(timeNowv2))
 
-	preloadRenderer := os.Getenv("FIBER_PREFORK_CHILD") == ""
+	preloadRenderer := !isPreforkChildProcess()
 	if err := InitRenderer(cacheDir, resourcePacksPath, assetsPath, preloadRenderer); err != nil {
 		return err
 	}
 
-	fmt.Printf("[CUSTOM_RESOURCES] Started SkyCrypt renderer instance in %s\n", time.Since(timeNow))
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] Started SkyCrypt renderer instance in %s", time.Since(timeNow))
 
 	// Render textures only on main thread; generated files are shared in cache/rendered.
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+	if !isPreforkChildProcess() {
 		itemIDs := preRenderSkyBlockItemIDs()
 		manifest, err := buildRenderedResourcePackManifest(resourcePacksPath, itemIDs, loaded, time.Now())
 		if err != nil {
@@ -2079,17 +2160,31 @@ func startCustomResources() error {
 		fmt.Printf("[CUSTOM_RESOURCES] cache/rendered is missing; child process will serve fallbacks until the main process warms textures\n")
 	}
 
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		fmt.Printf("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully with %s textures in %s\n", utility.AddCommas(itemTextureCacheLen()), time.Since(timeNow))
-	}
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully with %s textures in %s", utility.AddCommas(itemTextureCacheLen()), time.Since(timeNow))
 
 	return nil
 }
 
 func InitRenderer(cacheDir string, resourcePacksPath string, assetsPath string, preload bool) error {
-	renderer, err := newRendererForPackIDs(cacheDir, resourcePacksPath, assetsPath, defaultResourcePackIDs(), preload)
+	config := customResourceRendererSettings{
+		CacheDir:          cacheDir,
+		ResourcePacksPath: resourcePacksPath,
+		AssetsPath:        assetsPath,
+	}
+	rememberCustomResourceRendererConfig(config)
+	return initCustomResourceRenderer(config, preload)
+}
+
+func initCustomResourceRenderer(config customResourceRendererSettings, preload bool) error {
+	customResourceRendererMu.Lock()
+	defer customResourceRendererMu.Unlock()
+
+	renderer, err := newRendererForPackIDs(config.CacheDir, config.ResourcePacksPath, config.AssetsPath, defaultResourcePackIDs(), preload)
 	if err != nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: %v", err)
+	}
+	if renderer == nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: renderer is nil")
 	}
 	SkyCryptRender = renderer
 	return nil
@@ -2104,6 +2199,51 @@ func newRendererForPackIDs(cacheDir string, resourcePacksPath string, assetsPath
 		CacheDir:          cacheDir,
 		VerboseLogging:    false,
 	})
+}
+
+func ensureCustomResourceRenderer() error {
+	if currentCustomResourceRenderer() != nil {
+		return nil
+	}
+
+	config, err := customResourceRendererConfigForInit()
+	if err != nil {
+		return err
+	}
+
+	customResourceRendererMu.Lock()
+	defer customResourceRendererMu.Unlock()
+	if SkyCryptRender != nil {
+		return nil
+	}
+
+	renderer, err := newRendererForPackIDs(config.CacheDir, config.ResourcePacksPath, config.AssetsPath, defaultResourcePackIDs(), false)
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: %v", err)
+	}
+	if renderer == nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: renderer is nil")
+	}
+	SkyCryptRender = renderer
+	return nil
+}
+
+func WarmCustomResourceRendererAsync(delay time.Duration) {
+	go func() {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		alreadyInitialized := currentCustomResourceRenderer() != nil
+		timeNow := time.Now()
+		if err := ensureCustomResourceRenderer(); err != nil {
+			fmt.Printf("[CUSTOM_RESOURCES] Failed to warm SkyCrypt renderer: %v\n", err)
+			return
+		}
+		if !alreadyInitialized {
+			logCustomResourceRoutine("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully in %s", time.Since(timeNow))
+		}
+	}()
 }
 
 func WarmConfiguredSkyBlockTextures(ctx context.Context, cacheDir string, resourcePacksPath string, assetsPath string, itemIDs []string, options mr.PreRenderOptions) error {
@@ -2633,8 +2773,14 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 
 	itemMap := map[string]any(nil)
 	var renderErr error
-	renderer := SkyCryptRender
-	canRuntimeRender := renderer != nil && len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput && !textureCtx.DisableRuntimeRender
+	renderer := currentCustomResourceRenderer()
+	canRuntimeRender := len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput && !textureCtx.DisableRuntimeRender
+	if canRuntimeRender && renderer == nil {
+		if err := ensureCustomResourceRenderer(); err == nil {
+			renderer = currentCustomResourceRenderer()
+		}
+	}
+	canRuntimeRender = canRuntimeRender && renderer != nil
 	if !canRuntimeRender {
 		recordRuntimeRenderSkip(stats, renderer, textureCtx, isGenericSkullInput)
 	}

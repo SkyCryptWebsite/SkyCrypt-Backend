@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"runtime/debug"
 	"skycrypt/src"
 	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "skycrypt/docs"
@@ -48,11 +51,20 @@ func main() {
 		// ========== END FORENSIC LOGGING INIT ==========
 	}
 
+	err := src.SetupApplication()
+	if err != nil {
+		if utility.IsForensicsEnabled() {
+			forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
+		}
+
+		panic(err)
+	}
+
 	app := fiber.New(fiber.Config{
-		Prefork:                   true,  // Enable prefork (requires --pid=host in Docker)
-		ServerHeader:              "",    // Remove server header for slight perf gain
-		DisableKeepalive:          false, // Keep connections alive
-		DisableDefaultDate:        true,  // Disable date header
+		Prefork:                   preforkEnabled(), // Requires --pid=host in Docker when enabled
+		ServerHeader:              "",               // Remove server header for slight perf gain
+		DisableKeepalive:          false,            // Keep connections alive
+		DisableDefaultDate:        true,             // Disable date header
 		DisableDefaultContentType: false,
 		BodyLimit:                 10 << 20, // 10MB
 		ReadBufferSize:            4096,
@@ -93,18 +105,21 @@ func main() {
 	}))
 	app.Use(cors.New())
 
-	err := src.SetupApplication()
-	if err != nil {
-		if utility.IsForensicsEnabled() {
-			forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
-		}
-
-		panic(err)
-	}
-
 	src.SetupRoutes(app)
 
 	if err := app.Listen(":8080"); err != nil {
 		panic(err)
 	}
+}
+
+func preforkEnabled() bool {
+	if value, ok := os.LookupEnv("SKYCRYPT_PREFORK"); ok {
+		enabled, err := strconv.ParseBool(strings.TrimSpace(value))
+		if err == nil {
+			return enabled
+		}
+		fmt.Printf("[SKYCRYPT] invalid SKYCRYPT_PREFORK value %q; falling back to DEV-based default\n", value)
+	}
+
+	return os.Getenv("DEV") != "true"
 }

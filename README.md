@@ -141,6 +141,7 @@ DISCORD_WEBHOOK=""
 
 # Local development mode. Production deployments should leave this false.
 DEV="true"
+SKYCRYPT_PREFORK="false"
 
 # Rendering and diagnostics.
 ENABLE_ARMOR_HEX="false"
@@ -175,6 +176,7 @@ DISABLE_SERVER_API_AUTH="true"
 | `HYPIXEL_API_KEY` | Your Hypixel API key. Obtain from [Hypixel Developer Portal](https://developer.hypixel.net/) | - | Yes |
 | `DISCORD_WEBHOOK` | Discord webhook URL for error notifications and startup messages | - | No |
 | `DEV` | Enable development mode. Set to `true` for local development | `false` | No |
+| `SKYCRYPT_PREFORK` | Explicitly enable or disable Fiber prefork. Defaults to `false` when `DEV=true`, otherwise `true` | `false` in development, `true` otherwise | No |
 | `ENABLE_ARMOR_HEX` | Enable hexadecimal armor color support | `false` | No |
 | `VERBOSE_LOGGING` | Enable extra debug logging from utility helpers | `false` | No |
 | `FORENSICS_ENABLED` | Enable forensic request/performance logging and `/api/forensics` endpoints | `false` | No |

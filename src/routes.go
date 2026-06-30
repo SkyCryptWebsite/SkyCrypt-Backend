@@ -121,15 +121,11 @@ func SetupApplication() error {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
 
-		if _, err := lib.LoadRenderedTextureIndex(""); err != nil {
+		if err := lib.PrepareCustomResourceCache(); err != nil {
 			log.Printf("failed to load custom resource index: %v", err)
 		}
 
-		go func() {
-			if err := lib.StartCustomResources(); err != nil {
-				log.Printf("failed to start custom resources: %v", err)
-			}
-		}()
+		lib.WarmCustomResourceRendererAsync(1500 * time.Millisecond)
 	}
 
 	return nil

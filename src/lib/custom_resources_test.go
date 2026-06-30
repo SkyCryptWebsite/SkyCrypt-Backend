@@ -297,6 +297,16 @@ func TestShouldSkipSkyBlockPreRenderWhenManifestMatches(t *testing.T) {
 	}
 }
 
+func TestShouldSkipSkyBlockPreRenderWhenOnlyItemIDsChanged(t *testing.T) {
+	current := testRenderedResourcePackManifest("packs", "new-items", 4, 10)
+	saved := testRenderedResourcePackManifest("packs", "old-items", 3, 8)
+
+	skip, reason := shouldSkipSkyBlockPreRender(current, &saved, 8)
+	if !skip {
+		t.Fatalf("shouldSkipSkyBlockPreRender() skip = false, reason %q", reason)
+	}
+}
+
 func TestShouldSkipSkyBlockPreRenderRejectsStaleManifest(t *testing.T) {
 	current := testRenderedResourcePackManifest("packs", "items", 3, 10)
 	tests := []struct {
@@ -307,11 +317,6 @@ func TestShouldSkipSkyBlockPreRenderRejectsStaleManifest(t *testing.T) {
 		{
 			name:   "pack hash changed",
 			saved:  testRenderedResourcePackManifest("old-packs", "items", 3, 10),
-			loaded: 10,
-		},
-		{
-			name:   "item hash changed",
-			saved:  testRenderedResourcePackManifest("packs", "old-items", 3, 10),
 			loaded: 10,
 		},
 		{

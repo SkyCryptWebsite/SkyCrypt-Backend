@@ -11,6 +11,7 @@ import (
 	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"strings"
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -32,6 +33,13 @@ const (
 	gardenCacheTTL       = 30 * time.Minute
 	gardenCacheRefresh   = 5 * time.Minute
 )
+
+func hypixelAPIKey() string {
+	if key := strings.TrimSpace(os.Getenv("HYPIXEL_API_KEY")); key != "" {
+		return key
+	}
+	return strings.TrimSpace(HYPIXEL_API_KEY)
+}
 
 var (
 	playerLocalCache   = localcache.NewLocalCache[*skycrypttypes.Player](128)
@@ -111,7 +119,7 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	var rawReponse models.HypixelPlayerResponse
 	var response skycrypttypes.Player
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", hypixelAPIKey(), uuid))
 	if err != nil {
 		return &response, err
 	}
@@ -203,7 +211,7 @@ func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProf
 func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, error) {
 	var response models.HypixelProfilesResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", HYPIXEL_API_KEY, uuid))
+	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", hypixelAPIKey(), uuid))
 	if err != nil {
 		return &response, err
 	}
@@ -329,7 +337,7 @@ func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skyc
 func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, error) {
 	var rawReponse models.HypixelMuseumResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", hypixelAPIKey(), profileId))
 	if err != nil {
 		return nil, err
 	}
@@ -404,7 +412,7 @@ func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.G
 func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
 	var rawReponse models.HypixelGardenResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", HYPIXEL_API_KEY, profileId))
+	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", hypixelAPIKey(), profileId))
 	if err != nil {
 		return nil, err
 	}
