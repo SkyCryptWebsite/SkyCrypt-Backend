@@ -54,6 +54,8 @@ github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18 h1:Bcrdnip4ZXRWFDNAGOGQgixMx48bj3N8fIu5cHd5mjI=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.18/go.mod h1:yO7X7nwogtxCGo9rtEHM9bYYbnLfJof4n6vJGvPMpwY=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.19 h1:wJ7VLTVyt2jeXbgFe71qHatjfHgcyJ80Ouuf3R1/nYc=
+github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.19/go.mod h1:yO7X7nwogtxCGo9rtEHM9bYYbnLfJof4n6vJGvPMpwY=
 github.com/Tnze/go-mc v1.20.2 h1:arHCE/WxLCxY73C/4ZNLdOymRYtdwoXE05ohB7HVN6Q=
 github.com/Tnze/go-mc v1.20.2/go.mod h1:geoRj2HsXSkB3FJBuhr7wCzXegRlzWsVXd7h7jiJ6aQ=
 github.com/andybalholm/brotli v1.2.1 h1:R+f5xP285VArJDRgowrfb9DqL18yVK0gKAW/F+eTWro=
