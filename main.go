@@ -16,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -29,6 +30,11 @@ import (
 // @in header
 // @name X-API-Token
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("[SKYCRYPT] No .env file found, relying on environment variables")
+	}
+
 	if utility.IsForensicsEnabled() {
 		// ========== FORENSIC LOGGING INIT (MUST BE FIRST) ==========
 		forensics.InitLogger()

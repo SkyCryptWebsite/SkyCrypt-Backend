@@ -17,15 +17,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/etag"
-	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 func SetupApplication() error {
 	timeNow := time.Now()
 
-	err := godotenv.Load()
-	if err != nil && os.Getenv("FIBER_PREFORK_CHILD") == "" {
+	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
 		log.Println("No .env file found, using environment variables")
 	}
 
