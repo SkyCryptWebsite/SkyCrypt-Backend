@@ -40,7 +40,7 @@ func SetupApplication() error {
 	redisPassword := os.Getenv("REDIS_PASSWORD")
 	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
 
-	err = db.InitRedis(redisAddr, redisPassword, 0)
+	err := db.InitRedis(redisAddr, redisPassword, 0)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Redis: %v", err)
 	}

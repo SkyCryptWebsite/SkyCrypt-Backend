@@ -57,7 +57,7 @@ func main() {
 		// ========== END FORENSIC LOGGING INIT ==========
 	}
 
-	err := src.SetupApplication()
+	err = src.SetupApplication()
 	if err != nil {
 		if utility.IsForensicsEnabled() {
 			forensics.PrintFatal(fmt.Sprintf("Application setup failed: %v", err), zap.Error(err))
