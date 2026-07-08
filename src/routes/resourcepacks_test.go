@@ -52,10 +52,10 @@ func TestResourcePackHandlerReturnsMetaBackedPacks(t *testing.T) {
 			t.Fatalf("pack %s returned invalid metadata icon path %q", pack.Id, pack.Icon)
 		}
 	}
-	if packs[0].Icon != "/assets/resourcepacks/FurSky%20Reborn/pack.png" {
+	if packs[0].Icon != "/assets/resourcepacks/FurSky%20Reborn/pack.webp" {
 		t.Fatalf("fsr icon = %q, want corrected assets path", packs[0].Icon)
 	}
-	if packs[1].Icon != "/assets/resourcepacks/Hypixel%20Plus/pack.png" {
+	if packs[1].Icon != "/assets/resourcepacks/Hypixel%20Plus/pack.webp" {
 		t.Fatalf("hplus icon = %q, want corrected assets path", packs[1].Icon)
 	}
 }
