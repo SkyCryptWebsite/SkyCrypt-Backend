@@ -251,8 +251,8 @@ func resourcePackIconURL(packDirName string, metaIcon string) string {
 	if strings.HasPrefix(metaIcon, "http://") || strings.HasPrefix(metaIcon, "https://") {
 		return metaIcon
 	}
-	iconName := resourcePackIconFileName(metaIcon)
-	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, iconName)))
+
+	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, "pack.webp")))
 }
 
 func escapePath(path string) string {
@@ -261,18 +261,6 @@ func escapePath(path string) string {
 		parts[i] = url.PathEscape(part)
 	}
 	return strings.Join(parts, "/")
-}
-
-func resourcePackIconFileName(icon string) string {
-	icon = strings.TrimSpace(icon)
-	if icon == "" {
-		return "pack.png"
-	}
-	iconName := filepath.Base(filepath.FromSlash(strings.TrimPrefix(icon, "/")))
-	if iconName == "." || iconName == string(filepath.Separator) || iconName == "" {
-		return "pack.png"
-	}
-	return iconName
 }
 
 func sortResourcePackConfigs(configs []models.ResourcePackConfig) {

@@ -226,7 +226,7 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID str
 		encodedInventories[fmt.Sprintf("backpack_icon_%s", backpackIconId)] = &backpackIconData.Data
 	}
 
-	for index, layout := range useProfile.Loadout.Armor {
+	for index, layout := range useProfile.Loadout.Armor.Sets {
 		inventoryId := fmt.Sprintf("wardrobe_%d", index)
 
 		encodedInventories[fmt.Sprintf("%s_helmet", inventoryId)] = &layout.Helmet.Data

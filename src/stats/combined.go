@@ -60,7 +60,7 @@ func GetCombinedContext(
 		specifiedInventories["backpack_"+backpackId] = backpackData
 	}
 
-	for index, layout := range member.Loadout.Armor {
+	for index, layout := range member.Loadout.Armor.Sets {
 		inventoryId := fmt.Sprintf("wardrobe_%d", index)
 
 		specifiedInventories[fmt.Sprintf("%s_helmet", inventoryId)] = layout.Helmet
