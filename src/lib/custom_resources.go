@@ -252,7 +252,7 @@ func resourcePackIconURL(packDirName string, metaIcon string) string {
 		return metaIcon
 	}
 
-	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, "pack.webp")))
+	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, "pack.png")))
 }
 
 func escapePath(path string) string {

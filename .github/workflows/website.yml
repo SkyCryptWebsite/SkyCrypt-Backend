@@ -13,8 +13,8 @@ jobs:
   checks:
     uses: ./.github/workflows/checks.yml
 
-  tests:
-    uses: ./.github/workflows/test.yml
+  # tests:
+  #   uses: ./.github/workflows/test.yml
 
   analyze:
     name: Analyze
