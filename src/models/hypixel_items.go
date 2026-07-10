@@ -15,6 +15,7 @@ type HypixelItemsResponse struct {
 
 type HypixelItem struct {
 	Material          string                 `json:"material"`
+	ItemModel         string                 `json:"item_model,omitempty"`
 	Skin              skin                   `json:"skin,omitempty"`
 	Name              string                 `json:"name"`
 	Category          string                 `json:"category"`
@@ -33,6 +34,7 @@ type HypixelItem struct {
 type ProcessedHypixelItem struct {
 	SkyblockID        string                 `json:"skyblock_id"`
 	Material          string                 `json:"material"`
+	ItemModel         string                 `json:"item_model,omitempty"`
 	Name              string                 `json:"name"`
 	ItemId            int                    `json:"item_id"`
 	Rarity            string                 `json:"rarity"`

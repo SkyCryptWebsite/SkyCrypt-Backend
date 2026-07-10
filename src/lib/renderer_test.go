@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"strings"
 	"testing"
 )
 
@@ -106,6 +107,116 @@ func TestRenderItemHandlesKnownSkyBlockItem(t *testing.T) {
 	}
 }
 
+func TestPreferredItemModelUsesHypixelBeforeNEU(t *testing.T) {
+	got := preferredItemModel(" minecraft:bamboo ", "hypixel_skyblock:item/combat_1/arack")
+	if got != "minecraft:bamboo" {
+		t.Fatalf("preferredItemModel = %q, want minecraft:bamboo", got)
+	}
+
+	got = preferredItemModel("", " hypixel_skyblock:item/combat_1/arack ")
+	if got != "hypixel_skyblock:item/combat_1/arack" {
+		t.Fatalf("preferredItemModel NEU fallback = %q", got)
+	}
+}
+
+func TestRenderItemUsesVanillaHypixelItemModel(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"TEST_BAMBOO_MODEL": {
+			SkyblockID: "TEST_BAMBOO_MODEL",
+			Material:   "SKULL_ITEM",
+			ItemModel:  "minecraft:bamboo",
+			ItemId:     constants.BUKKIT_TO_ID["SKULL_ITEM"],
+			Damage:     3,
+		},
+	})
+	ITEM_TEXTURE_CACHE["bamboo"] = AppliedItemTexture{
+		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/bamboo.png",
+	}
+
+	textureBytes, err := RenderItem("TEST_BAMBOO_MODEL", nil, false)
+	if err != nil {
+		t.Fatalf("RenderItem returned error: %v", err)
+	}
+	if len(textureBytes) == 0 {
+		t.Fatal("RenderItem returned empty texture bytes")
+	}
+}
+
+func TestRenderItemUsesCustomHypixelItemModel(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"TEST_ARACK_MODEL": {
+			SkyblockID: "TEST_ARACK_MODEL",
+			Material:   "IRON_SWORD",
+			ItemModel:  "hypixel_skyblock:item/combat_1/arack",
+			ItemId:     constants.BUKKIT_TO_ID["IRON_SWORD"],
+		},
+	})
+	ITEM_TEXTURE_CACHE["hypixel_skyblock:item/combat_1/arack"] = AppliedItemTexture{
+		Texture:     testDomain() + "/assets/resourcepacks/Hypixel_Pack/assets/hypixel_skyblock/textures/item/combat_1/arack.png",
+		TexturePack: "HYPIXEL_PACK",
+	}
+
+	textureBytes, err := RenderItem("TEST_ARACK_MODEL", nil, false)
+	if err != nil {
+		t.Fatalf("RenderItem returned error: %v", err)
+	}
+	if len(textureBytes) == 0 {
+		t.Fatal("RenderItem returned empty texture bytes")
+	}
+}
+
+func TestRenderItemFallsBackWhenHypixelItemModelIsMissing(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"TEST_MISSING_MODEL": {
+			SkyblockID: "TEST_MISSING_MODEL",
+			Material:   "APPLE",
+			ItemModel:  "missing_namespace:item/does_not_exist",
+			ItemId:     constants.BUKKIT_TO_ID["APPLE"],
+		},
+	})
+	ITEM_TEXTURE_CACHE["TEST_MISSING_MODEL"] = AppliedItemTexture{
+		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png",
+	}
+
+	textureBytes, err := RenderItem("TEST_MISSING_MODEL", nil, false)
+	if err != nil {
+		t.Fatalf("RenderItem returned error: %v", err)
+	}
+	if len(textureBytes) == 0 {
+		t.Fatal("RenderItem returned empty texture bytes")
+	}
+}
+
+func TestRenderItemMissingModelUsesSkullFallback(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"TEST_MODEL_SKULL": {
+			SkyblockID: "TEST_MODEL_SKULL",
+			Material:   "SKULL_ITEM",
+			ItemModel:  "missing_namespace:item/does_not_exist",
+			ItemId:     constants.BUKKIT_TO_ID["SKULL_ITEM"],
+			Damage:     3,
+			TextureId:  "test-head-hash",
+		},
+	})
+
+	_, err := RenderItem("TEST_MODEL_SKULL", nil, false)
+	redirectErr, ok := err.(RedirectError)
+	if !ok {
+		t.Fatalf("RenderItem error = %v, want RedirectError", err)
+	}
+	if !strings.Contains(redirectErr.URL, "/api/head/test-head-hash") {
+		t.Fatalf("redirect URL = %q", redirectErr.URL)
+	}
+}
+
 func TestRenderItemHandlesBukkitItemWithDamage(t *testing.T) {
 	withRenderItemGlobals(t)
 
@@ -136,7 +247,6 @@ func TestRenderItemHandlesLowercaseMinecraftItemID(t *testing.T) {
 
 func TestRenderItemHandlesModelOnlyMinecraftItemID(t *testing.T) {
 	withRenderItemGlobals(t)
-	withRealRenderer(t)
 
 	textureBytes, err := RenderItem("minecraft:polished_diorite", nil, false)
 	if err != nil {
@@ -149,7 +259,6 @@ func TestRenderItemHandlesModelOnlyMinecraftItemID(t *testing.T) {
 
 func TestRenderItemHandlesChestAsRenderedModel(t *testing.T) {
 	withRenderItemGlobals(t)
-	withRealRenderer(t)
 
 	textureBytes, err := RenderItem("chest", nil, false)
 	if err != nil {
@@ -162,7 +271,6 @@ func TestRenderItemHandlesChestAsRenderedModel(t *testing.T) {
 
 func TestRenderItemHandlesEnderChestAsRenderedModel(t *testing.T) {
 	withRenderItemGlobals(t)
-	withRealRenderer(t)
 
 	textureBytes, err := RenderItem("ender_chest", nil, false)
 	if err != nil {

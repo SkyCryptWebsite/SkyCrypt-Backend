@@ -156,6 +156,8 @@ func processItems(items *[]models.HypixelItem) map[string]models.ProcessedHypixe
 
 		processed[item.SkyBlockID] = models.ProcessedHypixelItem{
 			SkyblockID:        item.SkyBlockID,
+			Material:          item.Material,
+			ItemModel:         item.ItemModel,
 			Name:              item.Name,
 			ItemId:            constants.BUKKIT_TO_ID[item.Material],
 			Rarity:            strings.ToLower(item.Rarity),

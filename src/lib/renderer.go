@@ -898,6 +898,7 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 	isSkyBlockItem = isSkyBlockItem && itemData.SkyblockID != ""
 
 	var customItem map[string]interface{}
+	var modelItem map[string]interface{}
 	if isSkyBlockItem {
 		itemDamage := itemData.Damage
 		if damage != 0 {
@@ -905,33 +906,39 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 		}
 
 		tag := any(map[string]any{"ExtraAttributes": map[string]any{"id": itemData.SkyblockID}})
-		itemModel := ""
+		neuItemModel := ""
 		if neuItem, err := notenoughupdates.GetItem(itemData.SkyblockID); err == nil {
 			tag = neuItem.NBT.ToMap()
-			itemModel = strings.TrimSpace(neuItem.NBT.ItemModel)
+			neuItemModel = strings.TrimSpace(neuItem.NBT.ItemModel)
 		}
+		itemModel := preferredItemModel(itemData.ItemModel, neuItemModel)
 
 		vanillaItemId := constants.GetVanillaItemId(constants.ItemModel{
 			NumericId:  itemData.ItemId,
 			ItemDamage: itemDamage,
 		})
-		if itemModel != "" {
-			vanillaItemId = strings.TrimPrefix(strings.ToLower(itemModel), "minecraft:")
-		}
 		if vanillaItemId == "" {
 			vanillaItemId = strings.ToLower(itemData.Material)
 		}
 
 		customItem = map[string]interface{}{
 			"id":          fmt.Sprintf("minecraft:%s", vanillaItemId),
-			"tag":         tag,
+			"tag":         tagWithoutItemModel(tag),
 			"damage":      itemDamage,
 			"item_id":     itemData.ItemId,
 			"texture":     itemData.TextureId,
 			"skyblock_id": itemData.SkyblockID,
 		}
 		if itemModel != "" {
-			customItem["ItemModel"] = itemModel
+			modelItem = map[string]interface{}{
+				"id":          normalizeMinecraftItemID(itemModel),
+				"ItemModel":   itemModel,
+				"tag":         tag,
+				"damage":      itemDamage,
+				"item_id":     itemData.ItemId,
+				"texture":     itemData.TextureId,
+				"skyblock_id": itemData.SkyblockID,
+			}
 		}
 	} else {
 		vanillaID := strings.TrimPrefix(strings.ToLower(itemID), "minecraft:")
@@ -961,7 +968,36 @@ func RenderItem(itemID string, disabledPacks []string, returnBarrierIfNone bool)
 		}
 	}
 
+	if modelItem != nil {
+		modelTexture := ApplyTexture(modelItem, disabledPacks)
+		if modelTexture.Texture != "" && !strings.HasSuffix(modelTexture.Texture, "/barrier.png") {
+			return resolveRenderedItemTexture(modelTexture, returnBarrierIfNone)
+		}
+	}
+
 	appliedTexure := ApplyTexture(customItem, disabledPacks)
+	return resolveRenderedItemTexture(appliedTexure, returnBarrierIfNone)
+}
+
+func preferredItemModel(hypixelItemModel string, neuItemModel string) string {
+	if itemModel := strings.TrimSpace(hypixelItemModel); itemModel != "" {
+		return itemModel
+	}
+	return strings.TrimSpace(neuItemModel)
+}
+
+func tagWithoutItemModel(tag any) any {
+	tagMap, ok := normalizeTextureItem(tag)
+	if !ok {
+		return tag
+	}
+	delete(tagMap, "ItemModel")
+	delete(tagMap, "item_model")
+	delete(tagMap, "itemModel")
+	return tagMap
+}
+
+func resolveRenderedItemTexture(appliedTexure AppliedItemTexture, returnBarrierIfNone bool) ([]byte, error) {
 	if appliedTexure.Texture == "" {
 		return nil, fmt.Errorf("couldn't find the texture")
 	}

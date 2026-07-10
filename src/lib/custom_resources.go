@@ -472,13 +472,21 @@ func ItemTextureCacheLen() int {
 }
 
 func cachedTextureFromRawMap(itemMap map[string]any, disabledPacks map[string]struct{}) (AppliedItemTexture, bool) {
+	itemModel := itemModelFromItem(itemMap)
+	if itemModel != "" {
+		if cachedTexture, ok := cachedItemTexture(strings.TrimPrefix(itemModel, "minecraft:"), disabledPacks); ok {
+			return cachedTexture, true
+		}
+		return AppliedItemTexture{}, false
+	}
+
 	if skyblockID := textureString(itemMap, "skyblock_id", "skyblockId", "SkyblockID"); skyblockID != "" {
 		if cachedTexture, ok := cachedItemTexture(skyblockID, disabledPacks); ok {
 			return cachedTexture, true
 		}
 	}
 
-	if id := normalizeMinecraftItemID(textureString(itemMap, "ItemModel", "item_model", "itemModel", "id", "ID")); id != "" {
+	if id := normalizeMinecraftItemID(textureString(itemMap, "id", "ID")); id != "" {
 		if cachedTexture, ok := cachedItemTexture(strings.TrimPrefix(id, "minecraft:"), disabledPacks); ok {
 			return cachedTexture, true
 		}
@@ -2335,10 +2343,15 @@ func stableTextureKeysFromInput(input ItemTextureInput) []string {
 		return keys
 	}
 
+	itemModel := normalizeMinecraftItemID(input.ItemModel)
 	if skyblockID := strings.TrimSpace(input.SkyBlockID); skyblockID != "" {
-		keys = append(keys, "skyblock:"+skyblockID)
+		if itemModel != "" {
+			keys = append(keys, "skyblock:"+skyblockID+"|itemmodel:"+itemModel)
+		} else {
+			keys = append(keys, "skyblock:"+skyblockID)
+		}
 	}
-	if itemModel := normalizeMinecraftItemID(input.ItemModel); itemModel != "" {
+	if itemModel != "" {
 		keys = append(keys, "itemmodel:"+itemModel)
 	}
 	if id := normalizeMinecraftItemID(input.ID); id != "" {
@@ -2357,14 +2370,17 @@ type textureCacheLookupDetail struct {
 
 func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool, textureCacheLookupDetail) {
 	skyblockID := strings.TrimSpace(input.SkyBlockID)
-	if texture, ok := cachedStableSkyBlockTexture(skyblockID, textureCtx); ok {
-		return texture, true, textureCacheLookupDetail{
-			Reason:    "stable_skyblock_cache",
-			StableKey: "skyblock:" + skyblockID,
+	hasItemModel := normalizeMinecraftItemID(input.ItemModel) != ""
+	hasSkullIdentity := skullIdentityFromInput(input) != ""
+	if !hasItemModel || hasSkullIdentity {
+		if texture, ok := cachedStableSkyBlockTexture(skyblockID, textureCtx); ok {
+			return texture, true, textureCacheLookupDetail{
+				Reason:    "stable_skyblock_cache",
+				StableKey: "skyblock:" + skyblockID,
+			}
 		}
 	}
 
-	hasSkullIdentity := skullIdentityFromInput(input) != ""
 	for _, stableKey := range stableTextureKeysFromInput(input) {
 		if skyblockID != "" && stableKey == "skyblock:"+skyblockID {
 			continue
@@ -2376,7 +2392,7 @@ func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApp
 			}
 		}
 	}
-	if skyblockID != "" && !hasSkullIdentity {
+	if skyblockID != "" && !hasSkullIdentity && !hasItemModel {
 		if texture, ok := cachedItemTexture(skyblockID, textureCtx.DisabledPacks); ok {
 			return texture, true, textureCacheLookupDetail{
 				Reason:    "legacy_skyblock_cache",
