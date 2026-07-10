@@ -1,8 +1,1 @@
-[
-  {
-    "parent": "item/paper",
-    "textures": {
-      "layer0": "hypixel_skyblock:item/uncategorized/compact_ooze"
-    }
-  }
-]
+{"parent":"item/paper","textures":{"layer0":"hypixel_skyblock:item/uncategorized/compact_ooze"}}

@@ -1,8 +1,1 @@
-[
-  {
-    "parent": "item/paper",
-    "textures": {
-      "layer0": "hypixel_skyblock:item/slayer/spider/toxic_arrow_poison"
-    }
-  }
-]
+{"parent":"item/paper","textures":{"layer0":"hypixel_skyblock:item/slayer/spider/toxic_arrow_poison"}}

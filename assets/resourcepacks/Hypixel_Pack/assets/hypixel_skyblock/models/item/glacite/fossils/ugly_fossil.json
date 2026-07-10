@@ -1,8 +1,1 @@
-[
-  {
-    "parent": "item/paper",
-    "textures": {
-      "layer0": "hypixel_skyblock:item/glacite/fossils/ugly_fossil"
-    }
-  }
-]
+{"parent":"item/paper","textures":{"layer0":"hypixel_skyblock:item/glacite/fossils/ugly_fossil"}}

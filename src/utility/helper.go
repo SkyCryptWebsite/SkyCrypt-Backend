@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joho/godotenv"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -53,6 +54,7 @@ var forensicsEnabled bool
 var armorHexColorsEnabled bool
 
 func init() {
+	_ = godotenv.Load()
 	domain = os.Getenv("DOMAIN")
 	if domain == "" {
 		domain = "https://sky.shiiyu.moe"

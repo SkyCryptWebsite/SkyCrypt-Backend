@@ -50,7 +50,6 @@ var vanillaAssetTextureCache sync.Map
 var vanillaModelTextureCache sync.Map
 var vanillaItemExistsCache sync.Map
 
-var fallbackResourcePackIDs = []string{"FSR", "HYPIXEL_PLUS"}
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
 
 const (
@@ -219,15 +218,12 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 		}
 
 		id := strings.TrimSpace(meta.ID)
-		if id == "" || strings.EqualFold(id, "vanilla") || strings.EqualFold(id, "hypixel_pack") {
+		if id == "" || strings.EqualFold(id, "vanilla") {
 			continue
 		}
 		url := strings.TrimSpace(meta.URL)
 		author := strings.TrimSpace(meta.Author)
 		priority := meta.Priority
-		if priority == 0 {
-			priority = defaultResourcePackPriority(id)
-		}
 
 		config := models.ResourcePackConfig{
 			Id:       id,
@@ -262,17 +258,6 @@ func sortResourcePackConfigs(configs []models.ResourcePackConfig) {
 	})
 }
 
-func defaultResourcePackPriority(packID string) int {
-	switch canonicalPackAlias(packID) {
-	case "fsr":
-		return 100
-	case "hplus":
-		return 50
-	default:
-		return 0
-	}
-}
-
 func cloneResourcePackConfigs(configs []models.ResourcePackConfig) []models.ResourcePackConfig {
 	cloned := make([]models.ResourcePackConfig, len(configs))
 	copy(cloned, configs)
@@ -294,7 +279,7 @@ func defaultResourcePackIDs() []string {
 		}
 	}
 
-	return append([]string(nil), fallbackResourcePackIDs...)
+	return []string{}
 }
 
 func defaultPackSignature() string {

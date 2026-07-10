@@ -6,11 +6,19 @@ import (
 	"skycrypt/src/models"
 	"slices"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // TODO: Resolve import cycle with helper.go
 func getDomain() string {
 	output := os.Getenv("DOMAIN")
+	if output != "" {
+		return output
+	}
+
+	_ = godotenv.Load()
+	output = os.Getenv("DOMAIN")
 	if output != "" {
 		return output
 	}

@@ -1,8 +1,1 @@
-[
-  {
-    "model": {
-      "type": "minecraft:model",
-      "model": "hypixel_skyblock:item/glacite/umber/refined_umber"
-    }
-  }
-]
+{"model":{"type":"minecraft:model","model":"hypixel_skyblock:item/glacite/umber/refined_umber"}}

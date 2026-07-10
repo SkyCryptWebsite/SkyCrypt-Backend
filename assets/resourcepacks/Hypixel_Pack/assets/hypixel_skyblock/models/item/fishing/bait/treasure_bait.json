@@ -1,8 +1,1 @@
-[
-  {
-    "parent": "item/paper",
-    "textures": {
-      "layer0": "hypixel_skyblock:item/fishing/bait/treasure_bait"
-    }
-  }
-]
+{"parent":"item/paper","textures":{"layer0":"hypixel_skyblock:item/fishing/bait/treasure_bait"}}

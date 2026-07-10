@@ -1,8 +1,1 @@
-[
-  {
-    "model": {
-      "type": "minecraft:model",
-      "model": "hypixel_skyblock:item/island_relevant/winter/weapons/ice_spray_wand"
-    }
-  }
-]
+{"model":{"type":"minecraft:model","model":"hypixel_skyblock:item/island_relevant/winter/weapons/ice_spray_wand"}}

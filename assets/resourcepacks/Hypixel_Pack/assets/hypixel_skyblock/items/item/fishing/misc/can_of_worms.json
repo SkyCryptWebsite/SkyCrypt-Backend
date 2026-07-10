@@ -1,8 +1,1 @@
-[
-  {
-    "model": {
-      "type": "minecraft:model",
-      "model": "hypixel_skyblock:item/fishing/misc/can_of_worms"
-    }
-  }
-]
+{"model":{"type":"minecraft:model","model":"hypixel_skyblock:item/fishing/misc/can_of_worms"}}

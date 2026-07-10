@@ -1,8 +1,1 @@
-[
-  {
-    "parent": "item/paper",
-    "textures": {
-      "layer0": "hypixel_skyblock:item/abiphones/x/abiphone_x_blue"
-    }
-  }
-]
+{"parent":"item/paper","textures":{"layer0":"hypixel_skyblock:item/abiphones/x/abiphone_x_blue"}}

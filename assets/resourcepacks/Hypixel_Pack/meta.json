@@ -1,9 +1,9 @@
 {
     "id": "HYPIXEL_PACK",
-    "name": "Official Hypixel Resource Pack",
-    "version": "v1.0",
+    "name": "Hypixel SkyBlock",
+    "version": "10-07-2026",
     "author": "Hypixel",
     "url": "https://hypixel.net/",
     "icon": "/assets/resourcepacks/Hypixel_Pack/pack.webp",
-    "priority": 1000
+    "priority": 0
 }
