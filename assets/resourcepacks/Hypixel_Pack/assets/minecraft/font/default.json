@@ -1,0 +1,63 @@
+[
+  {
+    "providers": [
+      {
+        "type": "bitmap",
+        "file": "hypixel_skyblock:gui/stats.png",
+        "ascent": 7,
+        "height": 7,
+        "chars": [
+          "\ue000\ue001\ue002\ue003\ue004\ue005\ue006\ue007",
+          "\ue008\ue009\ue00a\ue00b\ue00c\ue00d\ue00e\ue00f",
+          "\ue010\ue011\ue012\ue013\ue014\ue015\ue016\ue017",
+          "\ue018\ue019\ue01a\ue01b\ue01c\ue01d\ue01e\ue01f",
+          "\ue020\ue021\ue022\ue023\ue024\ue025\ue026\ue027",
+          "\ue028\ue029\ue02a\ue02b\ue02c\ue02d\u0000\u0000"
+        ]
+      },
+      {
+        "type": "bitmap",
+        "file": "hypixel_skyblock:gui/skills.png",
+        "ascent": 7,
+        "height": 7,
+        "chars": [
+          "\ue050\ue051\ue052\ue053",
+          "\ue054\ue055\ue056\ue057",
+          "\ue058\ue059\ue05a\ue05b"
+        ]
+      },
+      {
+        "type": "bitmap",
+        "file": "hypixel_skyblock:gui/icons.png",
+        "ascent": 7,
+        "height": 7,
+        "chars": [
+          "\ue060\ue061\ue062\ue063",
+          "\u2714\u2716\ue066\ue067",
+          "\ue068\u0000\u0000\u0000"
+        ]
+      },
+      {
+        "type": "bitmap",
+        "file": "hypixel_skyblock:gui/mobs.png",
+        "ascent": 7,
+        "height": 7,
+        "chars": [
+          "\ue070\ue071\ue072\ue073\ue074\ue075",
+          "\ue076\ue077\ue078\ue079\ue07a\ue07b",
+          "\ue07c\ue07d\ue07e\ue07f\ue080\ue081",
+          "\ue082\ue083\ue084\ue085\ue086\u0000"
+        ]
+      },
+      {
+        "type": "bitmap",
+        "file": "hypixel_skyblock:gui/icons/staff.png",
+        "ascent": 7,
+        "height": 7,
+        "chars": [
+          "\u12de"
+        ]
+      }
+    ]
+  }
+]

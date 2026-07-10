@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/iron_sword",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/island_relevant/winter/weapons/yeti_sword"
+    }
+  }
+]

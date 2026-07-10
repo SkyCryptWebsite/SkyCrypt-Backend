@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/paper",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/fishing/ship/rusty_ship_hull"
+    }
+  }
+]

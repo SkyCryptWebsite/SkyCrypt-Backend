@@ -219,12 +219,11 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 		}
 
 		id := strings.TrimSpace(meta.ID)
-		if id == "" || strings.EqualFold(id, "vanilla") {
+		if id == "" || strings.EqualFold(id, "vanilla") || strings.EqualFold(id, "hypixel_pack") {
 			continue
 		}
 		url := strings.TrimSpace(meta.URL)
 		author := strings.TrimSpace(meta.Author)
-		icon := resourcePackIconURL(file.Name(), meta.Icon)
 		priority := meta.Priority
 		if priority == 0 {
 			priority = defaultResourcePackPriority(id)
@@ -237,22 +236,13 @@ func loadResourcePackConfigs(resourcePacksPath string) ([]models.ResourcePackCon
 			Priority: priority,
 			Author:   author,
 			Url:      url,
-			Icon:     icon,
+			Icon:     fmt.Sprintf("%s%s", utility.GetDomain(), meta.Icon),
 		}
 		configs = append(configs, config)
 	}
 
 	sortResourcePackConfigs(configs)
 	return configs, nil
-}
-
-func resourcePackIconURL(packDirName string, metaIcon string) string {
-	metaIcon = strings.TrimSpace(metaIcon)
-	if strings.HasPrefix(metaIcon, "http://") || strings.HasPrefix(metaIcon, "https://") {
-		return metaIcon
-	}
-
-	return "/assets/resourcepacks/" + escapePath(filepath.ToSlash(filepath.Join(packDirName, "pack.webp")))
 }
 
 func escapePath(path string) string {

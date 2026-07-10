@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/golden_hoe",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/bingo/binghoe"
+    }
+  }
+]

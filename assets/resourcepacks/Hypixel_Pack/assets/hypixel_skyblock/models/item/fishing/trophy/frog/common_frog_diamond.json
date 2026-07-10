@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/diamond",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/fishing/trophy/frog/common_frog_diamond"
+    }
+  }
+]

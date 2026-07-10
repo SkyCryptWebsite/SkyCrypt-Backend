@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/iron_shovel",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/broken/broken_shovel"
+    }
+  }
+]

@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/rotten_flesh",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/uncategorized/worm_membrane"
+    }
+  }
+]

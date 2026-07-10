@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/fishing_rod",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/fishing/rod/rod_of_champions"
+    }
+  }
+]

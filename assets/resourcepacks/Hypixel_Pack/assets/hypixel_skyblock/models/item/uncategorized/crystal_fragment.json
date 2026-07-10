@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/quartz",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/uncategorized/crystal_fragment"
+    }
+  }
+]

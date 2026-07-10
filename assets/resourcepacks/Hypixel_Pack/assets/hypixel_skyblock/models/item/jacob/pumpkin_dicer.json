@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/iron_axe",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/jacob/pumpkin_dicer"
+    }
+  }
+]

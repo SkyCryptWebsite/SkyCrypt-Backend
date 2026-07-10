@@ -1,0 +1,8 @@
+[
+  {
+    "parent": "item/stick",
+    "textures": {
+      "layer0": "hypixel_skyblock:item/uncategorized/staff_of_the_rising_sun"
+    }
+  }
+]
