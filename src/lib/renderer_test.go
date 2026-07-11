@@ -4,9 +4,14 @@ import (
 	"path/filepath"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"skycrypt/src/utility"
 	"strings"
 	"testing"
 )
+
+func testDomain() string {
+	return utility.GetDomain()
+}
 
 func TestLocalStaticTexturePath(t *testing.T) {
 	appRoot, err := appRootDir()
