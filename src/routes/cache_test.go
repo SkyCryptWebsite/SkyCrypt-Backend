@@ -66,7 +66,9 @@ func TestSendCachedJSONIgnoresRAMCacheInDevelopment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	if response.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("status = %d, want %d", response.StatusCode, fiber.StatusNoContent)
 	}
@@ -85,7 +87,9 @@ func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
