@@ -3,13 +3,8 @@ package lib
 import (
 	"reflect"
 	"skycrypt/src/models"
-	"skycrypt/src/utility"
 	"testing"
 )
-
-func testDomain() string {
-	return utility.GetDomain()
-}
 
 func TestNormalizeEnabledPacksPreservesOrderAndAliases(t *testing.T) {
 	got := NormalizeEnabledPacks([]string{"fsr", "HPLUS", "unknown", "FSR", "HYPIXEL_PACK"})

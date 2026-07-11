@@ -139,7 +139,8 @@ HYPIXEL_API_KEY=""
 # Optional Discord webhook for startup and error notifications.
 DISCORD_WEBHOOK=""
 
-# Local development mode. Production deployments should leave this false.
+# Local development mode. Processed route responses bypass RAM and Redis caching,
+# while raw upstream API data caches remain enabled. Production deployments should leave this false.
 DEV="true"
 SKYCRYPT_PREFORK="false"
 
@@ -175,7 +176,7 @@ DISABLE_SERVER_API_AUTH="true"
 |----------|-------------|---------|----------|
 | `HYPIXEL_API_KEY` | Your Hypixel API key. Obtain from [Hypixel Developer Portal](https://developer.hypixel.net/) | - | Yes |
 | `DISCORD_WEBHOOK` | Discord webhook URL for error notifications and startup messages | - | No |
-| `DEV` | Enable development mode. Set to `true` for local development | `false` | No |
+| `DEV` | Enable development mode. When `true`, processed route responses bypass RAM and Redis caching while raw upstream API data caches remain enabled | `false` | No |
 | `SKYCRYPT_PREFORK` | Explicitly enable or disable Fiber prefork. Defaults to `false` when `DEV=true`, otherwise `true` | `false` in development, `true` otherwise | No |
 | `ENABLE_ARMOR_HEX` | Enable hexadecimal armor color support | `false` | No |
 | `VERBOSE_LOGGING` | Enable extra debug logging from utility helpers | `false` | No |

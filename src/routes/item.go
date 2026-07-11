@@ -14,16 +14,16 @@ type itemTextureResolution struct {
 
 // ItemResolveHandler godoc
 //
-// \t@Summary\t\tResolve an item texture
-// \t@Description\tReturns the final texture URL and the resource pack that supplied it.
-// \t@ID\t\t\tresolveItemImage
-// \t@Tags\t\t\tRendering
-// \t@Produce\t\tjson
-// \t@Param\t\t\titemId\tpath\t\tstring\ttrue\t"SkyBlock item ID or Minecraft item identifier"
-// \t@Success\t\t200\t\t{object}\titemTextureResolution
-// \t@Failure\t\t400\t\t{object}\tmodels.ProcessingError
-// \t@Failure\t\t500\t\t{object}\tmodels.ProcessingError
-// \t@Router\t\t\t/api/item/{itemId}/resolve [get]
+//	@Summary  Resolve an item texture
+//	@Description Returns the final texture URL and the resource pack that supplied it.
+//	@ID   resolveItemImage
+//	@Tags   Rendering
+//	@Produce  json
+//	@Param   itemId path  string true "SkyBlock item ID or Minecraft item identifier"
+//	@Success  200  {object} itemTextureResolution
+//	@Failure  400  {object} models.ProcessingError
+//	@Failure  500  {object} models.ProcessingError
+//	@Router   /api/item/{itemId}/resolve [get]
 func ItemResolveHandler(c *fiber.Ctx) error {
 	textureID := c.Params("itemId")
 	if textureID == "" {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
@@ -50,6 +51,10 @@ func enabledPacksCachePart(enabledPacks []string) string {
 }
 
 func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
+	if !processedResponseCacheEnabled() {
+		return false, nil
+	}
+
 	if responseRAMCacheEnabled(cacheKey.endpoint) {
 		if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
 			recordResponseCache(c.UserContext(), cacheKey.endpoint, "ram")
@@ -81,6 +86,12 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 	}
 
 	body := string(payload)
+	if !processedResponseCacheEnabled() {
+		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+		c.Set("X-SkyCrypt-Backend-Cache", "bypass")
+		return c.SendString(body)
+	}
+
 	if responseRAMCacheEnabled(cacheKey.endpoint) {
 		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, body, 30*time.Second, 30*time.Second)
 	}
@@ -127,6 +138,10 @@ func responseCacheLimit(endpoint string) int {
 
 func responseRAMCacheEnabled(endpoint string) bool {
 	return endpoint == "embed" || endpoint == "stats" || endpoint == "combined" || endpoint == "uuid" || endpoint == "username"
+}
+
+func processedResponseCacheEnabled() bool {
+	return os.Getenv("DEV") != "true"
 }
 
 func recordResponseCache(ctx context.Context, endpoint string, status string) {

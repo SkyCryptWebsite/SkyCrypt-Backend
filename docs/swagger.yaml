@@ -1916,6 +1916,13 @@ components:
         total:
           type: integer
       type: object
+    routes.itemTextureResolution:
+      properties:
+        texture:
+          type: string
+        texture_pack:
+          type: string
+      type: object
     skycrypt_src_models.NetworthResult:
       properties:
         bank:
@@ -2578,6 +2585,40 @@ paths:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Item image could not be rendered.
       summary: Render an item
+      tags:
+      - Rendering
+  /api/item/{itemId}/resolve:
+    get:
+      description: Returns the final texture URL and the resource pack that supplied
+        it.
+      operationId: resolveItemImage
+      parameters:
+      - description: SkyBlock item ID or Minecraft item identifier
+        in: path
+        name: itemId
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/routes.itemTextureResolution'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Internal Server Error
+      summary: Resolve an item texture
       tags:
       - Rendering
   /api/leather/{type}/{color}:
