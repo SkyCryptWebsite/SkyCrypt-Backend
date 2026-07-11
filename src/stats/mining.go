@@ -137,17 +137,17 @@ func getPowderAmount(userProfile *skycrypttypes.Member, powderType string) model
 
 	switch powderType {
 	case "mithril":
-		available = userProfile.Mining.PowderMithril
+		available = userProfile.Mining.PowderMithrilTotal
 		spent = userProfile.Mining.PowderSpentMithril
-		total = userProfile.Mining.PowderMithril + userProfile.Mining.PowderSpentMithril
+		total = userProfile.Mining.PowderMithril
 	case "gemstone":
-		available = userProfile.Mining.PowderGemstone
+		available = userProfile.Mining.PowderGemstoneTotal
 		spent = userProfile.Mining.PowderSpentGemstone
-		total = userProfile.Mining.PowderGemstone + userProfile.Mining.PowderSpentGemstone
+		total = userProfile.Mining.PowderGemstone
 	case "glacite":
-		available = userProfile.Mining.PowderGlacite
+		available = userProfile.Mining.PowderGlaciteTotal
 		spent = userProfile.Mining.PowderSpentGlacite
-		total = userProfile.Mining.PowderGlacite + userProfile.Mining.PowderSpentGlacite
+		total = userProfile.Mining.PowderGlacite
 	}
 
 	return models.PowderAmount{
