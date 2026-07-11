@@ -19,7 +19,7 @@ import (
 // CombinedHandler godoc
 //
 //	@Summary		Get combined profile data
-//	@Description	Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
+//	@Description	Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, saved loadouts, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
 //	@Description	Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
 //	@ID				getCombinedProfileStats
 //	@Tags			Stats

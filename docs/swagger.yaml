@@ -242,6 +242,11 @@ components:
           $ref: '#/components/schemas/models.DungeonsOutput'
         gear:
           $ref: '#/components/schemas/models.Gear'
+        loadouts:
+          items:
+            $ref: '#/components/schemas/models.ResolvedLoadout'
+          type: array
+          uniqueItems: false
         minions:
           $ref: '#/components/schemas/models.MinionsOutput'
         misc:
@@ -821,6 +826,13 @@ components:
           $ref: '#/components/schemas/models.ArmorResult'
         equipment:
           $ref: '#/components/schemas/models.EquipmentResult'
+        equipmentWardrobe:
+          items:
+            items:
+              $ref: '#/components/schemas/models.StrippedItem'
+            type: array
+          type: array
+          uniqueItems: false
         wardrobe:
           items:
             items:
@@ -956,6 +968,17 @@ components:
           type: string
         texture:
           type: string
+      type: object
+    models.LoadoutAccessories:
+      properties:
+        powerStone:
+          type: string
+        tuningPoints:
+          additionalProperties:
+            type: integer
+          type: object
+        tuningPointsSlot:
+          type: integer
       type: object
     models.Medal:
       properties:
@@ -1456,6 +1479,31 @@ components:
           type: string
         rankText:
           type: string
+      type: object
+    models.ResolvedLoadout:
+      properties:
+        accessories:
+          $ref: '#/components/schemas/models.LoadoutAccessories'
+        armor:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
+        equipment:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
+        foragingCoreSelectedSlot:
+          type: integer
+        id:
+          type: integer
+        miningCoreSelectedSlot:
+          type: integer
+        name:
+          type: string
+        pet:
+          $ref: '#/components/schemas/models.StrippedPet'
       type: object
     models.ResourcePackConfig:
       properties:
@@ -2194,7 +2242,7 @@ paths:
   /api/combined/{uuid}/{profileId}:
     get:
       description: |-
-        Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
+        Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, saved loadouts, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
         Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.
       operationId: getCombinedProfileStats
       parameters:

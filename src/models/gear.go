@@ -6,8 +6,9 @@ type WeaponsResult struct {
 }
 
 type Gear struct {
-	Armor     ArmorResult       `json:"armor"`
-	Equipment EquipmentResult   `json:"equipment"`
-	Wardrobe  [][]*StrippedItem `json:"wardrobe"`
-	Weapons   WeaponsResult     `json:"weapons"`
+	Armor             ArmorResult       `json:"armor"`
+	Equipment         EquipmentResult   `json:"equipment"`
+	Wardrobe          [][]*StrippedItem `json:"wardrobe"`
+	EquipmentWardrobe [][]*StrippedItem `json:"equipmentWardrobe"`
+	Weapons           WeaponsResult     `json:"weapons"`
 }

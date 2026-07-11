@@ -3,6 +3,7 @@ package models
 // Inventory    []StrippedItem   `json:"inventory,omitempty"`
 type CombinedOutput struct {
 	Gear        *Gear                       `json:"gear,omitempty"`
+	Loadouts    LoadoutsOutput              `json:"loadouts"`
 	Accessories *GetMissingAccessoresOutput `json:"accessories,omitempty"`
 	Pets        *OutputPets                 `json:"pets,omitempty"`
 	Skills      *SkillsOutput               `json:"skills,omitempty"`

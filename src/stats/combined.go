@@ -48,7 +48,7 @@ func GetCombinedContext(
 		member.Inventory = &skycrypttypes.Inventory{}
 	}
 
-	specifiedInventories := make(skyhelpernetworthgo.SpecifiedInventory, 8+len(member.Inventory.Backpack))
+	specifiedInventories := make(skyhelpernetworthgo.SpecifiedInventory, 8+len(member.Inventory.Backpack)+len(member.Loadout.Armor.Sets)*4+len(member.Loadout.Equipment.Sets)*4)
 	specifiedInventories["armor"] = member.Inventory.Armor
 	specifiedInventories["equipment"] = member.Inventory.Equipment
 	specifiedInventories["inventory"] = member.Inventory.Inventory
@@ -61,12 +61,20 @@ func GetCombinedContext(
 	}
 
 	for index, layout := range member.Loadout.Armor.Sets {
-		inventoryId := fmt.Sprintf("wardrobe_%d", index)
+		inventoryId := fmt.Sprintf("loadout_armor_%d", index)
 
 		specifiedInventories[fmt.Sprintf("%s_helmet", inventoryId)] = layout.Helmet
 		specifiedInventories[fmt.Sprintf("%s_chestplate", inventoryId)] = layout.Chestplate
 		specifiedInventories[fmt.Sprintf("%s_leggings", inventoryId)] = layout.Leggings
 		specifiedInventories[fmt.Sprintf("%s_boots", inventoryId)] = layout.Boots
+	}
+	for index, layout := range member.Loadout.Equipment.Sets {
+		inventoryId := fmt.Sprintf("loadout_equipment_%d", index)
+
+		specifiedInventories[fmt.Sprintf("%s_1", inventoryId)] = layout.EquipmentSlot1
+		specifiedInventories[fmt.Sprintf("%s_2", inventoryId)] = layout.EquipmentSlot2
+		specifiedInventories[fmt.Sprintf("%s_3", inventoryId)] = layout.EquipmentSlot3
+		specifiedInventories[fmt.Sprintf("%s_4", inventoryId)] = layout.EquipmentSlot4
 	}
 
 	decodedItems, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(specifiedInventories,
@@ -96,21 +104,24 @@ func GetCombinedContext(
 	allItems := make([]models.ProcessedItem, 0, totalCap)
 
 	maxWardrobeIndex := -1
-	for inventoryId := range specifiedInventories {
-		if strings.HasPrefix(inventoryId, "wardrobe_") {
-			parts := strings.Split(inventoryId, "_")
-			if len(parts) >= 2 {
-				index := 0
-				if _, err := fmt.Sscanf(parts[1], "%d", &index); err == nil {
-					if index > maxWardrobeIndex {
-						maxWardrobeIndex = index
-					}
-				}
-			}
+	armorSets := make(map[int][]models.ProcessedItem, len(member.Loadout.Armor.Sets))
+	for setID := range member.Loadout.Armor.Sets {
+		armorSets[setID] = make([]models.ProcessedItem, 4)
+		if setID > maxWardrobeIndex {
+			maxWardrobeIndex = setID
+		}
+	}
+	equipmentSets := make(map[int][]models.ProcessedItem, len(member.Loadout.Equipment.Sets))
+	maxEquipmentWardrobeIndex := -1
+	for setID := range member.Loadout.Equipment.Sets {
+		equipmentSets[setID] = make([]models.ProcessedItem, 4)
+		if setID > maxEquipmentWardrobeIndex {
+			maxEquipmentWardrobeIndex = setID
 		}
 	}
 
 	wardrobeSlice := make([]models.ProcessedItem, (maxWardrobeIndex+1)*4)
+	equipmentWardrobeSlice := make([]models.ProcessedItem, (maxEquipmentWardrobeIndex+1)*4)
 	neuItemCache := map[string]models.NEUItem{}
 
 	timeNow := time.Now()
@@ -135,26 +146,31 @@ func GetCombinedContext(
 
 		processed := statsItems.ProcessItemsWithNEUCacheAndStats(buf, inventoryId, neuItemCache, itemProcessingStats, enabledPacks)
 
-		if strings.HasPrefix(inventoryId, "wardrobe_") {
-			parts := strings.Split(inventoryId, "_")
-			if len(parts) == 3 {
-				index := 0
-				if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
-					continue
-				}
-				part := parts[2]
+		if strings.HasPrefix(inventoryId, "loadout_armor_") {
+			setID, part := 0, ""
+			if _, err := fmt.Sscanf(inventoryId, "loadout_armor_%d_%s", &setID, &part); err == nil {
 				if offset, ok := constants.WARDROBE_SLOT_OFFSET[part]; ok && len(processed) > 0 {
-					wardrobeSlice[index*4+offset] = processed[0]
+					armorSets[setID][offset] = processed[0]
+					wardrobeSlice[setID*4+offset] = processed[0]
 				}
+			}
+		} else if strings.HasPrefix(inventoryId, "loadout_equipment_") {
+			setID, slot := 0, 0
+			if _, err := fmt.Sscanf(inventoryId, "loadout_equipment_%d_%d", &setID, &slot); err == nil && slot >= 1 && slot <= 4 && len(processed) > 0 {
+				equipmentSets[setID][slot-1] = processed[0]
+				equipmentWardrobeSlice[setID*4+slot-1] = processed[0]
 			}
 		} else {
 			processedItems[inventoryId] = processed
 		}
 
-		allItems = append(allItems, processed...)
+		if !strings.HasPrefix(inventoryId, "loadout_equipment_") {
+			allItems = append(allItems, processed...)
+		}
 	}
 
 	processedItems["wardrobe"] = wardrobeSlice
+	processedItems["equipment_wardrobe"] = equipmentWardrobeSlice
 
 	itemProcessingDuration := time.Since(timeNow)
 	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), itemProcessingDuration, os.Getpid())
@@ -172,6 +188,9 @@ func GetCombinedContext(
 	sectionStart = time.Now()
 	pets := GetPets(userProfile, profile)
 	petsDuration := time.Since(sectionStart)
+	sectionStart = time.Now()
+	loadouts := GetLoadouts(member.Loadout, armorSets, equipmentSets, userProfile, member.AccessoryBagStorage.Tuning.Slots)
+	loadoutsDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
 	mining := GetMining(userProfile, player, allItems)
 	foraging := GetForaging(userProfile, player, allItems)
@@ -198,12 +217,13 @@ func GetCombinedContext(
 	sectionsDuration := time.Since(sectionsStart)
 	if sectionsDuration > 50*time.Millisecond {
 		fmt.Printf(
-			"Combined sections in %v pid=%d gear=%v accessories=%v pets=%v skills=%v combat=%v collections=%v misc=%v\n",
+			"Combined sections in %v pid=%d gear=%v accessories=%v pets=%v loadouts=%v skills=%v combat=%v collections=%v misc=%v\n",
 			sectionsDuration,
 			os.Getpid(),
 			gearDuration,
 			accessoriesDuration,
 			petsDuration,
+			loadoutsDuration,
 			skillsDuration,
 			combatDuration,
 			collectionsDuration,
@@ -213,6 +233,7 @@ func GetCombinedContext(
 
 	return &models.CombinedOutput{
 		Gear:        gear,
+		Loadouts:    loadouts,
 		Accessories: accessories,
 		Pets:        pets,
 		Skills: &models.SkillsOutput{

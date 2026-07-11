@@ -223,7 +223,6 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 			CandyUsed: pet.CandyUsed,
 			Skin:      pet.Skin,
 		}
-
 		petDataRarity := strings.ToUpper(pet.Rarity)
 		NEUItemId := fmt.Sprintf("%s;%d", pet.Type, slices.Index(constants.RARITIES, strings.ToLower(pet.Rarity)))
 		NEUItem, err := notenoughupdates.GetItem(NEUItemId)
