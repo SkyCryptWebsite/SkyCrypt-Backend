@@ -30,7 +30,7 @@ func appendInactiveLore(accessory *models.InsertAccessory, text string) {
 	accessory.Lore = append(accessory.Lore, "", text)
 }
 
-func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string][]models.ProcessedItem, disabledPacks ...[]string) *models.GetMissingAccessoresOutput {
+func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string][]models.ProcessedItem, enabledPacks ...[]string) *models.GetMissingAccessoresOutput {
 	if processedItems == nil {
 		return &models.GetMissingAccessoresOutput{}
 	}
@@ -201,7 +201,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 			Tag:    &riftPrismItem.NBT,
 			ID:     &itemId,
 			Damage: &riftPrismItem.Damage,
-		}, "Rift", disabledPacks...)
+		}, "Rift", enabledPacks...)
 
 		// Remove the three lines from the lore which say that player should use the prism in Wizard Portal
 		for i, lore := range processedItem.Lore {

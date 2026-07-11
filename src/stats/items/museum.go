@@ -9,7 +9,7 @@ import (
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
-func decodeMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]string) models.DecodedMuseumItems {
+func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) models.DecodedMuseumItems {
 	output := models.DecodedMuseumItems{
 		Items:   make(map[string]models.ProcessedMuseumItem),
 		Special: []models.ProcessedMuseumItem{},
@@ -22,7 +22,7 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]stri
 			continue
 		}
 
-		processedItems := ProcessItems(decodedItem.Items, "museum", disabledPacks...)
+		processedItems := ProcessItems(decodedItem.Items, "museum", enabledPacks...)
 		data := models.ProcessedMuseumItem{
 			Items:           processedItems,
 			SkyblockID:      itemId,
@@ -39,7 +39,7 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]stri
 			continue
 		}
 
-		processedItem := ProcessItems(decodedItem.Items, "museum", disabledPacks...)
+		processedItem := ProcessItems(decodedItem.Items, "museum", enabledPacks...)
 		data := models.ProcessedMuseumItem{
 			Items:           processedItem,
 			Missing:         false,
@@ -82,7 +82,7 @@ func getCategoryItems(category string, output map[string]models.ProcessedMuseumI
 	return result
 }
 
-func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]string) models.MuseumResult {
+func ProcessMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) models.MuseumResult {
 	if museumData.Items == nil {
 		museumData.Items = &map[string]skycrypttypes.MuseumItem{}
 	}
@@ -91,7 +91,7 @@ func ProcessMuseumItems(museumData *skycrypttypes.Museum, disabledPacks ...[]str
 		museumData.Special = &[]skycrypttypes.MuseumItem{}
 	}
 
-	decodedMuseum := decodeMuseumItems(museumData, disabledPacks...)
+	decodedMuseum := decodeMuseumItems(museumData, enabledPacks...)
 
 	output := make(map[string]models.ProcessedMuseumItem)
 	for _, itemId := range constants.MUSEUM.GetAllItems() {
@@ -227,12 +227,12 @@ func getMuseumCategoryItems(section string) []string {
 	return constants.MUSEUM.Categories[section]
 }
 
-func GetMuseum(museum *skycrypttypes.Museum, disabledPacks ...[]string) []models.ProcessedItem {
+func GetMuseum(museum *skycrypttypes.Museum, enabledPacks ...[]string) []models.ProcessedItem {
 	if museum == nil {
 		return make([]models.ProcessedItem, 6*9)
 	}
 
-	museumItems := ProcessMuseumItems(museum, disabledPacks...)
+	museumItems := ProcessMuseumItems(museum, enabledPacks...)
 
 	output := make([]models.ProcessedItem, 6*9)
 	for _, item := range constants.MUSEUM_INVENTORY {

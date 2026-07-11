@@ -23,9 +23,9 @@ func GetCombined(
 	userProfile *skycrypttypes.Member,
 	museum *skycrypttypes.Museum,
 	members []*models.MemberStats,
-	disabledPacks []string,
+	enabledPacks []string,
 ) (*models.CombinedOutput, error) {
-	return GetCombinedContext(context.Background(), mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
+	return GetCombinedContext(context.Background(), mowojang, profiles, profile, player, userProfile, museum, members, enabledPacks)
 }
 
 func GetCombinedContext(
@@ -37,7 +37,7 @@ func GetCombinedContext(
 	userProfile *skycrypttypes.Member,
 	museum *skycrypttypes.Museum,
 	members []*models.MemberStats,
-	disabledPacks []string,
+	enabledPacks []string,
 ) (*models.CombinedOutput, error) {
 	if userProfile.Profile == nil {
 		return nil, fmt.Errorf("user profile is nil")
@@ -116,7 +116,7 @@ func GetCombinedContext(
 	timeNow := time.Now()
 	var itemProcessingStats *statsItems.ItemProcessingStats
 	if statsItems.ItemProcessingDebugEnabled() {
-		itemProcessingStats = statsItems.NewItemProcessingStats("combined", mowojang.UUID, profile.ProfileID, disabledPacks)
+		itemProcessingStats = statsItems.NewItemProcessingStats("combined", mowojang.UUID, profile.ProfileID, enabledPacks)
 	}
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
@@ -133,7 +133,7 @@ func GetCombinedContext(
 			}
 		}
 
-		processed := statsItems.ProcessItemsWithNEUCacheAndStats(buf, inventoryId, neuItemCache, itemProcessingStats, disabledPacks)
+		processed := statsItems.ProcessItemsWithNEUCacheAndStats(buf, inventoryId, neuItemCache, itemProcessingStats, enabledPacks)
 
 		if strings.HasPrefix(inventoryId, "wardrobe_") {
 			parts := strings.Split(inventoryId, "_")
@@ -167,7 +167,7 @@ func GetCombinedContext(
 	gear := GetGear(processedItems, allItems)
 	gearDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
-	accessories := GetAccessories(userProfile, processedItems, disabledPacks)
+	accessories := GetAccessories(userProfile, processedItems, enabledPacks)
 	accessoriesDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
 	pets := GetPets(userProfile, profile)

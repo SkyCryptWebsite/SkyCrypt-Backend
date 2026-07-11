@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"skycrypt/src/lib"
-
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
 
@@ -33,7 +31,6 @@ const (
 	itemProcessingStageExtra        itemProcessingStage = "extra"
 	itemProcessingStageWiki         itemProcessingStage = "wiki"
 	itemProcessingStageTextureInput itemProcessingStage = "texture_input"
-	itemProcessingStageTextureApply itemProcessingStage = "texture_apply"
 	itemProcessingStageNested       itemProcessingStage = "nested"
 	itemProcessingStageValueLore    itemProcessingStage = "value_lore"
 	itemProcessingStageStrip        itemProcessingStage = "strip"
@@ -51,15 +48,11 @@ type ItemProcessingSample struct {
 }
 
 type ItemProcessingStats struct {
-	Route         string
-	UUID          string
-	ProfileID     string
-	DisabledPacks []string
-	Started       time.Time
-
-	TextureStats      *lib.TextureApplyStats
-	TextureCacheStart int
-	TextureCacheEnd   int
+	Route        string
+	UUID         string
+	ProfileID    string
+	EnabledPacks []string
+	Started      time.Time
 
 	TotalItems     int
 	TopLevelItems  int
@@ -72,7 +65,6 @@ type ItemProcessingStats struct {
 	ExtraDuration        time.Duration
 	NEUWikiDuration      time.Duration
 	TextureInputDuration time.Duration
-	TextureApplyDuration time.Duration
 	NestedDuration       time.Duration
 	ValueLoreDuration    time.Duration
 	StripDuration        time.Duration
@@ -83,18 +75,15 @@ type ItemProcessingStats struct {
 	SlowItems []ItemProcessingSample
 }
 
-func NewItemProcessingStats(route, uuid, profileID string, disabledPacks []string) *ItemProcessingStats {
+func NewItemProcessingStats(route, uuid, profileID string, enabledPacks []string) *ItemProcessingStats {
 	return &ItemProcessingStats{
-		Route:             route,
-		UUID:              uuid,
-		ProfileID:         profileID,
-		DisabledPacks:     append([]string(nil), disabledPacks...),
-		Started:           time.Now(),
-		TextureStats:      &lib.TextureApplyStats{},
-		TextureCacheStart: lib.ItemTextureCacheLen(),
-		TextureCacheEnd:   lib.ItemTextureCacheLen(),
-		SourceCounts:      map[string]int{},
-		SlowItems:         []ItemProcessingSample{},
+		Route:        route,
+		UUID:         uuid,
+		ProfileID:    profileID,
+		EnabledPacks: append([]string(nil), enabledPacks...),
+		Started:      time.Now(),
+		SourceCounts: map[string]int{},
+		SlowItems:    []ItemProcessingSample{},
 	}
 }
 
@@ -109,9 +98,6 @@ func (s *ItemProcessingStats) ensure() {
 	}
 	if s.Started.IsZero() {
 		s.Started = time.Now()
-	}
-	if s.TextureStats == nil {
-		s.TextureStats = &lib.TextureApplyStats{}
 	}
 	if s.SourceCounts == nil {
 		s.SourceCounts = map[string]int{}
@@ -188,8 +174,6 @@ func (s *ItemProcessingStats) recordStageDuration(stage itemProcessingStage, dur
 		s.NEUWikiDuration += duration
 	case itemProcessingStageTextureInput:
 		s.TextureInputDuration += duration
-	case itemProcessingStageTextureApply:
-		s.TextureApplyDuration += duration
 	case itemProcessingStageNested:
 		s.NestedDuration += duration
 	case itemProcessingStageValueLore:
@@ -231,12 +215,11 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		return false
 	}
 
-	s.TextureCacheEnd = lib.ItemTextureCacheLen()
 	perItem := time.Duration(0)
 	if s.TotalItems > 0 {
 		perItem = time.Duration(int64(duration) / int64(s.TotalItems))
 	}
-	stageTotal := s.RawLoreDuration + s.TypeParseDuration + s.ExtraDuration + s.NEUWikiDuration + s.TextureInputDuration + s.TextureApplyDuration + s.NestedDuration + s.ValueLoreDuration + s.StripDuration
+	stageTotal := s.RawLoreDuration + s.TypeParseDuration + s.ExtraDuration + s.NEUWikiDuration + s.TextureInputDuration + s.NestedDuration + s.ValueLoreDuration + s.StripDuration
 	unattributed := duration - stageTotal
 	if unattributed < 0 {
 		unattributed = 0
@@ -244,7 +227,7 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 
 	if _, err := fmt.Fprintf(
 		writer,
-		"[ITEM_PROCESSING_DEBUG] route=%s uuid=%s profile=%s pid=%d duration=%s per_item=%s items=%d top_level=%d nested=%d containers=%d sources=%s disabled_packs=%s cache_size=%d->%d stages raw_lore=%s type_parse=%s extra=%s wiki=%s texture_input=%s texture_apply=%s nested=%s value_lore=%s strip=%s unattributed=%s neu_wiki_cache_hits=%d neu_wiki_cache_misses=%d\n",
+		"[ITEM_PROCESSING_DEBUG] route=%s uuid=%s profile=%s pid=%d duration=%s per_item=%s items=%d top_level=%d nested=%d containers=%d sources=%s enabled_packs=%s stages raw_lore=%s type_parse=%s extra=%s wiki=%s texture_input=%s nested=%s value_lore=%s strip=%s unattributed=%s neu_wiki_cache_hits=%d neu_wiki_cache_misses=%d\n",
 		emptyDebugValue(s.Route),
 		emptyDebugValue(s.UUID),
 		emptyDebugValue(s.ProfileID),
@@ -256,15 +239,12 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		s.NestedItems,
 		s.ContainerItems,
 		sourceCountsDebugString(s.SourceCounts),
-		debugStringList(s.DisabledPacks),
-		s.TextureCacheStart,
-		s.TextureCacheEnd,
+		debugStringList(s.EnabledPacks),
 		s.RawLoreDuration,
 		s.TypeParseDuration,
 		s.ExtraDuration,
 		s.NEUWikiDuration,
 		s.TextureInputDuration,
-		s.TextureApplyDuration,
 		s.NestedDuration,
 		s.ValueLoreDuration,
 		s.StripDuration,
@@ -275,52 +255,9 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		return false
 	}
 
-	textureStats := s.TextureStats
-	if textureStats != nil {
-		if _, err := fmt.Fprintf(
-			writer,
-			"[ITEM_PROCESSING_DEBUG] route=%s texture total=%d cache_hits=%d cache_misses=%d stable_skyblock_hits=%d stable_key_hits=%d legacy_skyblock_hits=%d raw_map_hits=%d render_attempts=%d render_hits=%d render_errors=%d render_duration=%s render_skipped=%d render_skipped_disabled=%d render_skipped_renderer_nil=%d render_skipped_no_packs=%d render_skipped_generic_skull=%d skull_fallbacks=%d head_fallbacks=%d leather_fallbacks=%d vanilla_fallbacks=%d vanilla_texture_fallbacks=%d vanilla_model_fallbacks=%d numeric_fallbacks=%d barrier_fallbacks=%d total_duration=%s cache_duration=%s fallback_duration=%s\n",
-			emptyDebugValue(s.Route),
-			textureStats.Total,
-			textureStats.CacheHits,
-			textureStats.CacheMisses,
-			textureStats.StableSkyBlockHits,
-			textureStats.StableKeyHits,
-			textureStats.LegacySkyBlockHits,
-			textureStats.RawMapHits,
-			textureStats.RenderAttempts,
-			textureStats.RenderHits,
-			textureStats.RenderErrors,
-			textureStats.RenderDuration,
-			textureStats.RuntimeRenderSkipped,
-			textureStats.RuntimeRenderSkippedDisabled,
-			textureStats.RuntimeRenderSkippedRendererNil,
-			textureStats.RuntimeRenderSkippedNoPacks,
-			textureStats.RuntimeRenderSkippedGenericSkull,
-			textureStats.SkullFallbacks,
-			textureStats.HeadFallbacks,
-			textureStats.LeatherFallbacks,
-			textureStats.VanillaFallbacks,
-			textureStats.VanillaTextureFallbacks,
-			textureStats.VanillaModelFallbacks,
-			textureStats.NumericFallbacks,
-			textureStats.BarrierFallbacks,
-			textureStats.TotalDuration,
-			textureStats.CacheDuration,
-			textureStats.FallbackDuration,
-		); err != nil {
-			return false
-		}
-	}
-
 	if mode >= itemProcessingDebugDetail {
 		if err := writeSlowItemSamples(writer, s.SlowItems, topN); err != nil {
 			return false
-		}
-		if textureStats != nil {
-			if err := writeTextureSamples(writer, textureStats.Samples, topN); err != nil {
-				return false
-			}
 		}
 	}
 
@@ -378,34 +315,6 @@ func writeSlowItemSamples(writer io.Writer, samples []ItemProcessingSample, topN
 			sample.Depth,
 			sample.ContainsItems,
 			sample.Duration,
-		); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeTextureSamples(writer io.Writer, samples []lib.TextureDecisionSample, topN int) error {
-	sorted := append([]lib.TextureDecisionSample(nil), samples...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Duration > sorted[j].Duration
-	})
-	if len(sorted) > topN {
-		sorted = sorted[:topN]
-	}
-	for index, sample := range sorted {
-		if _, err := fmt.Fprintf(
-			writer,
-			"[TEXTURE_DEBUG] sample rank=%d reason=%s skyblock_id=%q minecraft_id=%q item_model=%q stable_key=%q texture_pack=%q duration=%s texture=%q\n",
-			index+1,
-			sample.Reason,
-			sample.SkyBlockID,
-			sample.MinecraftID,
-			sample.ItemModel,
-			sample.StableKey,
-			sample.TexturePack,
-			sample.Duration,
-			sample.Texture,
 		); err != nil {
 			return err
 		}

@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"skycrypt/src/constants"
-	"skycrypt/src/lib"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
@@ -16,34 +15,28 @@ import (
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 )
 
-func ProcessItems(items []*skycrypttypes.Item, source string, disabledPacks ...[]string) []models.ProcessedItem {
-	return ProcessItemsWithNEUCacheAndStats(items, source, map[string]models.NEUItem{}, nil, disabledPacks...)
+func ProcessItems(items []*skycrypttypes.Item, source string, enabledPacks ...[]string) []models.ProcessedItem {
+	return ProcessItemsWithNEUCacheAndStats(items, source, map[string]models.NEUItem{}, nil, enabledPacks...)
 }
 
-func ProcessItemsWithNEUCache(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, disabledPacks ...[]string) []models.ProcessedItem {
-	return ProcessItemsWithNEUCacheAndStats(items, source, neuItemCache, nil, disabledPacks...)
+func ProcessItemsWithNEUCache(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, enabledPacks ...[]string) []models.ProcessedItem {
+	return ProcessItemsWithNEUCacheAndStats(items, source, neuItemCache, nil, enabledPacks...)
 }
 
-func ProcessItemsWithNEUCacheAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, disabledPacks ...[]string) []models.ProcessedItem {
+func ProcessItemsWithNEUCacheAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, enabledPacks ...[]string) []models.ProcessedItem {
 	if neuItemCache == nil {
 		neuItemCache = map[string]models.NEUItem{}
 	}
-	textureCtx := lib.NewTextureApplyContext(disabledPacks...)
-	textureCtx.DisableRuntimeRender = true
 	if itemStats != nil {
 		itemStats.ensure()
-		textureCtx.Stats = itemStats.TextureStats
-	} else {
-		textureCtx.DisableStats = true
-		textureCtx.Stats = nil
 	}
-	return processItemsWithTextureContextAndStats(items, source, neuItemCache, textureCtx, itemStats, 0)
+	return processItemsWithStats(items, source, neuItemCache, itemStats, 0)
 }
 
-func processItemsWithTextureContextAndStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) []models.ProcessedItem {
+func processItemsWithStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, depth int) []models.ProcessedItem {
 	processedItems := make([]models.ProcessedItem, 0, len(items))
 	for _, item := range items {
-		processedItem := processItemWithStats(item, source, neuItemCache, textureCtx, itemStats, depth)
+		processedItem := processItemWithStats(item, source, neuItemCache, itemStats, depth)
 		processedItem.ItemIndex = len(processedItems)
 
 		processedItems = append(processedItems, processedItem)
@@ -52,15 +45,11 @@ func processItemsWithTextureContextAndStats(items []*skycrypttypes.Item, source 
 	return processedItems
 }
 
-func ProcessItem(item *skycrypttypes.Item, source string, disabledPacks ...[]string) models.ProcessedItem {
-	textureCtx := lib.NewTextureApplyContext(disabledPacks...)
-	textureCtx.DisableRuntimeRender = true
-	textureCtx.DisableStats = true
-	textureCtx.Stats = nil
-	return processItemWithStats(item, source, map[string]models.NEUItem{}, textureCtx, nil, 0)
+func ProcessItem(item *skycrypttypes.Item, source string, enabledPacks ...[]string) models.ProcessedItem {
+	return processItemWithStats(item, source, map[string]models.NEUItem{}, nil, 0)
 }
 
-func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, textureCtx lib.TextureApplyContext, itemStats *ItemProcessingStats, depth int) models.ProcessedItem {
+func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, depth int) models.ProcessedItem {
 	if item == nil || item.Tag == nil {
 		return models.ProcessedItem{}
 	}
@@ -222,6 +211,11 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 		if recordStats {
 			stageStart = time.Now()
 		}
+		if item.Tag.SkullOwner != nil && len(item.Tag.SkullOwner.Properties.Textures) > 0 {
+			if skinHash := utility.GetSkinHash(item.Tag.SkullOwner.Properties.Textures[0].Value); skinHash != "" {
+				processedItem.Texture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), skinHash)
+			}
+		}
 		numericId := 0
 		if item.ID != nil {
 			numericId = *item.ID
@@ -250,41 +244,18 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 			skyblockId = item.Tag.ExtraAttributes.Id
 		}
 
-		textureID := ""
-		if skyblockId != "" {
-			if itemData, ok := constants.GetItem(skyblockId); ok {
-				textureID = itemData.TextureId
-			}
+		textureIdentifier := strings.TrimSpace(skyblockId)
+		if textureIdentifier == "" {
+			textureIdentifier = strings.TrimPrefix(strings.TrimSpace(itemModel), "minecraft:")
 		}
-		textureInput := lib.ItemTextureInput{
-			ID:           fmt.Sprintf("minecraft:%s", itemId),
-			ItemModel:    itemModel,
-			SkyBlockID:   skyblockId,
-			NumericID:    numericId,
-			Damage:       damage,
-			Texture:      textureID,
-			DisplayColor: item.Tag.Display.Color,
-			SkullOwner:   item.Tag.SkullOwner,
-			Tag:          item.Tag,
+		if textureIdentifier == "" {
+			textureIdentifier = strings.TrimSpace(itemId)
 		}
 		if recordStats {
 			itemStats.recordStageDuration(itemProcessingStageTextureInput, time.Since(stageStart))
 		}
-
-		if recordStats {
-			stageStart = time.Now()
-		}
-		appliedTexture := lib.ApplyTextureInput(textureInput, textureCtx)
-		if recordStats {
-			itemStats.recordStageDuration(itemProcessingStageTextureApply, time.Since(stageStart))
-		}
-		processedItem.Texture = appliedTexture.Texture
-		if appliedTexture.TexturePack != "" {
-			processedItem.TexturePack = appliedTexture.TexturePack
-		}
-
-		if processedItem.Texture == "" {
-			fmt.Printf("[CUSTOM_RESOURCES] Found no textures for item: %s\n", skyblockId)
+		if processedItem.Texture == "" && textureIdentifier != "" {
+			processedItem.Texture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), textureIdentifier)
 		}
 	}
 
@@ -309,7 +280,7 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 		if recordStats {
 			stageStart = time.Now()
 		}
-		processedItem.ContainsItems = processItemsWithTextureContextAndStats(item.ContainsItems, source, neuItemCache, textureCtx, itemStats, depth+1)
+		processedItem.ContainsItems = processItemsWithStats(item.ContainsItems, source, neuItemCache, itemStats, depth+1)
 		if recordStats {
 			itemStats.recordStageDuration(itemProcessingStageNested, time.Since(stageStart))
 		}

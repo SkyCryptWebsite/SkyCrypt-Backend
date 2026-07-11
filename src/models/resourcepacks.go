@@ -8,5 +8,4 @@ type ResourcePackConfig struct {
 	Url      string `json:"url"`
 	Icon     string `json:"icon"`
 	Priority int    `json:"priority"`
-	Disabled bool   `json:"disabled,omitempty"`
 }

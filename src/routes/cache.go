@@ -44,12 +44,9 @@ func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 	}
 }
 
-func disabledPacksCachePart(disabledPacks []string) string {
-	normalized := lib.NormalizeDisabledPacks(disabledPacks)
-	if len(normalized) == 0 {
-		return ""
-	}
-	return strings.Join(normalized, ",")
+func enabledPacksCachePart(enabledPacks []string) string {
+	normalized := lib.NormalizeEnabledPacks(enabledPacks)
+	return "enabled-v7:" + strings.Join(normalized, ",")
 }
 
 func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {

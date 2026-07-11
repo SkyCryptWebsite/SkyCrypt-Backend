@@ -206,6 +206,7 @@ func SetupRoutes(app *fiber.App) {
 
 	// RENDERING ENDPOINTS
 	api.Get("/head/:textureId", routes.HeadHandlers)
+	api.Get("/item/:itemId/resolve", routes.ItemResolveHandler)
 	api.Get("/item/:itemId", routes.ItemHandlers)
 	api.Get("/potion/:type/:color", routes.PotionHandlers)
 	api.Get("/leather/:type/:color", routes.LeatherHandlers)

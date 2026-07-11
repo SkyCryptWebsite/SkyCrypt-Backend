@@ -43,12 +43,12 @@ func InventoryHandler(c *fiber.Ctx) error {
 
 	timeNow := time.Now()
 
-	disabledPacks := disabledPacksFromRequest(c)
+	enabledPacks := enabledPacksFromRequest(c)
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("inventory", uuid, profileId, disabledPacksCachePart(disabledPacks))
+	cacheKey := responseCacheKey("inventory", uuid, profileId, enabledPacksCachePart(enabledPacks))
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
@@ -131,13 +131,13 @@ func InventoryHandler(c *fiber.Ctx) error {
 	output := []models.Inventory{}
 	var itemProcessingStats *statsItems.ItemProcessingStats
 	if statsItems.ItemProcessingDebugEnabled() {
-		itemProcessingStats = statsItems.NewItemProcessingStats("inventory", uuid, profile.ProfileID, disabledPacks)
+		itemProcessingStats = statsItems.NewItemProcessingStats("inventory", uuid, profile.ProfileID, enabledPacks)
 	}
 	neuItemCache := map[string]models.NEUItem{}
 	for _, inventoryId := range constants.INVENTORY_ORDER {
 		inventoryData := constants.INVENTORY[inventoryId]
 		if inventoryId == "museum" {
-			museumItems := statsItems.GetMuseum(profileMuseum[uuid], disabledPacks)
+			museumItems := statsItems.GetMuseum(profileMuseum[uuid], enabledPacks)
 			stripStart := time.Now()
 			strippedItems := statsItems.StripItems(&museumItems)
 			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
@@ -153,7 +153,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			itemSlice := stats.GetInventory(&userProfile, "sacks")
 			sackItems := userProfile.Inventory.Sacks
 
-			parsedSacks := statsItems.ProcessItemsWithNEUCacheAndStats(itemSlice, "sacks", neuItemCache, itemProcessingStats, disabledPacks)
+			parsedSacks := statsItems.ProcessItemsWithNEUCacheAndStats(itemSlice, "sacks", neuItemCache, itemProcessingStats, enabledPacks)
 			processedSacks := statsItems.ProcessSacks(parsedSacks, sackItems)
 			stripStart := time.Now()
 			strippedItems := statsItems.StripItems(&processedSacks, models.StripOptions{
@@ -176,7 +176,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		}
 
 		inventoryItems := stats.GetInventory(&userProfile, inventoryId)
-		processedItems := statsItems.ProcessItemsWithNEUCacheAndStats(inventoryItems, inventoryId, neuItemCache, itemProcessingStats, disabledPacks)
+		processedItems := statsItems.ProcessItemsWithNEUCacheAndStats(inventoryItems, inventoryId, neuItemCache, itemProcessingStats, enabledPacks)
 		stripStart := time.Now()
 		strippedItems := statsItems.StripItems(&processedItems)
 		itemProcessingStats.RecordStripDuration(time.Since(stripStart))
@@ -206,7 +206,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		if err != nil {
 			fmt.Printf("Error marshaling items for caching: %v\n", err)
 		} else {
-			_ = db.Set(fmt.Sprintf("items:%s:%s:%s", profileId, uuid, disabledPacksCachePart(disabledPacks)), string(jsonData), 5*60) // Cache for 5 minutes
+			_ = db.Set(fmt.Sprintf("items:%s:%s:%s", profileId, uuid, enabledPacksCachePart(enabledPacks)), string(jsonData), 5*60) // Cache for 5 minutes
 		}
 	}()
 

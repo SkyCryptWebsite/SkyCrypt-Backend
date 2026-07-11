@@ -44,15 +44,15 @@ func CombinedHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 
-	disabledPacks := disabledPacksFromRequest(c)
+	enabledPacks := enabledPacksFromRequest(c)
 
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("combined", uuid, profileId, disabledPacksCachePart(disabledPacks))
+	cacheKey := responseCacheKey("combined", uuid, profileId, enabledPacksCachePart(enabledPacks))
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
 
-	result, err := computeCombinedContext(reqCtx, uuid, profileId, disabledPacks)
+	result, err := computeCombinedContext(reqCtx, uuid, profileId, enabledPacks)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -63,7 +63,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 	return sendAndCacheJSON(c, reqCtx, cacheKey, result, 5*60)
 }
 
-func computeCombinedContext(ctx context.Context, uuid string, profileId string, disabledPacks []string) (*models.CombinedOutput, error) {
+func computeCombinedContext(ctx context.Context, uuid string, profileId string, enabledPacks []string) (*models.CombinedOutput, error) {
 	var (
 		mowojang      *models.MowojangResponse
 		profiles      *models.HypixelProfilesResponse
@@ -157,5 +157,5 @@ func computeCombinedContext(ctx context.Context, uuid string, profileId string, 
 	museum := profileMuseum[uuid]
 	userProfile := &userProfileValue
 
-	return stats.GetCombinedContext(ctx, mowojang, profiles, profile, player, userProfile, museum, members, disabledPacks)
+	return stats.GetCombinedContext(ctx, mowojang, profiles, profile, player, userProfile, museum, members, enabledPacks)
 }

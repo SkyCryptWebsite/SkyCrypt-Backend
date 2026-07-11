@@ -7,6 +7,37 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+type itemTextureResolution struct {
+	Texture     string `json:"texture"`
+	TexturePack string `json:"texture_pack,omitempty"`
+}
+
+// ItemResolveHandler godoc
+//
+// \t@Summary\t\tResolve an item texture
+// \t@Description\tReturns the final texture URL and the resource pack that supplied it.
+// \t@ID\t\t\tresolveItemImage
+// \t@Tags\t\t\tRendering
+// \t@Produce\t\tjson
+// \t@Param\t\t\titemId\tpath\t\tstring\ttrue\t"SkyBlock item ID or Minecraft item identifier"
+// \t@Success\t\t200\t\t{object}\titemTextureResolution
+// \t@Failure\t\t400\t\t{object}\tmodels.ProcessingError
+// \t@Failure\t\t500\t\t{object}\tmodels.ProcessingError
+// \t@Router\t\t\t/api/item/{itemId}/resolve [get]
+func ItemResolveHandler(c *fiber.Ctx) error {
+	textureID := c.Params("itemId")
+	if textureID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(constants.InvalidItemProvidedError)
+	}
+
+	texture, err := lib.ResolveItemTexture(textureID, enabledPacksFromRequest(c), false)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(constants.InvalidItemProvidedError)
+	}
+
+	return c.JSON(itemTextureResolution{Texture: texture.Texture, TexturePack: texture.TexturePack})
+}
+
 // ItemHandlers godoc
 //
 //	@Summary		Render an item
@@ -30,9 +61,9 @@ func ItemHandlers(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidItemProvidedError)
 	}
 
-	disabledPacks := disabledPacksFromRequest(c)
+	enabledPacks := enabledPacksFromRequest(c)
 
-	textureBytes, err := lib.RenderItem(textureId, disabledPacks, false)
+	textureBytes, err := lib.RenderItem(textureId, enabledPacks, false)
 	if err != nil {
 		if redirectErr, ok := err.(lib.RedirectError); ok {
 			return c.Redirect(redirectErr.URL, 302)

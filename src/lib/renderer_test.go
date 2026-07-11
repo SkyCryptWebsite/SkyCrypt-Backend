@@ -69,18 +69,18 @@ func TestLocalStaticTexturePath(t *testing.T) {
 func withRenderItemGlobals(t *testing.T) {
 	t.Helper()
 
-	previousRenderer := SkyCryptRender
+	previousRenderer := customResourceRenderer
 	previousItems := constants.ItemsSnapshot()
-	previousCache := ITEM_TEXTURE_CACHE
+	previousCache := itemTextureCache
 
-	SkyCryptRender = nil
+	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
-	ITEM_TEXTURE_CACHE = map[string]AppliedItemTexture{}
+	itemTextureCache = map[string]AppliedItemTexture{}
 
 	t.Cleanup(func() {
-		SkyCryptRender = previousRenderer
+		customResourceRenderer = previousRenderer
 		constants.SetItems(previousItems)
-		ITEM_TEXTURE_CACHE = previousCache
+		itemTextureCache = previousCache
 	})
 }
 
@@ -94,7 +94,7 @@ func TestRenderItemHandlesKnownSkyBlockItem(t *testing.T) {
 			ItemId:     constants.BUKKIT_TO_ID["APPLE"],
 		},
 	})
-	ITEM_TEXTURE_CACHE["TEST_SKYBLOCK_ITEM"] = AppliedItemTexture{
+	itemTextureCache["TEST_SKYBLOCK_ITEM"] = AppliedItemTexture{
 		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png",
 	}
 
@@ -131,7 +131,7 @@ func TestRenderItemUsesVanillaHypixelItemModel(t *testing.T) {
 			Damage:     3,
 		},
 	})
-	ITEM_TEXTURE_CACHE["bamboo"] = AppliedItemTexture{
+	itemTextureCache["bamboo"] = AppliedItemTexture{
 		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/bamboo.png",
 	}
 
@@ -155,7 +155,7 @@ func TestRenderItemUsesCustomHypixelItemModel(t *testing.T) {
 			ItemId:     constants.BUKKIT_TO_ID["IRON_SWORD"],
 		},
 	})
-	ITEM_TEXTURE_CACHE["hypixel_skyblock:item/combat_1/arack"] = AppliedItemTexture{
+	itemTextureCache["hypixel_skyblock:item/combat_1/arack"] = AppliedItemTexture{
 		Texture:     testDomain() + "/assets/resourcepacks/Hypixel_Pack/assets/hypixel_skyblock/textures/item/combat_1/arack.png",
 		TexturePack: "HYPIXEL_PACK",
 	}
@@ -180,7 +180,7 @@ func TestRenderItemFallsBackWhenHypixelItemModelIsMissing(t *testing.T) {
 			ItemId:     constants.BUKKIT_TO_ID["APPLE"],
 		},
 	})
-	ITEM_TEXTURE_CACHE["TEST_MISSING_MODEL"] = AppliedItemTexture{
+	itemTextureCache["TEST_MISSING_MODEL"] = AppliedItemTexture{
 		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png",
 	}
 
@@ -232,7 +232,7 @@ func TestRenderItemHandlesBukkitItemWithDamage(t *testing.T) {
 func TestRenderItemHandlesLowercaseMinecraftItemID(t *testing.T) {
 	withRenderItemGlobals(t)
 
-	ITEM_TEXTURE_CACHE["chest"] = AppliedItemTexture{
+	itemTextureCache["chest"] = AppliedItemTexture{
 		Texture: testDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png",
 	}
 

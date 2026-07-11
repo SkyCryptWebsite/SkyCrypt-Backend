@@ -2,17 +2,15 @@ package routes
 
 import (
 	"skycrypt/src/lib"
-	"skycrypt/src/models"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-var RESOURCE_PACKS = []models.ResourcePackConfig{}
-
 // ResourcePackHandler godoc
 //
 //	@Summary		List resource packs
-//	@Description	Returns toggleable resource packs available to SkyCrypt clients.
+//	@Description	Returns toggleable resource packs sorted by descending priority for the recommended default order.
+//	@Description	The enabledPacks cookie controls per-request rendering order and does not change this response order.
 //	@Description	The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
 //	@ID				listResourcePacks
 //	@Tags			Rendering

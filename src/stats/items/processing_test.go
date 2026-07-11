@@ -3,7 +3,6 @@ package stats
 import (
 	"bytes"
 	"encoding/base64"
-	"skycrypt/src/lib"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
@@ -37,19 +36,7 @@ func testItem(id int, skyblockID string) *skycrypttypes.Item {
 	}
 }
 
-func TestProcessItemsUsesHotTextureCacheForNestedItems(t *testing.T) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
-		"PARENT_CACHE": {Texture: testDomain() + "/cache/rendered/skyblock=PARENT_CACHE.webp", TexturePack: "hplus"},
-		"NESTED_CACHE": {Texture: testDomain() + "/cache/rendered/skyblock=NESTED_CACHE.webp", TexturePack: "hplus"},
-	}
-	t.Cleanup(func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	})
-
+func TestProcessItemsUsesItemEndpointForNestedItems(t *testing.T) {
 	parent := testItem(1, "PARENT_CACHE")
 	parent.ContainsItems = []*skycrypttypes.Item{testItem(1, "NESTED_CACHE")}
 
@@ -57,27 +44,18 @@ func TestProcessItemsUsesHotTextureCacheForNestedItems(t *testing.T) {
 	if len(processed) != 1 {
 		t.Fatalf("processed length = %d, want 1", len(processed))
 	}
-	if processed[0].Texture != testDomain()+"/cache/rendered/skyblock=PARENT_CACHE.webp" {
+	if processed[0].Texture != testDomain()+"/api/item/PARENT_CACHE" {
 		t.Fatalf("parent texture = %q", processed[0].Texture)
 	}
 	if len(processed[0].ContainsItems) != 1 {
 		t.Fatalf("nested length = %d, want 1", len(processed[0].ContainsItems))
 	}
-	if processed[0].ContainsItems[0].Texture != testDomain()+"/cache/rendered/skyblock=NESTED_CACHE.webp" {
+	if processed[0].ContainsItems[0].Texture != testDomain()+"/api/item/NESTED_CACHE" {
 		t.Fatalf("nested texture = %q", processed[0].ContainsItems[0].Texture)
 	}
 }
 
-func TestProcessItemsTextureOutputsForVanillaLeatherAndSkull(t *testing.T) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{}
-	t.Cleanup(func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	})
-
+func TestProcessItemsTextureOutputsUseItemEndpointAndPotionSpecialCase(t *testing.T) {
 	apple := testItem(260, "")
 	leatherID := 298
 	leather := testItem(leatherID, "")
@@ -93,10 +71,10 @@ func TestProcessItemsTextureOutputsForVanillaLeatherAndSkull(t *testing.T) {
 	if len(processed) != 3 {
 		t.Fatalf("processed length = %d, want 3", len(processed))
 	}
-	if processed[0].Texture != testDomain()+"/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/apple.png" {
+	if processed[0].Texture != testDomain()+"/api/item/apple" {
 		t.Fatalf("apple texture = %q", processed[0].Texture)
 	}
-	if processed[1].Texture != testDomain()+"/api/leather/helmet/112233" {
+	if processed[1].Texture != testDomain()+"/api/item/leather_helmet" {
 		t.Fatalf("leather texture = %q", processed[1].Texture)
 	}
 	if processed[2].Texture != testDomain()+"/api/head/head-texture-hash" {
@@ -104,19 +82,8 @@ func TestProcessItemsTextureOutputsForVanillaLeatherAndSkull(t *testing.T) {
 	}
 }
 
-func TestProcessItemsUsesSkyBlockCacheForSkullItem(t *testing.T) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	want := testDomain() + "/cache/rendered/skyblock=PROCESS_SKULL_CACHE__pack=fsr.webp"
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
-		"FSR|skyblock:PROCESS_SKULL_CACHE": {Texture: want, TexturePack: "fsr"},
-	}
-	t.Cleanup(func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	})
-
+func TestProcessItemsUsesHeadEndpointForSkyBlockSkull(t *testing.T) {
+	want := testDomain() + "/api/head/process-skull-hash"
 	head := testItem(397, "PROCESS_SKULL_CACHE")
 	head.Tag.ItemModel = "minecraft:player_head"
 	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
@@ -126,7 +93,7 @@ func TestProcessItemsUsesSkyBlockCacheForSkullItem(t *testing.T) {
 		},
 	}
 
-	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{"hplus"})
+	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{"fsr"})
 	if len(processed) != 1 {
 		t.Fatalf("processed length = %d, want 1", len(processed))
 	}
@@ -136,18 +103,6 @@ func TestProcessItemsUsesSkyBlockCacheForSkullItem(t *testing.T) {
 }
 
 func TestProcessItemsWithStatsCountsNestedItemsAndTextures(t *testing.T) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
-		"PARENT_STATS": {Texture: testDomain() + "/cache/rendered/skyblock=PARENT_STATS.webp", TexturePack: "hplus"},
-		"NESTED_STATS": {Texture: testDomain() + "/cache/rendered/skyblock=NESTED_STATS.webp", TexturePack: "hplus"},
-	}
-	t.Cleanup(func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	})
-
 	parent := testItem(1, "PARENT_STATS")
 	parent.ContainsItems = []*skycrypttypes.Item{testItem(1, "NESTED_STATS")}
 	itemStats := NewItemProcessingStats("test", "uuid", "profile", nil)
@@ -165,21 +120,9 @@ func TestProcessItemsWithStatsCountsNestedItemsAndTextures(t *testing.T) {
 			itemStats.ContainerItems,
 		)
 	}
-	if itemStats.TextureStats.Total != 2 || itemStats.TextureStats.CacheHits != 2 {
-		t.Fatalf("texture stats total/cache hits = %d/%d, want 2/2", itemStats.TextureStats.Total, itemStats.TextureStats.CacheHits)
-	}
 }
 
 func TestProcessItemsWithStatsTracksNEUWikiRouteCache(t *testing.T) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{}
-	t.Cleanup(func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	})
-
 	items := []*skycrypttypes.Item{
 		testItem(1, "WIKI_STATS_MISSING_ITEM"),
 		testItem(1, "WIKI_STATS_MISSING_ITEM"),
@@ -219,18 +162,7 @@ func TestItemProcessingDebugSummaryEnvGate(t *testing.T) {
 	}
 }
 
-func BenchmarkProcessItemsHotTextureCache_1600Items(b *testing.B) {
-	previousRenderer := lib.SkyCryptRender
-	previousCache := lib.ITEM_TEXTURE_CACHE
-	lib.SkyCryptRender = nil
-	lib.ITEM_TEXTURE_CACHE = map[string]lib.AppliedItemTexture{
-		"BENCH_PROCESS": {Texture: testDomain() + "/cache/rendered/skyblock=BENCH_PROCESS.webp", TexturePack: "hplus"},
-	}
-	defer func() {
-		lib.SkyCryptRender = previousRenderer
-		lib.ITEM_TEXTURE_CACHE = previousCache
-	}()
-
+func BenchmarkProcessItemsItemEndpoint_1600Items(b *testing.B) {
 	items := make([]*skycrypttypes.Item, 1600)
 	for i := range items {
 		items[i] = testItem(1, "BENCH_PROCESS")
