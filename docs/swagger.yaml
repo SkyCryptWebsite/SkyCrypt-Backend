@@ -1461,8 +1461,6 @@ components:
       properties:
         author:
           type: string
-        disabled:
-          type: boolean
         icon:
           type: string
         id:
@@ -2774,7 +2772,8 @@ paths:
   /api/resourcepacks:
     get:
       description: |-
-        Returns toggleable resource packs available to SkyCrypt clients.
+        Returns toggleable resource packs sorted by descending priority for the recommended default order.
+        The enabledPacks cookie controls per-request rendering order and does not change this response order.
         The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
       operationId: listResourcePacks
       responses:
