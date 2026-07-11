@@ -55,7 +55,6 @@ type StrippedItem struct {
 	Count          *int           `json:"Count,omitempty"`
 	Shiny          bool           `json:"shiny,omitempty"`
 	Wiki           *string        `json:"wiki,omitempty"`
-	TexturePack    string         `json:"texture_pack,omitempty"`
 	SourceTab      *SourceTab     `json:"sourceTab,omitempty"`
 	DisplayInline  bool           `json:"displayInline,omitempty"`
 }

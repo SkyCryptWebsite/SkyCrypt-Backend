@@ -60,10 +60,6 @@ func StripItem(item *models.ProcessedItem, stripOpts ...models.StripOptions) *mo
 		output.Wiki = item.Wiki
 	}
 
-	if item.TexturePack != "" {
-		output.TexturePack = item.TexturePack
-	}
-
 	if opts.Nested && item.DisplayName != "" && item.ContainsItems != nil {
 		output.DisplayInline = true
 	}
