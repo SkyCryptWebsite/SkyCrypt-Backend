@@ -102,6 +102,7 @@ func GetCombinedContext(
 	combinedBuf := make([]*skycrypttypes.Item, maxInvSize)
 	processedItems := make(map[string][]models.ProcessedItem, len(specifiedInventories))
 	allItems := make([]models.ProcessedItem, 0, totalCap)
+	skillGearItems := make([]models.ProcessedItem, 0, totalCap)
 
 	maxWardrobeIndex := -1
 	armorSets := make(map[int][]models.ProcessedItem, len(member.Loadout.Armor.Sets))
@@ -167,10 +168,14 @@ func GetCombinedContext(
 		if !strings.HasPrefix(inventoryId, "loadout_equipment_") {
 			allItems = append(allItems, processed...)
 		}
+		if inventoryId != "rift_armor" && inventoryId != "rift_equipment" {
+			skillGearItems = append(skillGearItems, processed...)
+		}
 	}
 
 	processedItems["wardrobe"] = wardrobeSlice
 	processedItems["equipment_wardrobe"] = equipmentWardrobeSlice
+	skillGearItems = append(skillGearItems, statsItems.GetOwnedMuseumItems(museum, enabledPacks)...)
 
 	itemProcessingDuration := time.Since(timeNow)
 	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), itemProcessingDuration, os.Getpid())
@@ -192,10 +197,10 @@ func GetCombinedContext(
 	loadouts := GetLoadouts(member.Loadout, armorSets, equipmentSets, userProfile, member.AccessoryBagStorage.Tuning.Slots)
 	loadoutsDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
-	mining := GetMining(userProfile, player, allItems)
-	foraging := GetForaging(userProfile, player, allItems)
-	farming := GetFarming(userProfile, allItems)
-	fishing := GetFishing(userProfile, allItems)
+	mining := GetMining(userProfile, player, skillGearItems)
+	foraging := GetForaging(userProfile, player, skillGearItems)
+	farming := GetFarming(userProfile, skillGearItems)
+	fishing := GetFishing(userProfile, skillGearItems)
 	enchanting := GetEnchanting(userProfile)
 	hunting := GetAttributeShards(userProfile)
 	skillsDuration := time.Since(sectionStart)

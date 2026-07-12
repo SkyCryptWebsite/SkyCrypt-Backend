@@ -97,4 +97,5 @@ type hypixelItemMuseumData struct {
 	Parent             map[string]string `json:"parent"`
 	ArmorSetExperience map[string]int    `json:"armor_set_donation_xp"`
 	Category           string            `json:"category"`
+	GameStage          string            `json:"game_stage"`
 }

@@ -60,7 +60,7 @@ func findLoadoutPet(userProfile *skycrypttypes.Member, petUUID string, petCtx *p
 	}
 
 	for _, pet := range userProfile.Pets.Pets {
-		if pet.UUID != petUUID {
+		if pet.UniqueId != petUUID {
 			continue
 		}
 

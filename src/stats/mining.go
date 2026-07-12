@@ -251,7 +251,7 @@ func getGlaciteTunnels(userProfile *skycrypttypes.Member) models.GlaciteTunnels 
 	return output
 }
 
-func GetMining(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, items []models.ProcessedItem) models.MiningOutput {
+func GetMining(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, skillGearItems []models.ProcessedItem) models.MiningOutput {
 	HOTMLevel := stats.GetLevelByXp(int(userProfile.SkillTree.Experience["mining"]), &stats.ExtraSkillData{Type: "hotm"})
 	skills := GetSkills(userProfile, nil, player)
 
@@ -266,7 +266,7 @@ func GetMining(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, 
 		Powder:                 getPowder(userProfile),
 		GlaciteTunnels:         getGlaciteTunnels(userProfile),
 		Forge:                  getForge(userProfile),
-		Tools:                  statsItems.GetSkillTools("mining", items),
+		Gear:                   statsItems.GetSkillGear("mining", skillGearItems),
 		Hotm: getSkillTree(
 			userProfile,
 			notenoughupdates.NEUConstants.HeartOfTheMountain.Hotm.Perks,

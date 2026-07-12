@@ -634,14 +634,14 @@ components:
           type: integer
         copper:
           type: integer
+        gear:
+          $ref: '#/components/schemas/models.SkillGear'
         medals:
           additionalProperties:
             $ref: '#/components/schemas/models.Medal'
           type: object
         pelts:
           type: integer
-        tools:
-          $ref: '#/components/schemas/models.SkillToolsResult'
         uniqueGolds:
           type: integer
       type: object
@@ -654,6 +654,8 @@ components:
       type: object
     models.FishingOuput:
       properties:
+        gear:
+          $ref: '#/components/schemas/models.SkillGear'
         itemsFished:
           type: integer
         lavaSeaCreatures:
@@ -667,8 +669,6 @@ components:
           type: integer
         shredderFished:
           type: integer
-        tools:
-          $ref: '#/components/schemas/models.SkillToolsResult'
         treasure:
           type: integer
         treasureLarge:
@@ -689,6 +689,8 @@ components:
           $ref: '#/components/schemas/models.FishFamily'
         foragingLevel:
           $ref: '#/components/schemas/models.Skill'
+        gear:
+          $ref: '#/components/schemas/models.SkillGear'
         hinaChapter:
           $ref: '#/components/schemas/models.HinaChapter'
         hotf:
@@ -702,8 +704,6 @@ components:
           type: string
         tokens:
           $ref: '#/components/schemas/models.HotfTokens'
-        tools:
-          $ref: '#/components/schemas/models.SkillToolsResult'
         treeGift:
           additionalProperties:
             $ref: '#/components/schemas/models.TreeGift'
@@ -1011,6 +1011,8 @@ components:
             $ref: '#/components/schemas/models.ForgeOutput'
           type: array
           uniqueItems: false
+        gear:
+          $ref: '#/components/schemas/models.SkillGear'
         glaciteTunnels:
           $ref: '#/components/schemas/models.GlaciteTunnels'
         hotm:
@@ -1030,8 +1032,6 @@ components:
           type: string
         tokens:
           $ref: '#/components/schemas/models.HotmTokens'
-        tools:
-          $ref: '#/components/schemas/models.SkillToolsResult'
       type: object
     models.Minion:
       properties:
@@ -1638,10 +1638,48 @@ components:
         xpForNext:
           type: integer
       type: object
-    models.SkillToolsResult:
+    models.SkillArmorPieces:
       properties:
-        highest_priority_tool:
+        boots:
           $ref: '#/components/schemas/models.StrippedItem'
+        chestplate:
+          $ref: '#/components/schemas/models.StrippedItem'
+        helmet:
+          $ref: '#/components/schemas/models.StrippedItem'
+        leggings:
+          $ref: '#/components/schemas/models.StrippedItem'
+      type: object
+    models.SkillArmorSet:
+      properties:
+        game_stage:
+          type: string
+        pieces:
+          $ref: '#/components/schemas/models.SkillArmorPieces'
+        set_id:
+          type: string
+      type: object
+    models.SkillEquipment:
+      properties:
+        belt:
+          $ref: '#/components/schemas/models.StrippedItem'
+        cloak:
+          $ref: '#/components/schemas/models.StrippedItem'
+        gloves:
+          $ref: '#/components/schemas/models.StrippedItem'
+        necklace:
+          $ref: '#/components/schemas/models.StrippedItem'
+      type: object
+    models.SkillGear:
+      properties:
+        armor:
+          $ref: '#/components/schemas/models.SkillArmorSet'
+        equipment:
+          $ref: '#/components/schemas/models.SkillEquipment'
+        misc:
+          items:
+            $ref: '#/components/schemas/models.StrippedItem'
+          type: array
+          uniqueItems: false
         tools:
           items:
             $ref: '#/components/schemas/models.StrippedItem'

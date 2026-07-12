@@ -26,11 +26,6 @@ type ProcessedItem struct {
 	Count          *int            `json:"Count,omitempty"`
 }
 
-type SkillToolsResult struct {
-	Tools               []StrippedItem `json:"tools"`
-	HighestPriorityTool *StrippedItem  `json:"highest_priority_tool"`
-}
-
 type ArmorResult struct {
 	Armor     []StrippedItem     `json:"armor"`
 	Stats     map[string]float64 `json:"stats"`

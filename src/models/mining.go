@@ -11,7 +11,7 @@ type MiningOutput struct {
 	Powder                 PowderOutput      `json:"powder"`
 	GlaciteTunnels         GlaciteTunnels    `json:"glaciteTunnels"`
 	Forge                  []ForgeOutput     `json:"forge"`
-	Tools                  SkillToolsResult  `json:"tools"`
+	Gear                   SkillGear         `json:"gear"`
 	Hotm                   []ProcessedItem   `json:"hotm"`
 }
 

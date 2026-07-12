@@ -7,7 +7,7 @@ type FarmingOutput struct {
 	Medals           map[string]*Medal   `json:"medals"`
 	Contests         map[string]*Contest `json:"contests"`
 	ContestsAttended int                 `json:"contestsAttended"`
-	Tools            SkillToolsResult    `json:"tools"`
+	Gear             SkillGear           `json:"gear"`
 }
 
 type Medal struct {

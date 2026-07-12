@@ -6,7 +6,7 @@ type ForagingOutput struct {
 	CenterOfTheForest  CenterOfTheForest   `json:"cotf"`
 	SelectedAxeAbility string              `json:"selectedAxeAbility"`
 	Tokens             HotfTokens          `json:"tokens"`
-	Tools              SkillToolsResult    `json:"tools"`
+	Gear               SkillGear           `json:"gear"`
 	Hotf               []ProcessedItem     `json:"hotf"`
 	Whispers           Whispers            `json:"whispers"`
 	TreeGift           map[string]TreeGift `json:"treeGift"`

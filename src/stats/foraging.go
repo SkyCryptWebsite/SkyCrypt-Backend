@@ -114,7 +114,7 @@ func getTreeGifts(userProfile *skycrypttypes.Member) map[string]models.TreeGift 
 	}
 }
 
-func GetForaging(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, items []models.ProcessedItem) models.ForagingOutput {
+func GetForaging(userProfile *skycrypttypes.Member, player *skycrypttypes.Player, skillGearItems []models.ProcessedItem) models.ForagingOutput {
 	HOTFLevel := stats.GetLevelByXp(int(userProfile.SkillTree.Experience["foraging"]), &stats.ExtraSkillData{Type: "hotf"})
 	skills := GetSkills(userProfile, nil, player)
 
@@ -128,7 +128,7 @@ func GetForaging(userProfile *skycrypttypes.Member, player *skycrypttypes.Player
 		FishFamily:         getFishFamilyAmount(userProfile),
 		HinaChapter:        getHinaChapter(userProfile),
 		TreeGift:           getTreeGifts(userProfile),
-		Tools:              statsItems.GetSkillTools("foraging", items),
+		Gear:               statsItems.GetSkillGear("foraging", skillGearItems),
 		Hotf: getSkillTree(userProfile,
 			notenoughupdates.NEUConstants.HeartOfTheForest.Hotf.Perks,
 			notenoughupdates.NEUConstants.HeartOfTheForest.Prelude,

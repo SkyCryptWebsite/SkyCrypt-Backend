@@ -40,13 +40,13 @@ func getMedalType(contest *skycrypttypes.JacobContestData) string {
 	return medal
 }
 
-func GetFarming(userProfile *skycrypttypes.Member, items []models.ProcessedItem) models.FarmingOutput {
+func GetFarming(userProfile *skycrypttypes.Member, skillGearItems []models.ProcessedItem) models.FarmingOutput {
 	output := models.FarmingOutput{
 		UniqueGolds: len(userProfile.JacobsContest.UniqueBrackets["gold"]),
 		Pelts:       userProfile.Quests.TrapperQuest.PeltCount,
 		Copper:      userProfile.Garden.Copper,
 		Contests:    map[string]*models.Contest{},
-		Tools:       statsItems.GetSkillTools("farming", items),
+		Gear:        statsItems.GetSkillGear("farming", skillGearItems),
 	}
 
 	if userProfile.JacobsContest.MedalsInv != nil {

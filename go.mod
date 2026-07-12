@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.2
-	github.com/DuckySoLucky/SkyCrypt-Types v0.1.24
+	github.com/DuckySoLucky/SkyCrypt-Types v0.1.25
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.21
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/joho/godotenv v1.5.1

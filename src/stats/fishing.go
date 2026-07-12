@@ -91,7 +91,7 @@ func getTrophyFish(userProfile *skycrypttypes.Member) models.TrophyFishOutput {
 	}
 }
 
-func GetFishing(userProfile *skycrypttypes.Member, items []models.ProcessedItem) models.FishingOuput {
+func GetFishing(userProfile *skycrypttypes.Member, skillGearItems []models.ProcessedItem) models.FishingOuput {
 	output := models.FishingOuput{
 		ItemsFished:        int(userProfile.PlayerStats.ItemsFished.Total),
 		Treasure:           int(userProfile.PlayerStats.ItemsFished.Treasure),
@@ -99,7 +99,7 @@ func GetFishing(userProfile *skycrypttypes.Member, items []models.ProcessedItem)
 		SeaCreaturesFished: int(userProfile.PlayerStats.Pets.Milestone.SeaCreaturesKilled),
 		ShredderFished:     int(userProfile.PlayerStats.ShredderRod.Fished),
 		ShredderBait:       int(userProfile.PlayerStats.ShredderRod.Bait),
-		Tools:              statsItems.GetSkillTools("fishing", items),
+		Gear:               statsItems.GetSkillGear("fishing", skillGearItems),
 		TrophyFish:         getTrophyFish(userProfile),
 		WaterSeaCreatures:  []models.Kill{},
 		LavaSeaCreatures:   []models.Kill{},

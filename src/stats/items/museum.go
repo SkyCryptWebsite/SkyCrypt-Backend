@@ -52,6 +52,43 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 	return output
 }
 
+func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) []models.ProcessedItem {
+	if museumData == nil {
+		return []models.ProcessedItem{}
+	}
+
+	output := []models.ProcessedItem{}
+	if museumData.Items != nil {
+		for _, itemData := range *museumData.Items {
+			if itemData.Borrowing {
+				continue
+			}
+
+			decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
+			if err != nil {
+				continue
+			}
+			output = append(output, ProcessItems(decodedItem.Items, "museum", enabledPacks...)...)
+		}
+	}
+
+	if museumData.Special != nil {
+		for _, itemData := range *museumData.Special {
+			if itemData.Borrowing {
+				continue
+			}
+
+			decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
+			if err != nil {
+				continue
+			}
+			output = append(output, ProcessItems(decodedItem.Items, "museum", enabledPacks...)...)
+		}
+	}
+
+	return output
+}
+
 func markChildrenAsDonated(children string, output *map[string]models.ProcessedMuseumItem, decodedMuseum models.DecodedMuseumItems) {
 	if _, exists := decodedMuseum.Items[children]; exists {
 		(*output)[children] = decodedMuseum.Items[children]
