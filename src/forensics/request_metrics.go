@@ -3,6 +3,7 @@ package forensics
 import (
 	"context"
 	"net/url"
+	"skycrypt/src/security"
 	"strings"
 	"sync"
 	"time"
@@ -368,9 +369,16 @@ func RedisKeyGroup(key string) string {
 }
 
 func HTTPDependencyName(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Host == "" {
-		return rawURL
+	redactedURL := RedactURL(rawURL)
+	if redactedURL == "[REDACTED INVALID URL]" {
+		return "[REDACTED INVALID URL]"
+	}
+	parsed, err := url.Parse(redactedURL)
+	if err != nil {
+		return "[REDACTED INVALID URL]"
+	}
+	if parsed.Host == "" {
+		return redactedURL
 	}
 	return parsed.Host + parsed.Path
 }
@@ -378,16 +386,17 @@ func HTTPDependencyName(rawURL string) string {
 func RedactURL(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return rawURL
+		return "[REDACTED INVALID URL]"
 	}
 	query := parsed.Query()
-	for _, key := range []string{"key", "api_key", "apikey", "token"} {
-		if query.Has(key) {
+	for key := range query {
+		switch strings.ToLower(key) {
+		case "key", "api_key", "apikey", "token":
 			query.Set(key, "REDACTED")
 		}
 	}
 	parsed.RawQuery = query.Encode()
-	return parsed.String()
+	return security.RedactString(parsed.String())
 }
 
 func durationToMs(duration time.Duration) float64 {

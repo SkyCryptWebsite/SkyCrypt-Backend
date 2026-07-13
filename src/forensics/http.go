@@ -2,6 +2,7 @@ package forensics
 
 import (
 	"net/http"
+	"skycrypt/src/security"
 	"time"
 
 	"go.uber.org/zap"
@@ -32,14 +33,15 @@ func (ihc *InstrumentedHTTPClient) Get(url string) (*http.Response, error) {
 	duration := time.Since(start)
 
 	if err != nil {
+		redactedErr := security.RedactError(err)
 		ihc.logger.Error("http_request_error",
 			zap.String("method", "GET"),
 			zap.String("url", redactedURL),
-			zap.Error(err),
+			zap.Error(redactedErr),
 			zap.Duration("duration", duration),
 			zap.Int64("duration_ms", duration.Milliseconds()),
 		)
-		return nil, err
+		return nil, redactedErr
 	}
 
 	fields := []zap.Field{
@@ -87,14 +89,15 @@ func (ihc *InstrumentedHTTPClient) Do(req *http.Request) (*http.Response, error)
 	duration := time.Since(start)
 
 	if err != nil {
+		redactedErr := security.RedactError(err)
 		ihc.logger.Error("http_request_error",
 			zap.String("method", req.Method),
 			zap.String("url", redactedURL),
-			zap.Error(err),
+			zap.Error(redactedErr),
 			zap.Duration("duration", duration),
 			zap.Int64("duration_ms", duration.Milliseconds()),
 		)
-		return nil, err
+		return nil, redactedErr
 	}
 
 	ihc.logger.Info("http_request_completed",
@@ -135,23 +138,24 @@ func (lrt *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	Logger.Debug("http_roundtrip_start",
 		zap.String("method", req.Method),
 		zap.String("url", redactedURL),
-		zap.String("host", req.URL.Host),
+		zap.String("host", security.RedactString(req.URL.Host)),
 	)
 
 	resp, err := lrt.base.RoundTrip(req)
 	duration := time.Since(start)
 
 	if err != nil {
-		RecordHTTPDependency(req.Context(), req.Method, req.URL.String(), 0, duration, err)
+		redactedErr := security.RedactError(err)
+		RecordHTTPDependency(req.Context(), req.Method, redactedURL, 0, duration, redactedErr)
 		Logger.Error("http_roundtrip_error",
 			zap.String("method", req.Method),
 			zap.String("url", redactedURL),
-			zap.Error(err),
+			zap.Error(redactedErr),
 			zap.Duration("duration", duration),
 		)
-		return nil, err
+		return nil, redactedErr
 	}
-	RecordHTTPDependency(req.Context(), req.Method, req.URL.String(), resp.StatusCode, duration, nil)
+	RecordHTTPDependency(req.Context(), req.Method, redactedURL, resp.StatusCode, duration, nil)
 
 	logLevel := zap.InfoLevel
 	if resp.StatusCode >= 500 {
@@ -165,7 +169,7 @@ func (lrt *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 	Logger.Log(logLevel, "http_roundtrip_completed",
 		zap.String("method", req.Method),
 		zap.String("url", redactedURL),
-		zap.String("host", req.URL.Host),
+		zap.String("host", security.RedactString(req.URL.Host)),
 		zap.Int("status_code", resp.StatusCode),
 		zap.Int64("content_length", resp.ContentLength),
 		zap.Duration("duration", duration),

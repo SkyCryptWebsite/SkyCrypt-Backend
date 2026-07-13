@@ -3,6 +3,7 @@ package forensics
 import (
 	"context"
 	"fmt"
+	"skycrypt/src/security"
 	"time"
 
 	"go.uber.org/zap"
@@ -107,19 +108,22 @@ func RecordCacheMiss() {
 }
 
 func TrackAPICall(apiName string, url string, statusCode int, duration time.Duration, err error) {
+	redactedAPIName := security.RedactString(apiName)
+	redactedURL := RedactURL(url)
 	fields := []zap.Field{
-		zap.String("api", apiName),
-		zap.String("url", url),
+		zap.String("api", redactedAPIName),
+		zap.String("url", redactedURL),
 		zap.Duration("duration", duration),
 		zap.Int64("duration_ms", duration.Milliseconds()),
 	}
 
 	if err != nil {
-		fields = append(fields, zap.Error(err))
+		redactedErr := security.RedactError(err)
+		fields = append(fields, zap.Error(redactedErr))
 		Logger.Error("api_call_failed", fields...)
-		RecordError("api_call_error", err, map[string]interface{}{
-			"api": apiName,
-			"url": url,
+		RecordError("api_call_error", redactedErr, map[string]interface{}{
+			"api": redactedAPIName,
+			"url": redactedURL,
 		})
 		return
 	}
@@ -138,8 +142,8 @@ func TrackAPICall(apiName string, url string, statusCode int, duration time.Dura
 
 	if duration > 100*time.Millisecond {
 		Logger.Warn("slow_api_call",
-			zap.String("api", apiName),
-			zap.String("url", url),
+			zap.String("api", redactedAPIName),
+			zap.String("url", redactedURL),
 			zap.Duration("duration", duration),
 		)
 	}

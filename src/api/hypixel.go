@@ -2,14 +2,17 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
 	"skycrypt/src/models"
+	"skycrypt/src/security"
 	"skycrypt/src/utility"
 	"strings"
 	"time"
@@ -20,8 +23,9 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-var HYPIXEL_API_KEY = os.Getenv("HYPIXEL_API_KEY")
 var hypixelFetchGroup singleflight.Group
+
+var hypixelRequestTimeout = 30 * time.Second
 
 const (
 	playerCacheTTL       = 24 * time.Hour
@@ -33,13 +37,6 @@ const (
 	gardenCacheTTL       = 30 * time.Minute
 	gardenCacheRefresh   = 5 * time.Minute
 )
-
-func hypixelAPIKey() string {
-	if key := strings.TrimSpace(os.Getenv("HYPIXEL_API_KEY")); key != "" {
-		return key
-	}
-	return strings.TrimSpace(HYPIXEL_API_KEY)
-}
 
 var (
 	playerLocalCache   = localcache.NewLocalCache[*skycrypttypes.Player](128)
@@ -119,7 +116,7 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	var rawReponse models.HypixelPlayerResponse
 	var response skycrypttypes.Player
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/player?key=%s&uuid=%s", hypixelAPIKey(), uuid))
+	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/player", url.Values{"uuid": {uuid}})
 	if err != nil {
 		return &response, err
 	}
@@ -211,7 +208,7 @@ func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProf
 func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, error) {
 	var response models.HypixelProfilesResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/profiles?key=%s&uuid=%s", hypixelAPIKey(), uuid))
+	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/profiles", url.Values{"uuid": {uuid}})
 	if err != nil {
 		return &response, err
 	}
@@ -337,7 +334,7 @@ func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skyc
 func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, error) {
 	var rawReponse models.HypixelMuseumResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/museum?key=%s&profile=%s", hypixelAPIKey(), profileId))
+	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/museum", url.Values{"profile": {profileId}})
 	if err != nil {
 		return nil, err
 	}
@@ -412,7 +409,7 @@ func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.G
 func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
 	var rawReponse models.HypixelGardenResponse
 
-	body, err := getHypixelBody(ctx, fmt.Sprintf("https://api.hypixel.net/v2/skyblock/garden?key=%s&profile=%s", hypixelAPIKey(), profileId))
+	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +432,7 @@ func refreshPlayerInBackground(uuid string) {
 	}
 	go func() {
 		defer playerLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
 		defer cancel()
 		_, _ = fetchPlayerFresh(ctx, uuid)
 	}()
@@ -448,7 +445,7 @@ func refreshProfilesInBackground(uuid string) {
 	}
 	go func() {
 		defer profilesLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
 		defer cancel()
 		_, _ = fetchProfilesFresh(ctx, uuid)
 	}()
@@ -461,7 +458,7 @@ func refreshMuseumInBackground(profileId string) {
 	}
 	go func() {
 		defer museumLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
 		defer cancel()
 		_, _ = fetchMuseumFresh(ctx, profileId)
 	}()
@@ -474,20 +471,25 @@ func refreshGardenInBackground(profileId string) {
 	}
 	go func() {
 		defer gardenLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
 		defer cancel()
 		_, _ = fetchGardenFresh(ctx, profileId)
 	}()
 }
 
 func detachedFetchContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	return context.WithTimeout(context.WithoutCancel(ctx), hypixelRequestTimeout)
 }
 
-func getHypixelBody(ctx context.Context, url string) ([]byte, error) {
-	resp, err := getContext(ctx, url)
+func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]byte, error) {
+	req, err := buildHypixelRequest(ctx, endpoint, query)
 	if err != nil {
-		return nil, fmt.Errorf("error making request: %v", err)
+		return nil, err
+	}
+
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, security.RedactError(fmt.Errorf("error making request: %w", err))
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -509,8 +511,56 @@ func getHypixelBody(ctx context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-func getContext(ctx context.Context, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func buildHypixelRequest(ctx context.Context, endpoint string, query url.Values) (*http.Request, error) {
+	key := strings.TrimSpace(os.Getenv("HYPIXEL_API_KEY"))
+	if key == "" {
+		return nil, errors.New("HYPIXEL_API_KEY is not configured")
+	}
+
+	requestURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, security.RedactError(fmt.Errorf("invalid Hypixel endpoint: %w", err))
+	}
+
+	encodedQuery := requestURL.Query()
+	for name := range encodedQuery {
+		if isSensitiveQueryName(name) {
+			return nil, errors.New("Hypixel request URL contains a sensitive query parameter")
+		}
+	}
+	for name, values := range query {
+		if isSensitiveQueryName(name) {
+			return nil, errors.New("Hypixel request query contains a sensitive parameter")
+		}
+		for _, value := range values {
+			encodedQuery.Add(name, value)
+		}
+	}
+	requestURL.RawQuery = encodedQuery.Encode()
+	encodedURL := requestURL.String()
+	if strings.Contains(encodedURL, key) {
+		return nil, errors.New("Hypixel request URL contains the configured API key")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, encodedURL, nil)
+	if err != nil {
+		return nil, security.RedactError(err)
+	}
+	req.Header.Set("API-Key", key)
+	return req, nil
+}
+
+func isSensitiveQueryName(name string) bool {
+	switch strings.ToLower(name) {
+	case "key", "api_key", "apikey", "token":
+		return true
+	default:
+		return false
+	}
+}
+
+func getContext(ctx context.Context, requestURL string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}

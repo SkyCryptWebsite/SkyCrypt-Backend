@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"skycrypt/src"
 	"skycrypt/src/forensics"
+	"skycrypt/src/security"
 	"skycrypt/src/utility"
 	"strconv"
 	"strings"
@@ -89,23 +90,26 @@ func main() {
 		EnableStackTrace: true,
 		StackTraceHandler: func(c *fiber.Ctx, err any) {
 			stack := debug.Stack()
-			fmt.Printf("\033[31m\n========== FATAL PANIC ==========\nPANIC: %v\n\nSTACK TRACE:\n%s\n==================================\033[0m\n", err, stack)
+			panicDetail := security.RedactString(fmt.Sprintf("%v", err))
+			redactedStack := security.RedactString(string(stack))
+			redactedURL := forensics.RedactURL(c.OriginalURL())
+			fmt.Printf("\033[31m\n========== FATAL PANIC ==========\nPANIC: %s\n\nSTACK TRACE:\n%s\n==================================\033[0m\n", panicDetail, redactedStack)
 
 			if utility.IsForensicsEnabled() {
 				forensics.Logger.Error("panic_recovered",
-					zap.Any("error", err),
-					zap.String("url", c.OriginalURL()),
+					zap.String("error", panicDetail),
+					zap.String("url", redactedURL),
 					zap.String("method", c.Method()),
-					zap.String("stack_trace", string(stack)),
+					zap.String("stack_trace", redactedStack),
 				)
 			}
 
-			utility.SendWebhook(c.OriginalURL(), err, stack)
+			utility.SendWebhook(redactedURL, panicDetail, []byte(redactedStack))
 
 			_ = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":  "Internal Server Error",
 				"type":   fmt.Sprintf("%T", err),
-				"detail": fmt.Sprintf("%v", err),
+				"detail": panicDetail,
 			})
 		},
 	}))

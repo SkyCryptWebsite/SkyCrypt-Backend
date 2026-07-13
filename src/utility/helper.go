@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"skycrypt/src/constants"
+	"skycrypt/src/security"
 	"sort"
 	"strconv"
 	"strings"
@@ -428,7 +429,8 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 		return
 	}
 
-	errorStr := fmt.Sprintf("%v", err)
+	endpoint = security.RedactString(endpoint)
+	errorStr := security.RedactString(fmt.Sprintf("%v", err))
 	errorHash := generateErrorHash(endpoint, errorStr)
 
 	if !shouldSendError(errorHash) {
@@ -445,7 +447,7 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 		callerInfo = "Unknown caller"
 	}
 
-	stackStr := string(stack)
+	stackStr := security.RedactString(string(stack))
 	maxStackLength := 800
 	if len(stackStr) > maxStackLength {
 		stackStr = stackStr[:maxStackLength] + "\n... (truncated)"
@@ -508,13 +510,13 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 
 	jsonData, jsonErr := json.Marshal(payload)
 	if jsonErr != nil {
-		fmt.Printf("Failed to marshal webhook payload: %v\n", jsonErr)
+		fmt.Printf("Failed to marshal webhook payload: %v\n", security.RedactError(jsonErr))
 		return
 	}
 
 	resp, httpErr := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
 	if httpErr != nil {
-		fmt.Printf("Failed to send webhook: %v\n", httpErr)
+		fmt.Printf("Failed to send webhook: %v\n", security.RedactError(httpErr))
 		return
 	}
 	defer func() {

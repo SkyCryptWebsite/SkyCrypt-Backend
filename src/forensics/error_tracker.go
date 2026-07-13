@@ -1,6 +1,8 @@
 package forensics
 
 import (
+	"fmt"
+	"skycrypt/src/security"
 	"sync"
 	"time"
 
@@ -32,31 +34,49 @@ func (et *ErrorTracker) RecordError(errType string, err error, context map[strin
 	et.mu.Lock()
 	defer et.mu.Unlock()
 
-	if _, exists := et.errorCount[errType]; !exists {
-		et.errorCount[errType] = &ErrorStats{
+	redactedErr := security.RedactError(err)
+	redactedErrorType := security.RedactString(errType)
+
+	if _, exists := et.errorCount[redactedErrorType]; !exists {
+		et.errorCount[redactedErrorType] = &ErrorStats{
 			Examples: make([]string, 0, 10),
 		}
 	}
 
-	stats := et.errorCount[errType]
+	stats := et.errorCount[redactedErrorType]
 	stats.Count++
 	stats.LastOccurred = time.Now()
 
 	if len(stats.Examples) < 10 {
-		stats.Examples = append(stats.Examples, err.Error())
+		stats.Examples = append(stats.Examples, redactedErr.Error())
 	}
 
 	fields := []zap.Field{
-		zap.String("error_type", errType),
-		zap.Error(err),
+		zap.String("error_type", redactedErrorType),
+		zap.Error(redactedErr),
 		zap.Uint64("occurrence_count", stats.Count),
 	}
 
 	for key, value := range context {
-		fields = append(fields, zap.Any(key, value))
+		fields = append(fields, zap.Any(security.RedactString(key), redactLogValue(value)))
 	}
 
 	et.logger.Error("error_recorded", fields...)
+}
+
+func redactLogValue(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case string:
+		return security.RedactString(typed)
+	case []byte:
+		return security.RedactString(string(typed))
+	case error:
+		return security.RedactError(typed)
+	case fmt.Stringer:
+		return security.RedactString(typed.String())
+	default:
+		return value
+	}
 }
 
 func (et *ErrorTracker) DumpStats() {
