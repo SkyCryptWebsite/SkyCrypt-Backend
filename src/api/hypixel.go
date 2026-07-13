@@ -525,12 +525,12 @@ func buildHypixelRequest(ctx context.Context, endpoint string, query url.Values)
 	encodedQuery := requestURL.Query()
 	for name := range encodedQuery {
 		if isSensitiveQueryName(name) {
-			return nil, errors.New("Hypixel request URL contains a sensitive query parameter")
+			return nil, errors.New("hypixel request URL contains a sensitive query parameter")
 		}
 	}
 	for name, values := range query {
 		if isSensitiveQueryName(name) {
-			return nil, errors.New("Hypixel request query contains a sensitive parameter")
+			return nil, errors.New("hypixel request query contains a sensitive parameter")
 		}
 		for _, value := range values {
 			encodedQuery.Add(name, value)
@@ -539,7 +539,7 @@ func buildHypixelRequest(ctx context.Context, endpoint string, query url.Values)
 	requestURL.RawQuery = encodedQuery.Encode()
 	encodedURL := requestURL.String()
 	if strings.Contains(encodedURL, key) {
-		return nil, errors.New("Hypixel request URL contains the configured API key")
+		return nil, errors.New("hypixel request URL contains the configured API key")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, encodedURL, nil)
