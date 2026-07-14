@@ -50,12 +50,41 @@ type textureCacheLookupDetail struct {
 	StableKey string
 }
 
+func isGenericPackedSkullTexture(input ItemTextureInput, texture AppliedItemTexture) bool {
+	id := normalizeMinecraftItemID(input.ID)
+	if id == "" {
+		id = normalizeMinecraftItemID(input.ItemModel)
+	}
+	if skullIdentityFromInput(input) == "" && !isVanillaSkullItemID(id) {
+		return false
+	}
+
+	texturePath := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(texture.Texture), "\\", "/"))
+	return strings.Contains(texturePath, "model=minecraft_item_template_skull") &&
+		strings.Contains(texturePath, "tex1=block_soul_sand")
+}
+
+func isVanillaSkullItemID(id string) bool {
+	switch normalizeMinecraftItemID(id) {
+	case "minecraft:player_head",
+		"minecraft:zombie_head",
+		"minecraft:skeleton_skull",
+		"minecraft:wither_skeleton_skull",
+		"minecraft:creeper_head",
+		"minecraft:dragon_head",
+		"minecraft:piglin_head":
+		return true
+	default:
+		return false
+	}
+}
+
 func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApplyContext) (AppliedItemTexture, bool, textureCacheLookupDetail) {
 	skyblockID := strings.TrimSpace(input.SkyBlockID)
 	hasItemModel := normalizeMinecraftItemID(input.ItemModel) != ""
 	hasSkullIdentity := skullIdentityFromInput(input) != ""
 	if !hasItemModel || hasSkullIdentity {
-		if texture, ok := cachedStableSkyBlockTexture(skyblockID, textureCtx); ok {
+		if texture, ok := cachedStableSkyBlockTexture(skyblockID, textureCtx); ok && !isGenericPackedSkullTexture(input, texture) {
 			return texture, true, textureCacheLookupDetail{
 				Reason:    "stable_skyblock_cache",
 				StableKey: "skyblock:" + skyblockID,
@@ -67,7 +96,7 @@ func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApp
 		if skyblockID != "" && stableKey == "skyblock:"+skyblockID {
 			continue
 		}
-		if texture, ok := cachedTextureForStableKey(stableKey, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.EnabledPackSet); ok {
+		if texture, ok := cachedTextureForStableKey(stableKey, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.EnabledPackSet); ok && !isGenericPackedSkullTexture(input, texture) {
 			return texture, true, textureCacheLookupDetail{
 				Reason:    "stable_key_cache",
 				StableKey: stableKey,
@@ -75,7 +104,7 @@ func cachedTextureForInputDetailed(input ItemTextureInput, textureCtx TextureApp
 		}
 	}
 	if skyblockID != "" && !hasSkullIdentity && !hasItemModel {
-		if texture, ok := cachedItemTexture(skyblockID, textureCtx); ok {
+		if texture, ok := cachedItemTexture(skyblockID, textureCtx); ok && !isGenericPackedSkullTexture(input, texture) {
 			return texture, true, textureCacheLookupDetail{
 				Reason:    "legacy_skyblock_cache",
 				StableKey: skyblockID,
@@ -464,11 +493,13 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 				Texture:     publicCacheTextureURL(customTexture.Path),
 				TexturePack: customTexture.TexturePackID,
 			}
-			if stats != nil {
-				stats.RenderHits++
+			if !isGenericPackedSkullTexture(input, outputTexture) {
+				if stats != nil {
+					stats.RenderHits++
+				}
+				setCachedTextureForInput(input, textureCtx, outputTexture)
+				return finishFallback("runtime_render_hit", "", outputTexture)
 			}
-			setCachedTextureForInput(input, textureCtx, outputTexture)
-			return finishFallback("runtime_render_hit", "", outputTexture)
 		}
 
 		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
@@ -491,11 +522,13 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 						Texture:     publicCacheTextureURL(customTexture.Path),
 						TexturePack: customTexture.TexturePackID,
 					}
-					if stats != nil {
-						stats.RenderHits++
+					if !isGenericPackedSkullTexture(input, outputTexture) {
+						if stats != nil {
+							stats.RenderHits++
+						}
+						setCachedTextureForInput(input, textureCtx, outputTexture)
+						return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
 					}
-					setCachedTextureForInput(input, textureCtx, outputTexture)
-					return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
 				}
 			}
 		}
@@ -556,19 +589,19 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 		}
 		return finishFallback("vanilla_texture_fallback", "", vanillaTexture)
 	}
-	if vanillaTexture := vanillaModelTextureURL(id); vanillaTexture.Texture != "" {
-		if stats != nil {
-			stats.VanillaFallbacks++
-			stats.VanillaModelFallbacks++
-		}
-		return finishFallback("vanilla_model_fallback", "", vanillaTexture)
-	}
 	if vanillaTexture := vanillaSpecialHeadTextureURL(id); vanillaTexture.Texture != "" {
 		if stats != nil {
 			stats.VanillaFallbacks++
 			stats.VanillaModelFallbacks++
 		}
 		return finishFallback("vanilla_special_head_fallback", "", vanillaTexture)
+	}
+	if vanillaTexture := vanillaModelTextureURL(id); vanillaTexture.Texture != "" {
+		if stats != nil {
+			stats.VanillaFallbacks++
+			stats.VanillaModelFallbacks++
+		}
+		return finishFallback("vanilla_model_fallback", "", vanillaTexture)
 	}
 
 	if renderErr != nil {

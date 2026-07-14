@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"image/png"
+	"os"
 	"path/filepath"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -121,6 +123,115 @@ func TestPreferredItemModelUsesHypixelBeforeNEU(t *testing.T) {
 	got = preferredItemModel("", " hypixel_skyblock:item/combat_1/arack ")
 	if got != "hypixel_skyblock:item/combat_1/arack" {
 		t.Fatalf("preferredItemModel NEU fallback = %q", got)
+	}
+}
+
+func TestItemTextureCandidatesFallBackToNEU(t *testing.T) {
+	withRenderItemGlobals(t)
+	previousWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	appRoot, err := appRootDir()
+	if err != nil {
+		t.Fatalf("appRootDir returned error: %v", err)
+	}
+	if err := os.Chdir(appRoot); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previousWorkingDirectory) })
+
+	customItem, modelItem, err := itemTextureCandidates("KUUDRA_TIER_KEY", 0)
+	if err != nil {
+		t.Fatalf("itemTextureCandidates returned error: %v", err)
+	}
+	if modelItem == nil {
+		t.Fatal("expected KUUDRA_TIER_KEY model candidate from NEU")
+	}
+
+	customInput := itemTextureInputFromMap(customItem)
+	if customInput.SkyBlockID != "KUUDRA_TIER_KEY" || customInput.ID != "minecraft:player_head" {
+		t.Fatalf("custom NEU input = %#v", customInput)
+	}
+	if skullIdentityFromInput(customInput) == "" {
+		t.Fatal("custom NEU input lost SkullOwner data")
+	}
+
+	modelInput := itemTextureInputFromMap(modelItem)
+	if modelInput.ItemModel != "minecraft:player_head" || modelInput.SkyBlockID != "KUUDRA_TIER_KEY" {
+		t.Fatalf("model NEU input = %#v", modelInput)
+	}
+	fallback := skullFallbackTexture(modelInput, NewTextureApplyContext([]string{"FSR"}))
+	if !strings.Contains(fallback.Texture, "/api/head/bfd3e71838c0e76f890213120b4ce7449577736604338a8d28b4c86db2547e71") {
+		t.Fatalf("KUUDRA_TIER_KEY fallback = %#v", fallback)
+	}
+}
+
+func TestNEUMobHeadItemsFallBackToRenderedVanillaHeads(t *testing.T) {
+	withRenderItemGlobals(t)
+	previousWorkingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd returned error: %v", err)
+	}
+	appRoot, err := appRootDir()
+	if err != nil {
+		t.Fatalf("appRootDir returned error: %v", err)
+	}
+	if err := os.Chdir(appRoot); err != nil {
+		t.Fatalf("Chdir returned error: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previousWorkingDirectory) })
+
+	previousCacheDir := CACHE_DIR
+	CACHE_DIR = filepath.Join(t.TempDir(), "cache")
+	t.Cleanup(func() { CACHE_DIR = previousCacheDir })
+
+	tests := map[string]string{
+		"ZOMBIE_HAT":   "zombie_head",
+		"SKELETON_HAT": "skeleton_skull",
+		"CREEPER_HAT":  "creeper_head",
+	}
+	for skyBlockID, minecraftID := range tests {
+		t.Run(skyBlockID, func(t *testing.T) {
+			_, modelItem, err := itemTextureCandidates(skyBlockID, 0)
+			if err != nil {
+				t.Fatalf("itemTextureCandidates returned error: %v", err)
+			}
+			if modelItem == nil {
+				t.Fatal("expected model candidate")
+			}
+
+			context := NewTextureApplyContext([]string{"FSR"})
+			context.DisableRuntimeRender = true
+			texture := ApplyTextureInput(itemTextureInputFromMap(modelItem), context)
+			wantSuffix := "/cache/heads/minecraft_" + minecraftID + ".png"
+			if !strings.HasSuffix(texture.Texture, wantSuffix) || texture.TexturePack != "" {
+				t.Fatalf("texture = %#v, want suffix %q", texture, wantSuffix)
+			}
+
+			file, err := os.Open(filepath.Join(CACHE_DIR, "heads", "minecraft_"+minecraftID+".png"))
+			if err != nil {
+				t.Fatalf("open rendered head: %v", err)
+			}
+			img, err := png.Decode(file)
+			_ = file.Close()
+			if err != nil {
+				t.Fatalf("decode rendered head: %v", err)
+			}
+			hasVisiblePixel := false
+			for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y && !hasVisiblePixel; y++ {
+				for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+					_, _, _, alpha := img.At(x, y).RGBA()
+					if alpha != 0 {
+						hasVisiblePixel = true
+						break
+					}
+				}
+			}
+			if !hasVisiblePixel {
+				t.Fatal("rendered head has no visible pixels")
+			}
+		})
 	}
 }
 

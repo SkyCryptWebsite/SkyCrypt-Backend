@@ -77,9 +77,67 @@ func itemTextureCandidates(itemID string, damage int) (map[string]any, map[strin
 		customItem, modelItem := skyBlockTextureCandidates(itemData, damage)
 		return customItem, modelItem, nil
 	}
+	if neuItem, err := notenoughupdates.GetItem(strings.ToUpper(itemID)); err == nil {
+		customItem, modelItem := neuTextureCandidates(itemID, neuItem, damage)
+		return customItem, modelItem, nil
+	}
 
 	customItem, err := vanillaTextureCandidate(itemID, damage)
 	return customItem, nil, err
+}
+
+func neuTextureCandidates(itemID string, neuItem models.NEUItem, damage int) (map[string]any, map[string]any) {
+	itemDamage := neuItem.Damage
+	if damage != 0 {
+		itemDamage = damage
+	}
+
+	skyBlockID := strings.TrimSpace(neuItem.NEUId)
+	if skyBlockID == "" {
+		skyBlockID = strings.ToUpper(strings.TrimSpace(itemID))
+	}
+
+	tag := neuItem.NBT.ToMap()
+	itemModel := strings.TrimSpace(neuItem.NBT.ItemModel)
+	minecraftID, numericID := neuMinecraftItemID(neuItem.MinecraftId, itemModel, itemDamage)
+
+	customItem := map[string]any{
+		"id":          minecraftID,
+		"tag":         tagWithoutItemModel(tag),
+		"damage":      itemDamage,
+		"item_id":     numericID,
+		"skyblock_id": skyBlockID,
+	}
+	if itemModel == "" {
+		return customItem, nil
+	}
+
+	return customItem, map[string]any{
+		"id":          normalizeMinecraftItemID(itemModel),
+		"ItemModel":   itemModel,
+		"tag":         tag,
+		"damage":      itemDamage,
+		"item_id":     numericID,
+		"skyblock_id": skyBlockID,
+	}
+}
+
+func neuMinecraftItemID(minecraftID string, itemModel string, damage int) (string, int) {
+	normalizedID := normalizeMinecraftItemID(minecraftID)
+	lookupID := strings.ToUpper(strings.TrimPrefix(normalizedID, "minecraft:"))
+	if lookupID == "SKULL" {
+		lookupID = "SKULL_ITEM"
+	}
+	numericID := constants.BUKKIT_TO_ID[lookupID]
+	if numericID != 0 {
+		if mappedID := constants.GetVanillaItemId(constants.ItemModel{NumericId: numericID, ItemDamage: damage}); mappedID != "" {
+			normalizedID = "minecraft:" + mappedID
+		}
+	}
+	if normalizedID == "" && strings.TrimSpace(itemModel) != "" {
+		normalizedID = normalizeMinecraftItemID(itemModel)
+	}
+	return normalizedID, numericID
 }
 
 func skyBlockTextureCandidates(itemData models.ProcessedHypixelItem, damage int) (map[string]any, map[string]any) {

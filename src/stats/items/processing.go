@@ -211,11 +211,6 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 		if recordStats {
 			stageStart = time.Now()
 		}
-		if item.Tag.SkullOwner != nil && len(item.Tag.SkullOwner.Properties.Textures) > 0 {
-			if skinHash := utility.GetSkinHash(item.Tag.SkullOwner.Properties.Textures[0].Value); skinHash != "" {
-				processedItem.Texture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), skinHash)
-			}
-		}
 		numericId := 0
 		if item.ID != nil {
 			numericId = *item.ID
@@ -245,10 +240,17 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 		}
 
 		textureIdentifier := strings.TrimSpace(skyblockId)
-		if textureIdentifier == "" {
+		if textureIdentifier != "" {
+			processedItem.Texture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), textureIdentifier)
+		} else if item.Tag.SkullOwner != nil && len(item.Tag.SkullOwner.Properties.Textures) > 0 {
+			if skinHash := utility.GetSkinHash(item.Tag.SkullOwner.Properties.Textures[0].Value); skinHash != "" {
+				processedItem.Texture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), skinHash)
+			}
+		}
+		if processedItem.Texture == "" {
 			textureIdentifier = strings.TrimPrefix(strings.TrimSpace(itemModel), "minecraft:")
 		}
-		if textureIdentifier == "" {
+		if processedItem.Texture == "" && textureIdentifier == "" {
 			textureIdentifier = strings.TrimSpace(itemId)
 		}
 		if recordStats {
@@ -353,7 +355,7 @@ func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []m
 
 			itemTexture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), itemId)
 			if NEUItem.NBT.SkullOwner != nil {
-				itemTexture = fmt.Sprintf("%s/api/head/%s", utility.GetDomain(), utility.GetSkinHash(NEUItem.NBT.SkullOwner.Properties.Textures[0].Value))
+				itemTexture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), rawItemId)
 			}
 
 			itemAmount := sackContents[rawItemId]

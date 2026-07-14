@@ -244,15 +244,16 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 
 func vanillaSpecialHeadTextureURL(id string) AppliedItemTexture {
 	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	texturePath := ""
 	switch id {
 	case "zombie_head":
-		return vanillaAssetTextureURL("entity/zombie/zombie")
+		texturePath = "entity/zombie/zombie"
 	case "skeleton_skull":
-		return vanillaAssetTextureURL("entity/skeleton/skeleton")
+		texturePath = "entity/skeleton/skeleton"
 	case "wither_skeleton_skull":
-		return vanillaAssetTextureURL("entity/skeleton/wither_skeleton")
+		texturePath = "entity/skeleton/wither_skeleton"
 	case "creeper_head":
-		return vanillaAssetTextureURL("entity/creeper/creeper")
+		texturePath = "entity/creeper/creeper"
 	case "dragon_head":
 		return vanillaAssetTextureURL("entity/enderdragon/dragon")
 	case "piglin_head":
@@ -260,6 +261,17 @@ func vanillaSpecialHeadTextureURL(id string) AppliedItemTexture {
 	default:
 		return AppliedItemTexture{}
 	}
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		return AppliedItemTexture{}
+	}
+	sourcePath := filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft", "textures", filepath.FromSlash(texturePath+".png"))
+	cacheID := "minecraft_" + id
+	if rendered := RenderLocalHead(cacheID, sourcePath); len(rendered) == 0 {
+		return AppliedItemTexture{}
+	}
+	return AppliedItemTexture{Texture: publicCacheTextureURL(filepath.Join(CACHE_DIR, "heads", cacheID+".png"))}
 }
 
 func readVanillaJSON(path string) map[string]any {

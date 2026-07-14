@@ -222,6 +222,48 @@ func RenderHead(textureId string) []byte {
 	return b
 }
 
+func RenderLocalHead(cacheID string, texturePath string) []byte {
+	cachePath := filepath.Join(CACHE_DIR, "heads", cacheID+".png")
+	if data, err := os.ReadFile(cachePath); err == nil {
+		return data
+	}
+
+	result, err, _ := headGroup.Do("local:"+cacheID, func() (interface{}, error) {
+		if data, err := os.ReadFile(cachePath); err == nil {
+			return data, nil
+		}
+
+		img, err := loadImage(texturePath)
+		if err != nil {
+			return nil, err
+		}
+
+		head := To3DHead(img)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, head); err != nil {
+			return nil, err
+		}
+		data := buf.Bytes()
+
+		if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err == nil {
+			if err := os.WriteFile(cachePath, data, 0644); err != nil {
+				log.Println("Error saving local head to cache:", err)
+			}
+		}
+		return data, nil
+	})
+	if err != nil {
+		log.Printf("Error rendering local head %s: %v", cacheID, err)
+		return nil
+	}
+
+	data, ok := result.([]byte)
+	if !ok {
+		return nil
+	}
+	return data
+}
+
 type imageResult struct {
 	img image.Image
 	err error
