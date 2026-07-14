@@ -77,19 +77,38 @@ func TestProcessItemsTextureOutputsUseItemEndpointAndPotionSpecialCase(t *testin
 	if processed[1].Texture != testDomain()+"/api/item/leather_helmet" {
 		t.Fatalf("leather texture = %q", processed[1].Texture)
 	}
-	if processed[2].Texture != testDomain()+"/api/head/head-texture-hash" {
+	if processed[2].Texture != testDomain()+"/api/item/HEAD_ITEM" {
 		t.Fatalf("head texture = %q", processed[2].Texture)
 	}
 }
 
-func TestProcessItemsUsesHeadEndpointForSkyBlockSkull(t *testing.T) {
-	want := testDomain() + "/api/head/process-skull-hash"
+func TestProcessItemsUsesItemEndpointForSkyBlockSkull(t *testing.T) {
+	want := testDomain() + "/api/item/PROCESS_SKULL_CACHE"
 	head := testItem(397, "PROCESS_SKULL_CACHE")
 	head.Tag.ItemModel = "minecraft:player_head"
 	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
 		ID: "process-skull-id",
 		Properties: skycrypttypes.Properties{
 			Textures: []skycrypttypes.Texture{{Value: testSkinValue("process-skull-hash")}},
+		},
+	}
+
+	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{"fsr"})
+	if len(processed) != 1 {
+		t.Fatalf("processed length = %d, want 1", len(processed))
+	}
+	if processed[0].Texture != want {
+		t.Fatalf("skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
+func TestProcessItemsUsesHeadEndpointForGenericSkull(t *testing.T) {
+	want := testDomain() + "/api/head/generic-skull-hash"
+	head := testItem(397, "")
+	head.Tag.ItemModel = "minecraft:player_head"
+	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: testSkinValue("generic-skull-hash")}},
 		},
 	}
 
