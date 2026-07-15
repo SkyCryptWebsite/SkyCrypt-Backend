@@ -138,7 +138,7 @@ func NewTextureApplyContext(enabledPacksParam ...[]string) TextureApplyContext {
 }
 
 func normalizeTextureApplyContext(textureCtx TextureApplyContext) TextureApplyContext {
-	if len(textureCtx.EnabledPackIDs) == 0 {
+	if textureCtx.EnabledPackIDs == nil {
 		textureCtx.EnabledPackIDs = defaultResourcePackIDs()
 	} else {
 		textureCtx.EnabledPackIDs = NormalizeEnabledPacks(textureCtx.EnabledPackIDs)

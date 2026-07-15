@@ -3,6 +3,10 @@ package lib
 import "strings"
 
 func NormalizeEnabledPacks(enabledPacks []string) []string {
+	if enabledPacks == nil {
+		return defaultResourcePackIDs()
+	}
+
 	knownPacks := knownResourcePackAliases()
 	canonicalIDs := canonicalResourcePackIDs()
 	seen := map[string]struct{}{}
@@ -22,9 +26,6 @@ func NormalizeEnabledPacks(enabledPacks []string) []string {
 			seen[canonicalPack] = struct{}{}
 			normalized = append(normalized, canonicalIDs[canonicalPack])
 		}
-	}
-	if len(normalized) == 0 {
-		return defaultResourcePackIDs()
 	}
 	return normalized
 }

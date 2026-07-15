@@ -14,11 +14,18 @@ func TestNormalizeEnabledPacksPreservesOrderAndAliases(t *testing.T) {
 	}
 }
 
-func TestNormalizeEnabledPacksUsesDefaultsForEmptyOrUnknown(t *testing.T) {
+func TestNormalizeEnabledPacksUsesDefaultsWhenPreferenceIsMissing(t *testing.T) {
 	want := defaultResourcePackIDs()
-	for _, input := range [][]string{nil, {}, {"unknown"}} {
-		if got := NormalizeEnabledPacks(input); !reflect.DeepEqual(got, want) {
-			t.Fatalf("NormalizeEnabledPacks(%#v) = %#v, want %#v", input, got, want)
+	if got := NormalizeEnabledPacks(nil); !reflect.DeepEqual(got, want) {
+		t.Fatalf("NormalizeEnabledPacks(nil) = %#v, want %#v", got, want)
+	}
+}
+
+func TestNormalizeEnabledPacksPreservesExplicitEmptyPreference(t *testing.T) {
+	for _, input := range [][]string{{}, {"unknown"}} {
+		got := NormalizeEnabledPacks(input)
+		if got == nil || len(got) != 0 {
+			t.Fatalf("NormalizeEnabledPacks(%#v) = %#v, want non-nil empty slice", input, got)
 		}
 	}
 }
@@ -31,6 +38,16 @@ func TestTextureApplyContextPreservesEnabledOrder(t *testing.T) {
 	}
 	if context.PackSignature != "enabled-v7:FSR,HYPIXEL_PLUS,HYPIXEL_PACK" {
 		t.Fatalf("PackSignature = %q", context.PackSignature)
+	}
+}
+
+func TestTextureApplyContextPreservesVanillaOnlyPreference(t *testing.T) {
+	context := normalizeTextureApplyContext(NewTextureApplyContext([]string{}))
+	if context.EnabledPackIDs == nil || len(context.EnabledPackIDs) != 0 {
+		t.Fatalf("EnabledPackIDs = %#v, want non-nil empty slice", context.EnabledPackIDs)
+	}
+	if context.PackSignature != "enabled-v7:" {
+		t.Fatalf("PackSignature = %q, want %q", context.PackSignature, "enabled-v7:")
 	}
 }
 

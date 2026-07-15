@@ -56,6 +56,31 @@ func TestEncodedEnabledPacksCookie(t *testing.T) {
 	}
 }
 
+func TestEncodedEmptyEnabledPacksCookieUsesVanillaOnly(t *testing.T) {
+	t.Setenv("DEV", "false")
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+
+	request := httptest.NewRequest("GET", "/", nil)
+	request.Header.Set("Cookie", "enabledPacks=%5B%5D")
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := response.Body.Close(); err != nil {
+			t.Errorf("close response body: %v", err)
+		}
+	})
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "enabled-v7:" {
+		t.Fatalf("enabled packs = %q, want vanilla-only signature", body)
+	}
+}
+
 func TestEnabledPacksFromRequestDefaultsAndIgnoresLegacyCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
 	want := enabledPacksCachePart(nil)

@@ -121,3 +121,9 @@ func TestEnabledPacksCachePartIsOrderSensitive(t *testing.T) {
 		t.Fatalf("enabled pack cache parts should differ by order: %q", first)
 	}
 }
+
+func TestEnabledPacksCachePartPreservesVanillaOnlyPreference(t *testing.T) {
+	if got := enabledPacksCachePart([]string{}); got != "enabled-v7:" {
+		t.Fatalf("enabledPacksCachePart([]) = %q, want %q", got, "enabled-v7:")
+	}
+}

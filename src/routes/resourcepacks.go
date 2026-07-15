@@ -10,7 +10,8 @@ import (
 //
 //	@Summary		List resource packs
 //	@Description	Returns toggleable resource packs sorted by descending priority for the recommended default order.
-//	@Description	The enabledPacks cookie controls per-request rendering order and does not change this response order.
+//	@Description	The enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.
+//	@Description	A missing preference uses the default order, while an explicit empty array uses vanilla textures only.
 //	@Description	The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
 //	@ID				listResourcePacks
 //	@Tags			Rendering
