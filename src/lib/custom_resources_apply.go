@@ -372,10 +372,6 @@ func recordRuntimeRenderSkip(stats *TextureApplyStats, renderer *mr.Renderer, te
 		stats.RuntimeRenderSkippedRendererNil++
 		return
 	}
-	if len(textureCtx.EnabledPackIDs) == 0 {
-		stats.RuntimeRenderSkippedNoPacks++
-		return
-	}
 	if isGenericSkullInput {
 		stats.RuntimeRenderSkippedGenericSkull++
 	}
@@ -463,7 +459,7 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	itemMap := map[string]any(nil)
 	var renderErr error
 	renderer := currentCustomResourceRenderer()
-	canRuntimeRender := len(textureCtx.EnabledPackIDs) > 0 && !isGenericSkullInput && !textureCtx.DisableRuntimeRender
+	canRuntimeRender := !isGenericSkullInput && !textureCtx.DisableRuntimeRender
 	if canRuntimeRender && renderer == nil {
 		if err := ensureCustomResourceRenderer(); err == nil {
 			renderer = currentCustomResourceRenderer()
@@ -497,7 +493,9 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 				if stats != nil {
 					stats.RenderHits++
 				}
-				setCachedTextureForInput(input, textureCtx, outputTexture)
+				if len(textureCtx.EnabledPackIDs) > 0 {
+					setCachedTextureForInput(input, textureCtx, outputTexture)
+				}
 				return finishFallback("runtime_render_hit", "", outputTexture)
 			}
 		}
@@ -526,7 +524,9 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 						if stats != nil {
 							stats.RenderHits++
 						}
-						setCachedTextureForInput(input, textureCtx, outputTexture)
+						if len(textureCtx.EnabledPackIDs) > 0 {
+							setCachedTextureForInput(input, textureCtx, outputTexture)
+						}
 						return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
 					}
 				}

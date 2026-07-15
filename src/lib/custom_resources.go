@@ -95,7 +95,6 @@ type TextureApplyStats struct {
 	RuntimeRenderSkipped             int
 	RuntimeRenderSkippedDisabled     int
 	RuntimeRenderSkippedRendererNil  int
-	RuntimeRenderSkippedNoPacks      int
 	RuntimeRenderSkippedGenericSkull int
 	SkullFallbacks                   int
 	HeadFallbacks                    int

@@ -373,6 +373,44 @@ func TestRenderItemHandlesModelOnlyMinecraftItemID(t *testing.T) {
 	}
 }
 
+func TestApplyTextureRendersVanillaBlockModelWithNoCustomPacks(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderer, err := newRendererForPackIDs(
+		filepath.Join(t.TempDir(), "cache"),
+		filepath.Join(appRoot, "assets", "resourcepacks"),
+		filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft"),
+		[]string{"HYPIXEL_PACK"},
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	customResourceRenderer = renderer
+
+	textureCtx := NewTextureApplyContext([]string{})
+	texture := ApplyTextureInput(ItemTextureInput{ID: "minecraft:stone"}, textureCtx)
+	if textureCtx.Stats.RenderAttempts == 0 {
+		t.Fatal("vanilla-only context skipped runtime rendering")
+	}
+	if texture.TexturePack != "vanilla" {
+		t.Fatalf("texture pack = %q, want vanilla", texture.TexturePack)
+	}
+	if !strings.Contains(texture.Texture, "/cache/rendered/") {
+		t.Fatalf("texture = %q, want rendered model cache path", texture.Texture)
+	}
+	if strings.Contains(texture.Texture, "/textures/block/") {
+		t.Fatalf("texture = %q, got raw block texture", texture.Texture)
+	}
+	if len(itemTextureCache) != 0 {
+		t.Fatalf("vanilla-only render populated legacy item cache: %#v", itemTextureCache)
+	}
+}
+
 func TestRenderItemHandlesChestAsRenderedModel(t *testing.T) {
 	withRenderItemGlobals(t)
 

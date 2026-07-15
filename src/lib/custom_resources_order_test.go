@@ -63,6 +63,16 @@ func TestRendererPackIDsReversePublicPriorityOrder(t *testing.T) {
 	}
 }
 
+func TestRendererPackIDsPreserveExplicitEmptyPreference(t *testing.T) {
+	got := packIDsForRenderer([]string{})
+	if got == nil || len(got) != 0 {
+		t.Fatalf("packIDsForRenderer([]string{}) = %#v, want non-nil empty slice", got)
+	}
+	if got := packIDsForRenderer(nil); got != nil {
+		t.Fatalf("packIDsForRenderer(nil) = %#v, want nil", got)
+	}
+}
+
 func TestStableTextureKeysDoNotUseGenericKeysForSkyBlockItems(t *testing.T) {
 	keys := stableTextureKeysFromInput(ItemTextureInput{
 		ID:         "minecraft:iron_sword",

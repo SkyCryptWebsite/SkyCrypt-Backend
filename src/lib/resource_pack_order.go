@@ -47,7 +47,11 @@ func enabledPackSet(enabledPackIDs []string) map[string]struct{} {
 }
 
 func packIDsForRenderer(enabledPackIDs []string) []string {
-	packIDs := append([]string(nil), enabledPackIDs...)
+	if enabledPackIDs == nil {
+		return nil
+	}
+	packIDs := make([]string, len(enabledPackIDs))
+	copy(packIDs, enabledPackIDs)
 	for left, right := 0, len(packIDs)-1; left < right; left, right = left+1, right-1 {
 		packIDs[left], packIDs[right] = packIDs[right], packIDs[left]
 	}
