@@ -242,6 +242,10 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 		AllowsRecomb:     false,
 		AllowsEnrichment: true,
 	},
+	"SAFETY_BADGE": {
+		AllowsRecomb:     false,
+		AllowsEnrichment: true,
+	},
 }
 
 var MAGICAL_POWER = map[string]int{
