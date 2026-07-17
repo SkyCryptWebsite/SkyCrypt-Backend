@@ -105,8 +105,9 @@ var MINIONS = map[string]map[string]minionInfo{
 		"FLOWER":   {Texture: "/api/head/baa7c59b2f792d8d091aecacf47a19f8ab93f3fd3c48f6930b1c2baeb09e0f9b", MaxTier: 12},
 	},
 	"fishing": {
-		"FISHING": {Texture: "/api/head/53ea0fd89524db3d7a3544904933830b4fc8899ef60c113d948bb3c4fe7aabb1", MaxTier: 12},
-		"CLAY":    {Texture: "/api/head/af9b312c8f53da289060e6452855072e07971458abbf338ddec351e16c171ff8", MaxTier: 12},
+		"FISHING":  {Texture: "/api/head/53ea0fd89524db3d7a3544904933830b4fc8899ef60c113d948bb3c4fe7aabb1", MaxTier: 12},
+		"CLAY":     {Texture: "/api/head/af9b312c8f53da289060e6452855072e07971458abbf338ddec351e16c171ff8", MaxTier: 12},
+		"LILY_PAD": {Texture: "/api/head/413cca52523499174e53d7719d116f2a85e5953e063e426f71b1bd9e66dc395e", MaxTier: 12},
 	},
 }
 
