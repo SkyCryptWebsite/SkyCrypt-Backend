@@ -14,11 +14,14 @@ func GetLoadouts(
 	loadouts skycrypttypes.Loadouts,
 	armorSets map[int][]models.ProcessedItem,
 	equipmentSets map[int][]models.ProcessedItem,
+	currentArmor []models.ProcessedItem,
+	currentEquipment []models.ProcessedItem,
 	userProfile *skycrypttypes.Member,
 	tuningSlots map[int]map[string]int,
 ) models.LoadoutsOutput {
 	output := make(models.LoadoutsOutput, 0, len(loadouts.Loadouts.Sets))
 	petCtx := newPetProcessingContext()
+
 	for setID, loadout := range loadouts.Loadouts.Sets {
 		if !isConfiguredLoadout(loadout) {
 			continue
@@ -29,11 +32,21 @@ func GetLoadouts(
 			id = setID
 		}
 
+		armor := stripLoadoutItems(armorSets[loadout.ArmorSetID])
+		if loadout.ArmorSetID == loadouts.Armor.EquippedSet {
+			armor = statsItems.GetArmor(currentArmor).Armor
+		}
+
+		equipment := stripLoadoutItems(equipmentSets[loadout.EquipmentSetID])
+		if loadout.EquipmentSetID == loadouts.Equipment.EquippedSet {
+			equipment = statsItems.GetEquipment(currentEquipment).Equipment
+		}
+
 		resolved := models.ResolvedLoadout{
 			ID:        id,
 			Name:      loadout.Name,
-			Armor:     stripLoadoutItems(armorSets[loadout.ArmorSetID]),
-			Equipment: stripLoadoutItems(equipmentSets[loadout.EquipmentSetID]),
+			Armor:     armor,
+			Equipment: equipment,
 			Accessories: models.LoadoutAccessories{
 				TuningPointsSlot: loadout.TuningPointsSlot,
 				TuningPoints:     tuningSlots[loadout.TuningPointsSlot],

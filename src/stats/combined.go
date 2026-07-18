@@ -194,7 +194,15 @@ func GetCombinedContext(
 	pets := GetPets(userProfile, profile)
 	petsDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
-	loadouts := GetLoadouts(member.Loadout, armorSets, equipmentSets, userProfile, member.AccessoryBagStorage.Tuning.Slots)
+	loadouts := GetLoadouts(
+		member.Loadout,
+		armorSets,
+		equipmentSets,
+		processedItems["armor"],
+		processedItems["equipment"],
+		userProfile,
+		member.AccessoryBagStorage.Tuning.Slots,
+	)
 	loadoutsDuration := time.Since(sectionStart)
 	sectionStart = time.Now()
 	mining := GetMining(userProfile, player, skillGearItems)
