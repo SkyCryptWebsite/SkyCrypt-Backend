@@ -1,10 +1,19 @@
 package lib
 
 import (
+	"encoding/base64"
 	"reflect"
-	"skycrypt/src/models"
 	"testing"
+
+	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+
+	"skycrypt/src/models"
 )
+
+func testSkullTextureValue(hash string) string {
+	payload := `{"textures":{"SKIN":{"url":"http://textures.minecraft.net/texture/` + hash + `"}}}`
+	return base64.StdEncoding.EncodeToString([]byte(payload))
+}
 
 func TestNormalizeEnabledPacksPreservesOrderAndAliases(t *testing.T) {
 	got := NormalizeEnabledPacks([]string{"fsr", "HPLUS", "unknown", "FSR", "HYPIXEL_PACK"})
@@ -143,6 +152,89 @@ func TestCachedTextureLookupUsesFirstEnabledPackWithTexture(t *testing.T) {
 	}
 	if texture.TexturePack != "HYPIXEL_PLUS" || texture.Texture != "hplus-texture" {
 		t.Fatalf("texture = %#v, want HYPIXEL_PLUS", texture)
+	}
+}
+
+func TestApplyTextureInputReturnsCachedCustomSkullWithoutRendering(t *testing.T) {
+	previousCache := itemTextureCache
+	context := NewTextureApplyContext([]string{"FSR"})
+	itemTextureCache = map[string]AppliedItemTexture{
+		textureCacheKey(context.PackSignature, "skyblock:PROCESS_CACHED_SKULL"): {
+			Texture:     "/cache/process-cached-skull.png",
+			TexturePack: "FSR",
+		},
+	}
+	t.Cleanup(func() { itemTextureCache = previousCache })
+	context.DisableRuntimeRender = true
+
+	texture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:player_head",
+		ItemModel:  "minecraft:player_head",
+		SkyBlockID: "PROCESS_CACHED_SKULL",
+		Texture:    "process-cached-skull-hash",
+		SkullOwner: &skycrypttypes.SkullOwner{
+			Properties: skycrypttypes.Properties{
+				Textures: []skycrypttypes.Texture{{Value: testSkullTextureValue("process-cached-skull-hash")}},
+			},
+		},
+	}, context)
+
+	if texture.Texture != "/cache/process-cached-skull.png" || texture.TexturePack != "FSR" {
+		t.Fatalf("texture = %#v, want cached FSR texture", texture)
+	}
+	if context.Stats.RenderAttempts != 0 || context.Stats.CacheHits != 1 {
+		t.Fatalf("render attempts/cache hits = %d/%d, want 0/1", context.Stats.RenderAttempts, context.Stats.CacheHits)
+	}
+}
+
+func TestApplyTextureInputIgnoresDisabledPackSkullCache(t *testing.T) {
+	previousCache := itemTextureCache
+	disabledContext := NewTextureApplyContext([]string{"FSR"})
+	itemTextureCache = map[string]AppliedItemTexture{
+		textureCacheKey(disabledContext.PackSignature, "skyblock:PROCESS_DISABLED_SKULL"): {
+			Texture:     "/cache/process-disabled-skull.png",
+			TexturePack: "FSR",
+		},
+	}
+	t.Cleanup(func() { itemTextureCache = previousCache })
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+	context.DisableRuntimeRender = true
+
+	texture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:player_head",
+		ItemModel:  "minecraft:player_head",
+		SkyBlockID: "PROCESS_DISABLED_SKULL",
+		Texture:    "process-disabled-skull-hash",
+	}, context)
+
+	want := context.Domain + "/api/head/process-disabled-skull-hash"
+	if texture.Texture != want || texture.TexturePack != "" {
+		t.Fatalf("texture = %#v, want head fallback %q", texture, want)
+	}
+}
+
+func TestApplyTextureInputRejectsGenericPackedSkullCache(t *testing.T) {
+	previousCache := itemTextureCache
+	context := NewTextureApplyContext([]string{"FSR"})
+	itemTextureCache = map[string]AppliedItemTexture{
+		textureCacheKey(context.PackSignature, "skyblock:PROCESS_PLACEHOLDER_SKULL"): {
+			Texture:     "/cache/model=minecraft_item_template_skull&tex1=block_soul_sand.png",
+			TexturePack: "FSR",
+		},
+	}
+	t.Cleanup(func() { itemTextureCache = previousCache })
+	context.DisableRuntimeRender = true
+
+	texture := ApplyTextureInput(ItemTextureInput{
+		ID:         "minecraft:player_head",
+		ItemModel:  "minecraft:player_head",
+		SkyBlockID: "PROCESS_PLACEHOLDER_SKULL",
+		Texture:    "process-real-skull-hash",
+	}, context)
+
+	want := context.Domain + "/api/head/process-real-skull-hash"
+	if texture.Texture != want || texture.TexturePack != "" {
+		t.Fatalf("texture = %#v, want real head fallback %q", texture, want)
 	}
 }
 

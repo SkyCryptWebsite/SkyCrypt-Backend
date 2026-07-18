@@ -3,6 +3,7 @@ package stats
 import (
 	"bytes"
 	"encoding/base64"
+	"skycrypt/src/lib"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
@@ -77,13 +78,13 @@ func TestProcessItemsTextureOutputsUseItemEndpointAndPotionSpecialCase(t *testin
 	if processed[1].Texture != testDomain()+"/api/item/leather_helmet" {
 		t.Fatalf("leather texture = %q", processed[1].Texture)
 	}
-	if processed[2].Texture != testDomain()+"/api/item/HEAD_ITEM" {
+	if processed[2].Texture != testDomain()+"/api/head/head-texture-hash" {
 		t.Fatalf("head texture = %q", processed[2].Texture)
 	}
 }
 
-func TestProcessItemsUsesItemEndpointForSkyBlockSkull(t *testing.T) {
-	want := testDomain() + "/api/item/PROCESS_SKULL_CACHE"
+func TestProcessItemsUsesHeadEndpointForSkyBlockSkullWithoutCustomTexture(t *testing.T) {
+	want := testDomain() + "/api/head/process-skull-hash"
 	head := testItem(397, "PROCESS_SKULL_CACHE")
 	head.Tag.ItemModel = "minecraft:player_head"
 	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
@@ -98,6 +99,24 @@ func TestProcessItemsUsesItemEndpointForSkyBlockSkull(t *testing.T) {
 		t.Fatalf("processed length = %d, want 1", len(processed))
 	}
 	if processed[0].Texture != want {
+		t.Fatalf("skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
+func TestProcessItemsUsesItemEndpointForSkullWithoutUsableTexture(t *testing.T) {
+	head := testItem(397, "PROCESS_SKULL_NO_TEXTURE")
+	head.Tag.ItemModel = "minecraft:player_head"
+	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: "not-a-valid-texture"}},
+		},
+	}
+	textureCtx := lib.NewTextureApplyContext([]string{})
+	textureCtx.DisableRuntimeRender = true
+
+	processed := processItemsWithStats([]*skycrypttypes.Item{head}, "inventory", map[string]models.NEUItem{}, nil, textureCtx, 0)
+	want := testDomain() + "/api/item/PROCESS_SKULL_NO_TEXTURE"
+	if len(processed) != 1 || processed[0].Texture != want {
 		t.Fatalf("skull texture = %q, want %q", processed[0].Texture, want)
 	}
 }
@@ -118,6 +137,31 @@ func TestProcessItemsUsesHeadEndpointForGenericSkull(t *testing.T) {
 	}
 	if processed[0].Texture != want {
 		t.Fatalf("skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
+func TestProcessItemsNestedSkullReusesTextureContext(t *testing.T) {
+	parent := testItem(1, "PARENT_WITH_SKULL")
+	nestedHead := testItem(397, "NESTED_SKULL")
+	nestedHead.Tag.ItemModel = "minecraft:player_head"
+	nestedHead.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: testSkinValue("nested-skull-hash")}},
+		},
+	}
+	parent.ContainsItems = []*skycrypttypes.Item{nestedHead}
+	textureCtx := lib.NewTextureApplyContext([]string{})
+	textureCtx.DisableRuntimeRender = true
+
+	processed := processItemsWithStats([]*skycrypttypes.Item{parent}, "inventory", map[string]models.NEUItem{}, nil, textureCtx, 0)
+	if len(processed) != 1 || len(processed[0].ContainsItems) != 1 {
+		t.Fatalf("processed nested output lengths = %d/%d, want 1/1", len(processed), len(processed[0].ContainsItems))
+	}
+	if got, want := processed[0].ContainsItems[0].Texture, testDomain()+"/api/head/nested-skull-hash"; got != want {
+		t.Fatalf("nested skull texture = %q, want %q", got, want)
+	}
+	if textureCtx.Stats.Total != 1 {
+		t.Fatalf("texture applications = %d, want 1 for only the nested skull", textureCtx.Stats.Total)
 	}
 }
 

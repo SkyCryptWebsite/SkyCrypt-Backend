@@ -202,14 +202,13 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 			ID:     &itemId,
 			Damage: &riftPrismItem.Damage,
 		}, "Rift", enabledPacks...)
+		processedItem.Lore = slices.Clone(processedItem.Lore)
 
-		if !loreContains(processedItem.Lore, "Rift Transferable") {
-			// Remove the three lines from the lore which say that player should use the prism in Wizard Portal
-			for i, lore := range processedItem.Lore {
-				if strings.TrimSpace(lore) == "" {
-					processedItem.Lore = append(processedItem.Lore[:i], processedItem.Lore[i+3:]...)
-					break
-				}
+		// Remove the three lines from the lore which say that player should use the prism in Wizard Portal
+		for i, lore := range processedItem.Lore {
+			if strings.TrimSpace(lore) == "" {
+				processedItem.Lore = append(processedItem.Lore[:i], processedItem.Lore[i+3:]...)
+				break
 			}
 		}
 
