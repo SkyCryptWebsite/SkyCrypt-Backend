@@ -1,9 +1,12 @@
 package lib
 
 import (
+	"bytes"
+	"encoding/json"
 	"image/png"
 	"os"
 	"path/filepath"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -409,6 +412,93 @@ func TestApplyTextureRendersVanillaBlockModelWithNoCustomPacks(t *testing.T) {
 	if len(itemTextureCache) != 0 {
 		t.Fatalf("vanilla-only render populated legacy item cache: %#v", itemTextureCache)
 	}
+}
+
+func TestOverclockerPackCacheIsolation(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawItemBytes, err := os.ReadFile(filepath.Join(appRoot, "NotEnoughUpdates-REPO", "items", "OVERCLOCKER_3000.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rawItem models.RawNEUItem
+	if err := json.Unmarshal(rawItemBytes, &rawItem); err != nil {
+		t.Fatal(err)
+	}
+	parsedNBT, ok := notenoughupdates.ParseNBTToItem(rawItem.NBT)
+	if !ok {
+		t.Fatal("failed to parse OVERCLOCKER_3000 NBT")
+	}
+
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	renderer, err := newRendererForPackIDs(
+		cacheDir,
+		filepath.Join(appRoot, "assets", "resourcepacks"),
+		filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft"),
+		defaultResourcePackIDs(),
+		false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	customResourceRenderer = renderer
+
+	input := ItemTextureInput{
+		ID:         rawItem.MinecraftId,
+		ItemModel:  "hypixel_skyblock:item/island_relevant/garden/greenhouse/overclocker_3000",
+		SkyBlockID: rawItem.NEUId,
+		Damage:     rawItem.Damage,
+		Tag:        parsedNBT,
+	}
+
+	allPacks := ApplyTextureInput(input, NewTextureApplyContext())
+	if allPacks.TexturePack != "HYPIXEL_PLUS" {
+		t.Fatalf("all-packs texture pack = %q, want HYPIXEL_PLUS", allPacks.TexturePack)
+	}
+	allPacksBytes := readAppliedTextureBytes(t, cacheDir, allPacks)
+
+	vanilla := ApplyTextureInput(input, NewTextureApplyContext([]string{}))
+	if vanilla.TexturePack != "" && vanilla.TexturePack != "vanilla" {
+		t.Fatalf("vanilla texture pack = %q, want no custom pack", vanilla.TexturePack)
+	}
+	if !strings.Contains(strings.ToLower(vanilla.Texture), "paper") {
+		t.Fatalf("vanilla texture = %q, want paper fallback", vanilla.Texture)
+	}
+
+	hypixelPack := ApplyTextureInput(input, NewTextureApplyContext([]string{"HYPIXEL_PACK"}))
+	if hypixelPack.TexturePack != "HYPIXEL_PACK" {
+		t.Fatalf("Hypixel-only texture pack = %q, want HYPIXEL_PACK", hypixelPack.TexturePack)
+	}
+	if hypixelPack.Texture == allPacks.Texture {
+		t.Fatalf("Hypixel-only texture reused H+ path %q", hypixelPack.Texture)
+	}
+	hypixelPackBytes := readAppliedTextureBytes(t, cacheDir, hypixelPack)
+	if bytes.Equal(hypixelPackBytes, allPacksBytes) {
+		t.Fatal("Hypixel-only texture reused H+ image bytes")
+	}
+}
+
+func readAppliedTextureBytes(t *testing.T, cacheDir string, texture AppliedItemTexture) []byte {
+	t.Helper()
+	texturePath, ok, err := localStaticTexturePath(texture.Texture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("texture %q is not a local static path", texture.Texture)
+	}
+	if strings.Contains(filepath.ToSlash(texturePath), "/cache/rendered/") {
+		texturePath = filepath.Join(cacheDir, "rendered", filepath.Base(texturePath))
+	}
+	textureBytes, err := os.ReadFile(texturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return textureBytes
 }
 
 func TestRenderItemHandlesChestAsRenderedModel(t *testing.T) {
