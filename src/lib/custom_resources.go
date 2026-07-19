@@ -14,6 +14,7 @@ import (
 
 	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	"golang.org/x/sync/singleflight"
 )
 
 var customResourceRenderer *mr.Renderer
@@ -40,6 +41,8 @@ var vanillaTextureCache sync.Map
 var vanillaAssetTextureCache sync.Map
 var vanillaModelTextureCache sync.Map
 var vanillaItemExistsCache sync.Map
+var resolvedItemTextureCache sync.Map
+var itemTextureResolutionGroup singleflight.Group
 
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
 var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex

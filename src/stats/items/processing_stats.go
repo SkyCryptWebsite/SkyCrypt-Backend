@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"skycrypt/src/lib"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,8 +70,12 @@ type ItemProcessingStats struct {
 	ValueLoreDuration    time.Duration
 	StripDuration        time.Duration
 
-	NEUWikiCacheHits   int
-	NEUWikiCacheMisses int
+	NEUWikiCacheHits      int
+	NEUWikiCacheMisses    int
+	TextureCacheHits      int
+	TextureCacheMisses    int
+	RuntimeRenderAttempts int
+	RuntimeRenderSkipped  int
 
 	SlowItems []ItemProcessingSample
 }
@@ -195,6 +200,16 @@ func (s *ItemProcessingStats) recordNEUWikiLookup(cacheHit bool, duration time.D
 	s.recordStageDuration(itemProcessingStageWiki, duration)
 }
 
+func (s *ItemProcessingStats) recordTextureApplyStats(textureStats *lib.TextureApplyStats) {
+	if s == nil || textureStats == nil {
+		return
+	}
+	s.TextureCacheHits += textureStats.CacheHits
+	s.TextureCacheMisses += textureStats.CacheMisses
+	s.RuntimeRenderAttempts += textureStats.RenderAttempts
+	s.RuntimeRenderSkipped += textureStats.RuntimeRenderSkipped
+}
+
 func (s *ItemProcessingStats) LogIfEnabled(duration time.Duration) bool {
 	return s.WriteDebugSummary(os.Stdout, duration)
 }
@@ -227,7 +242,7 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 
 	if _, err := fmt.Fprintf(
 		writer,
-		"[ITEM_PROCESSING_DEBUG] route=%s uuid=%s profile=%s pid=%d duration=%s per_item=%s items=%d top_level=%d nested=%d containers=%d sources=%s enabled_packs=%s stages raw_lore=%s type_parse=%s extra=%s wiki=%s texture_input=%s nested=%s value_lore=%s strip=%s unattributed=%s neu_wiki_cache_hits=%d neu_wiki_cache_misses=%d\n",
+		"[ITEM_PROCESSING_DEBUG] route=%s uuid=%s profile=%s pid=%d duration=%s per_item=%s items=%d top_level=%d nested=%d containers=%d sources=%s enabled_packs=%s stages raw_lore=%s type_parse=%s extra=%s wiki=%s texture_input=%s nested=%s value_lore=%s strip=%s unattributed=%s neu_wiki_cache_hits=%d neu_wiki_cache_misses=%d texture_cache_hits=%d texture_cache_misses=%d runtime_render_attempts=%d runtime_render_skipped=%d\n",
 		emptyDebugValue(s.Route),
 		emptyDebugValue(s.UUID),
 		emptyDebugValue(s.ProfileID),
@@ -251,6 +266,10 @@ func (s *ItemProcessingStats) WriteDebugSummary(writer io.Writer, duration time.
 		unattributed,
 		s.NEUWikiCacheHits,
 		s.NEUWikiCacheMisses,
+		s.TextureCacheHits,
+		s.TextureCacheMisses,
+		s.RuntimeRenderAttempts,
+		s.RuntimeRenderSkipped,
 	); err != nil {
 		return false
 	}

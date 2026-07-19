@@ -34,7 +34,40 @@ func ResolveItemTexture(itemID string, enabledPacks []string, returnBarrierIfNon
 	if itemID == "" {
 		return AppliedItemTexture{}, fmt.Errorf("couldn't find the texture")
 	}
+	cacheKey := itemTextureResolutionCacheKey(itemID, damage, enabledPacks, returnBarrierIfNone)
+	return resolveItemTextureSingleflight(cacheKey, func() (AppliedItemTexture, error) {
+		return resolveItemTextureUncached(itemID, damage, enabledPacks, returnBarrierIfNone)
+	})
+}
 
+func itemTextureResolutionCacheKey(itemID string, damage int, enabledPacks []string, returnBarrierIfNone bool) string {
+	packSignature := packSignatureFromPackIDs(NormalizeEnabledPacks(enabledPacks))
+	return fmt.Sprintf("%s|damage:%d|packs:%s|barrier:%t", strings.ToLower(strings.TrimSpace(itemID)), damage, packSignature, returnBarrierIfNone)
+}
+
+func resolveItemTextureSingleflight(cacheKey string, resolve func() (AppliedItemTexture, error)) (AppliedItemTexture, error) {
+	if cached, ok := resolvedItemTextureCache.Load(cacheKey); ok {
+		return cached.(AppliedItemTexture), nil
+	}
+
+	result, err, _ := itemTextureResolutionGroup.Do(cacheKey, func() (any, error) {
+		if cached, ok := resolvedItemTextureCache.Load(cacheKey); ok {
+			return cached.(AppliedItemTexture), nil
+		}
+		texture, err := resolve()
+		if err != nil {
+			return AppliedItemTexture{}, err
+		}
+		resolvedItemTextureCache.Store(cacheKey, texture)
+		return texture, nil
+	})
+	if err != nil {
+		return AppliedItemTexture{}, err
+	}
+	return result.(AppliedItemTexture), nil
+}
+
+func resolveItemTextureUncached(itemID string, damage int, enabledPacks []string, returnBarrierIfNone bool) (AppliedItemTexture, error) {
 	customItem, modelItem, err := itemTextureCandidates(itemID, damage)
 	if err != nil {
 		return AppliedItemTexture{}, err

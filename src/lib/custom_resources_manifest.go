@@ -485,6 +485,7 @@ func resetRenderedTextureIndex() {
 	itemTextureCacheMu.Lock()
 	itemTextureCache = make(map[string]AppliedItemTexture)
 	itemTextureCacheMu.Unlock()
+	resolvedItemTextureCache.Clear()
 
 	renderedSkyBlockIndexMu.Lock()
 	renderedSkyBlockIndex = make(map[string]struct{})
@@ -510,6 +511,8 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		cacheDir = filepath.Join(cwd, "cache")
 	}
 	rememberRenderedTextureIndexCacheDir(cacheDir)
+	clearPackSignatureTextureCache()
+	resolvedItemTextureCache.Clear()
 
 	renderedDir := filepath.Join(cacheDir, "rendered")
 	files, err := os.ReadDir(renderedDir)
@@ -531,23 +534,43 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		parts := strings.Split(fileName, "__")
 		itemId := ""
 		minecraftID := ""
-		itemModel := ""
+		inputItemModel := ""
+		resolvedModel := ""
 		texturePack := ""
 		packSegments := 0
+		modelConflict := false
 		for _, part := range parts {
 			if strings.HasPrefix(part, "skyblock=") {
 				itemId = strings.TrimPrefix(part, "skyblock=")
 			} else if strings.HasPrefix(part, "mc=") {
 				minecraftID = debugFilenameIdentifier(strings.TrimPrefix(part, "mc="))
 			} else if strings.HasPrefix(part, "itemmodel=") {
-				itemModel = debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
+				modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
+				if inputItemModel != "" && modelValue != "" && inputItemModel != modelValue {
+					modelConflict = true
+				}
+				if inputItemModel == "" {
+					inputItemModel = modelValue
+				}
+			} else if strings.HasPrefix(part, "model=") {
+				modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "model="))
+				if resolvedModel != "" && modelValue != "" && resolvedModel != modelValue {
+					modelConflict = true
+				}
+				if resolvedModel == "" {
+					resolvedModel = modelValue
+				}
 			} else if strings.HasPrefix(part, "pack=") {
 				packSegments++
 				texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
 			}
 		}
-		if packSegments != 1 || !validRenderedTexturePackID(texturePack, knownPacks) {
+		if modelConflict || packSegments != 1 || !validRenderedTexturePackID(texturePack, knownPacks) {
 			continue
+		}
+		itemModel := inputItemModel
+		if itemModel == "" {
+			itemModel = resolvedModel
 		}
 
 		texture := AppliedItemTexture{
@@ -559,6 +582,9 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		}
 		if itemId != "" && texturePack != "" {
 			setCachedTextureForStableKey(texturePack, "skyblock:"+itemId, texture)
+			if itemModel != "" {
+				setCachedTextureForStableKey(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+			}
 			loaded++
 		}
 		if texturePack != "" {
@@ -624,24 +650,11 @@ func scheduleRenderedTextureIndexRefresh() {
 		return
 	}
 	cacheDir := renderedTextureIndexCacheDir
-	lastModTime := renderedTextureIndexLastDirModTime
-	renderedTextureIndexLastLazyReload = now
-	renderedTextureIndexReloadMu.Unlock()
-
 	if strings.TrimSpace(cacheDir) == "" {
-		return
-	}
-	renderedDir := filepath.Join(cacheDir, "rendered")
-	info, err := os.Stat(renderedDir)
-	if err != nil || !info.IsDir() || !info.ModTime().After(lastModTime) {
-		return
-	}
-
-	renderedTextureIndexReloadMu.Lock()
-	if renderedTextureIndexReloadInFlight {
 		renderedTextureIndexReloadMu.Unlock()
 		return
 	}
+	renderedTextureIndexLastLazyReload = now
 	renderedTextureIndexReloadInFlight = true
 	renderedTextureIndexReloadMu.Unlock()
 
@@ -654,6 +667,18 @@ func scheduleRenderedTextureIndexRefresh() {
 			renderedTextureIndexReloadInFlight = false
 			renderedTextureIndexReloadMu.Unlock()
 		}()
+
+		renderedDir := filepath.Join(cacheDir, "rendered")
+		info, err := os.Stat(renderedDir)
+		if err != nil || !info.IsDir() {
+			return
+		}
+		renderedTextureIndexReloadMu.Lock()
+		lastModTime := renderedTextureIndexLastDirModTime
+		renderedTextureIndexReloadMu.Unlock()
+		if !info.ModTime().After(lastModTime) {
+			return
+		}
 
 		if _, err := loadRenderedTextureIndexForRefresh(cacheDir); err != nil {
 			if utility.IsVerboseLogging() || strings.EqualFold(os.Getenv("VERBOSE_LOGGING"), "true") {

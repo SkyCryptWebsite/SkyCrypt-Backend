@@ -32,7 +32,12 @@ func ProcessItemsWithNEUCacheAndStats(items []*skycrypttypes.Item, source string
 		itemStats.ensure()
 	}
 	textureCtx := lib.NewTextureApplyContext(enabledPacks...)
-	return processItemsWithStats(items, source, neuItemCache, itemStats, textureCtx, 0)
+	textureCtx.DisableRuntimeRender = true
+	processedItems := processItemsWithStats(items, source, neuItemCache, itemStats, textureCtx, 0)
+	if itemStats != nil {
+		itemStats.recordTextureApplyStats(textureCtx.Stats)
+	}
+	return processedItems
 }
 
 func processItemsWithStats(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, itemStats *ItemProcessingStats, textureCtx lib.TextureApplyContext, depth int) []models.ProcessedItem {
@@ -49,6 +54,7 @@ func processItemsWithStats(items []*skycrypttypes.Item, source string, neuItemCa
 
 func ProcessItem(item *skycrypttypes.Item, source string, enabledPacks ...[]string) models.ProcessedItem {
 	textureCtx := lib.NewTextureApplyContext(enabledPacks...)
+	textureCtx.DisableRuntimeRender = true
 	return processItemWithStats(item, source, map[string]models.NEUItem{}, nil, textureCtx, 0)
 }
 
@@ -264,7 +270,16 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 				SkullOwner:   item.Tag.SkullOwner,
 				Tag:          item.Tag,
 			}, textureCtx)
-			if (appliedTexture.TexturePack != "" && !strings.EqualFold(appliedTexture.TexturePack, "vanilla")) || strings.Contains(appliedTexture.Texture, "/api/head/") {
+			isCustomPackTexture := appliedTexture.TexturePack != "" && !strings.EqualFold(appliedTexture.TexturePack, "vanilla")
+			isHeadTexture := strings.Contains(appliedTexture.Texture, "/api/head/")
+			isCachedRenderedTexture := strings.Contains(appliedTexture.Texture, "/cache/rendered/")
+			_, apiItemExists := constants.GetItem(skyblockId)
+			useNEUItemEndpoint := false
+			if skyblockId != "" && !apiItemExists && len(textureCtx.EnabledPackIDs) > 0 {
+				_, neuItemErr := notenoughupdates.GetItem(skyblockId)
+				useNEUItemEndpoint = neuItemErr == nil
+			}
+			if isCustomPackTexture || isCachedRenderedTexture || (isHeadTexture && !useNEUItemEndpoint) {
 				processedItem.Texture = appliedTexture.Texture
 				processedItem.TexturePack = appliedTexture.TexturePack
 			}

@@ -11,10 +11,14 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 func testDomain() string {
@@ -79,7 +83,7 @@ func TestLocalStaticTexturePath(t *testing.T) {
 	}
 }
 
-func withRenderItemGlobals(t *testing.T) {
+func withRenderItemGlobals(t testing.TB) {
 	t.Helper()
 
 	previousRenderer := customResourceRenderer
@@ -96,6 +100,8 @@ func withRenderItemGlobals(t *testing.T) {
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	itemTextureCache = map[string]AppliedItemTexture{}
+	resolvedItemTextureCache.Clear()
+	itemTextureResolutionGroup = singleflight.Group{}
 	renderedSkyBlockIndex = map[string]struct{}{}
 	renderedTextureIndexCacheDir = ""
 	renderedTextureIndexLastLazyReload = time.Time{}
@@ -115,6 +121,8 @@ func withRenderItemGlobals(t *testing.T) {
 		renderedTextureIndexReloadInFlight = previousRenderedInFlight
 		loadRenderedTextureIndexForRefresh = previousLoader
 		renderedTextureIndexLazyReloadInterval = previousReloadInterval
+		resolvedItemTextureCache.Clear()
+		itemTextureResolutionGroup = singleflight.Group{}
 	})
 }
 
@@ -575,6 +583,49 @@ func TestLoadRenderedTextureIndexRejectsMalformedPackSegments(t *testing.T) {
 	}
 }
 
+func TestLoadRenderedTextureIndexSupportsCurrentAndLegacyModelSegments(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		"skyblock=CURRENT_MODEL__pack=HYPIXEL_PLUS__model=minecraft_player_head__hash=current.webp",
+		"skyblock=LEGACY_MODEL__pack=HYPIXEL_PLUS__itemmodel=minecraft_diamond_sword__hash=legacy.webp",
+		"skyblock=INPUT_AND_RESOLVED_MODEL__pack=vanilla__itemmodel=minecraft_player_head__model=minecraft_item_template_skull__hash=both.webp",
+		"skyblock=CONFLICTING_MODEL__pack=HYPIXEL_PLUS__model=minecraft_player_head__model=minecraft_diamond_sword__hash=conflict.webp",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(renderedDir, name), []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded != 3 {
+		t.Fatalf("loaded texture count = %d, want 3 valid model entries", loaded)
+	}
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+	if texture, ok := cachedTextureForStableKey("itemmodel:minecraft:player_head", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "CURRENT_MODEL") {
+		t.Fatalf("current model metadata was not indexed: %#v", texture)
+	}
+	if texture, ok := cachedTextureForStableKey("itemmodel:minecraft:diamond_sword", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "LEGACY_MODEL") {
+		t.Fatalf("legacy model metadata was not indexed: %#v", texture)
+	}
+	vanillaContext := NewTextureApplyContext([]string{})
+	if texture, ok := cachedTextureForStableKey("skyblock:INPUT_AND_RESOLVED_MODEL|itemmodel:minecraft:player_head", vanillaContext.PackSignature, vanillaContext.EnabledPackIDs, vanillaContext.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "INPUT_AND_RESOLVED_MODEL") {
+		t.Fatalf("input and resolved model metadata was not indexed: %#v", texture)
+	}
+	if _, ok := cachedStableSkyBlockTexture("CONFLICTING_MODEL", context); ok {
+		t.Fatal("conflicting model metadata was indexed")
+	}
+}
+
 func TestRendererCacheVersionInvalidationPrecedesIndexReload(t *testing.T) {
 	withRenderItemGlobals(t)
 
@@ -689,6 +740,7 @@ func TestLazyRefreshSkipsUnchangedDirectory(t *testing.T) {
 		return 0, nil
 	}
 	scheduleRenderedTextureIndexRefresh()
+	waitForRenderedTextureRefresh(t)
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("unchanged directory triggered %d refreshes", got)
 	}
@@ -735,11 +787,95 @@ func TestLazyRefreshMissingDirectoryPreservesMemory(t *testing.T) {
 	renderedTextureIndexCacheDir = filepath.Join(t.TempDir(), "missing-cache")
 	renderedTextureIndexLastLazyReload = time.Time{}
 	scheduleRenderedTextureIndexRefresh()
+	waitForRenderedTextureRefresh(t)
 	if texture := itemTextureCache["runtime-only"]; texture.Texture != "runtime-texture" {
 		t.Fatalf("missing rendered directory cleared runtime cache entry: %#v", texture)
 	}
 	if renderedTextureIndexReloadInFlight {
 		t.Fatal("missing rendered directory started a refresh")
+	}
+}
+
+func TestResolveItemTextureSingleflightCachesSuccessfulResolution(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	var calls atomic.Int32
+	resolve := func() (AppliedItemTexture, error) {
+		calls.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		return AppliedItemTexture{Texture: "cached-texture", TexturePack: "HYPIXEL_PLUS"}, nil
+	}
+
+	const workers = 32
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(workers)
+	for range workers {
+		go func() {
+			defer waitGroup.Done()
+			texture, err := resolveItemTextureSingleflight("shared-key", resolve)
+			if err != nil || texture.Texture != "cached-texture" {
+				t.Errorf("singleflight result = %#v, %v", texture, err)
+			}
+		}()
+	}
+	waitGroup.Wait()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("resolver calls = %d, want 1", got)
+	}
+	if _, err := resolveItemTextureSingleflight("shared-key", resolve); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("cached resolver calls = %d, want 1", got)
+	}
+}
+
+func TestItemTextureResolutionCacheKeyPreservesPackOrder(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	first := itemTextureResolutionCacheKey("TEST_ITEM", 0, []string{"FSR", "HYPIXEL_PLUS"}, false)
+	second := itemTextureResolutionCacheKey("TEST_ITEM", 0, []string{"HYPIXEL_PLUS", "FSR"}, false)
+	if first == second {
+		t.Fatalf("different pack orders produced the same cache key: %q", first)
+	}
+}
+
+func BenchmarkApplyTextureInputCachedModels_1600Items(b *testing.B) {
+	withRenderItemGlobals(b)
+
+	packIDs := []string{"HYPIXEL_PLUS"}
+	textureCtx := TextureApplyContext{
+		EnabledPackIDs:       packIDs,
+		EnabledPackSet:       enabledPackSet(packIDs),
+		PackSignature:        orderedPackSignature(packIDs),
+		Domain:               testDomain(),
+		DisableRuntimeRender: true,
+		DisableStats:         true,
+	}
+	inputs := make([]ItemTextureInput, 1600)
+	for index := range inputs {
+		skyBlockID := "BENCH_CACHED_MODEL_" + strconv.Itoa(index)
+		inputs[index] = ItemTextureInput{
+			ID:         "minecraft:player_head",
+			ItemModel:  "minecraft:player_head",
+			SkyBlockID: skyBlockID,
+			NumericID:  397,
+		}
+		setCachedTextureForStableKey("HYPIXEL_PLUS", "skyblock:"+skyBlockID+"|itemmodel:minecraft:player_head", AppliedItemTexture{
+			Texture:     testDomain() + "/cache/rendered/" + skyBlockID + ".webp",
+			TexturePack: "HYPIXEL_PLUS",
+		})
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		for _, input := range inputs {
+			texture := ApplyTextureInput(input, textureCtx)
+			if texture.TexturePack != "HYPIXEL_PLUS" {
+				b.Fatalf("cached texture pack = %q", texture.TexturePack)
+			}
+		}
 	}
 }
 

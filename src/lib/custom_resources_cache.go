@@ -171,8 +171,11 @@ func cachedItemTexture(id string, textureCtx TextureApplyContext) (AppliedItemTe
 
 func cachedTextureForStableKey(stableKey string, packSignature string, enabledPackIDs []string, enabledPacks map[string]struct{}, legacyKeys ...string) (AppliedItemTexture, bool) {
 	stableKey = strings.TrimSpace(stableKey)
-	if stableKey == "" || len(enabledPackIDs) == 0 {
+	if stableKey == "" {
 		return AppliedItemTexture{}, false
+	}
+	if len(enabledPackIDs) == 0 {
+		return cachedTextureByKey(textureCacheKey("vanilla", stableKey), enabledPacks)
 	}
 
 	if texture, ok := cachedTextureForStableKeyInMemory(stableKey, packSignature, enabledPackIDs, enabledPacks, legacyKeys...); ok {
@@ -191,6 +194,7 @@ func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, e
 
 	for _, packID := range enabledPackIDs {
 		if texture, ok := cachedTextureByPackVariant(packID, stableKey, enabledPacks, seenKeys); ok {
+			cacheTextureForPackSignature(packSignature, stableKey, texture)
 			return texture, true
 		}
 	}
@@ -203,6 +207,27 @@ func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, e
 		}
 	}
 	return AppliedItemTexture{}, false
+}
+
+func cacheTextureForPackSignature(packSignature string, stableKey string, texture AppliedItemTexture) {
+	packSignature = strings.TrimSpace(packSignature)
+	stableKey = strings.TrimSpace(stableKey)
+	if packSignature == "" || stableKey == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
+		return
+	}
+	itemTextureCacheMu.Lock()
+	itemTextureCache[textureCacheKey(packSignature, stableKey)] = texture
+	itemTextureCacheMu.Unlock()
+}
+
+func clearPackSignatureTextureCache() {
+	itemTextureCacheMu.Lock()
+	for key := range itemTextureCache {
+		if strings.HasPrefix(key, orderedPackSignaturePrefix) {
+			delete(itemTextureCache, key)
+		}
+	}
+	itemTextureCacheMu.Unlock()
 }
 
 func cachedTextureByKeyOnce(key string, enabledPacks map[string]struct{}, seenKeys map[string]struct{}) (AppliedItemTexture, bool) {

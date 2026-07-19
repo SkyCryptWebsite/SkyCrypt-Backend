@@ -3,9 +3,11 @@ package stats
 import (
 	"bytes"
 	"encoding/base64"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/lib"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -103,6 +105,50 @@ func TestProcessItemsUsesHeadEndpointForSkyBlockSkullWithoutCustomTexture(t *tes
 	}
 }
 
+func TestProcessItemsUsesItemEndpointForNEUOnlySkyBlockSkull(t *testing.T) {
+	const skyBlockID = "SOUL_FISH_DIAMOND"
+	notenoughupdates.CACHED_NEU_ITEMS.Store(skyBlockID, models.NEUItem{NEUId: skyBlockID})
+	t.Cleanup(func() {
+		notenoughupdates.CACHED_NEU_ITEMS.Delete(skyBlockID)
+	})
+
+	head := testItem(397, skyBlockID)
+	head.Tag.ItemModel = "minecraft:player_head"
+	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: testSkinValue("soul-fish-diamond-hash")}},
+		},
+	}
+
+	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{"fsr"})
+	want := testDomain() + "/api/item/" + skyBlockID
+	if len(processed) != 1 || processed[0].Texture != want {
+		t.Fatalf("NEU-only skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
+func TestProcessItemsUsesHeadEndpointForNEUOnlySkullWithNoPacks(t *testing.T) {
+	const skyBlockID = "KUUDRA_INFERNAL_TIER_KEY"
+	notenoughupdates.CACHED_NEU_ITEMS.Store(skyBlockID, models.NEUItem{NEUId: skyBlockID})
+	t.Cleanup(func() {
+		notenoughupdates.CACHED_NEU_ITEMS.Delete(skyBlockID)
+	})
+
+	head := testItem(397, skyBlockID)
+	head.Tag.ItemModel = "minecraft:player_head"
+	head.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+		Properties: skycrypttypes.Properties{
+			Textures: []skycrypttypes.Texture{{Value: testSkinValue("infernal-kuudra-key-hash")}},
+		},
+	}
+
+	processed := ProcessItems([]*skycrypttypes.Item{head}, "inventory", []string{})
+	want := testDomain() + "/api/head/infernal-kuudra-key-hash"
+	if len(processed) != 1 || processed[0].Texture != want {
+		t.Fatalf("vanilla NEU skull texture = %q, want %q", processed[0].Texture, want)
+	}
+}
+
 func TestProcessItemsUsesItemEndpointForSkullWithoutUsableTexture(t *testing.T) {
 	head := testItem(397, "PROCESS_SKULL_NO_TEXTURE")
 	head.Tag.ItemModel = "minecraft:player_head"
@@ -162,6 +208,9 @@ func TestProcessItemsNestedSkullReusesTextureContext(t *testing.T) {
 	}
 	if textureCtx.Stats.Total != 1 {
 		t.Fatalf("texture applications = %d, want 1 for only the nested skull", textureCtx.Stats.Total)
+	}
+	if textureCtx.Stats.RenderAttempts != 0 {
+		t.Fatalf("nested profile processing attempted %d runtime renders", textureCtx.Stats.RenderAttempts)
 	}
 }
 
@@ -223,6 +272,9 @@ func TestItemProcessingDebugSummaryEnvGate(t *testing.T) {
 	if !strings.Contains(enabled.String(), "[ITEM_PROCESSING_DEBUG]") {
 		t.Fatalf("enabled debug output = %q, want item processing tag", enabled.String())
 	}
+	if !strings.Contains(enabled.String(), "runtime_render_attempts=0") {
+		t.Fatalf("enabled debug output = %q, want runtime render counter", enabled.String())
+	}
 }
 
 func BenchmarkProcessItemsItemEndpoint_1600Items(b *testing.B) {
@@ -236,6 +288,34 @@ func BenchmarkProcessItemsItemEndpoint_1600Items(b *testing.B) {
 		processed := ProcessItems(items, "inventory")
 		if len(processed) != len(items) {
 			b.Fatalf("processed length = %d, want %d", len(processed), len(items))
+		}
+	}
+}
+
+func BenchmarkProcessItemsSkullMisses_1600Items(b *testing.B) {
+	items := make([]*skycrypttypes.Item, 1600)
+	for index := range items {
+		item := testItem(397, "BENCH_SKULL_MISS_"+strconv.Itoa(index))
+		item.Tag.ItemModel = "minecraft:player_head"
+		item.Tag.SkullOwner = &skycrypttypes.SkullOwner{
+			Properties: skycrypttypes.Properties{
+				Textures: []skycrypttypes.Texture{{Value: testSkinValue("bench-skull-hash")}},
+			},
+		}
+		items[index] = item
+	}
+	textureCtx := lib.NewTextureApplyContext([]string{})
+	textureCtx.DisableRuntimeRender = true
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		processed := processItemsWithStats(items, "inventory", map[string]models.NEUItem{}, nil, textureCtx, 0)
+		if len(processed) != len(items) {
+			b.Fatalf("processed length = %d, want %d", len(processed), len(items))
+		}
+		if textureCtx.Stats.RenderAttempts != 0 {
+			b.Fatalf("profile processing attempted %d runtime renders", textureCtx.Stats.RenderAttempts)
 		}
 	}
 }
