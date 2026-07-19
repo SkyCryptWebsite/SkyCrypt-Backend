@@ -43,7 +43,7 @@ var renderedTextureIndexLazyReloadInterval = 5 * time.Second
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1
-	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.1"
+	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.5"
 	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
 )
 
@@ -245,7 +245,7 @@ func PrepareCustomResourceCache() error {
 
 	renderedDir := filepath.Join(config.CacheDir, "rendered")
 	timeNow := time.Now()
-	loaded, err := LoadRenderedTextureIndex(config.CacheDir)
+	loaded, err := reloadRenderedTextureIndex(config.CacheDir)
 	if err != nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
 	}
@@ -272,18 +272,6 @@ func startCustomResources() error {
 	resourcePacksPath := config.ResourcePacksPath
 	assetsPath := config.AssetsPath
 	renderedDir := filepath.Join(cacheDir, "rendered")
-	_, renderedDirErr := os.Stat(renderedDir)
-	if renderedDirErr != nil && !os.IsNotExist(renderedDirErr) {
-		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to stat cache directory %s: %v", renderedDir, renderedDirErr)
-	}
-	renderedDirExists := renderedDirErr == nil
-
-	timeNowv2 := time.Now()
-	loaded, err := LoadRenderedTextureIndex(cacheDir)
-	if err != nil {
-		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
-	}
-	logCustomResourceRoutine("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s", utility.AddCommas(loaded), renderedDir, time.Since(timeNowv2))
 
 	preloadRenderer := !isPreforkChildProcess()
 	if err := InitRenderer(cacheDir, resourcePacksPath, assetsPath, preloadRenderer); err != nil {
@@ -291,6 +279,19 @@ func startCustomResources() error {
 	}
 
 	logCustomResourceRoutine("[CUSTOM_RESOURCES] Started SkyCrypt renderer instance in %s", time.Since(timeNow))
+
+	_, renderedDirErr := os.Stat(renderedDir)
+	if renderedDirErr != nil && !os.IsNotExist(renderedDirErr) {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to stat cache directory %s: %v", renderedDir, renderedDirErr)
+	}
+	renderedDirExists := renderedDirErr == nil
+
+	timeNowv2 := time.Now()
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to read cache directory: %v", err)
+	}
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] Loaded %s cached textures from %s in %s", utility.AddCommas(loaded), renderedDir, time.Since(timeNowv2))
 
 	// Render textures only on main thread; generated files are shared in cache/rendered.
 	if !isPreforkChildProcess() {
@@ -332,8 +333,7 @@ func startCustomResources() error {
 				fmt.Printf("[CUSTOM_RESOURCES] Removed %s stale rendered textures after resource pack warm\n", utility.AddCommas(removed))
 			}
 
-			resetRenderedTextureIndex()
-			reloaded, err := LoadRenderedTextureIndex(cacheDir)
+			reloaded, err := reloadRenderedTextureIndex(cacheDir)
 			if err != nil {
 				return fmt.Errorf("[CUSTOM_RESOURCES] Failed to reload rendered texture index after warm: %v", err)
 			}

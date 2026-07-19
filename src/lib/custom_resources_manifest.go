@@ -491,6 +491,11 @@ func resetRenderedTextureIndex() {
 	renderedSkyBlockIndexMu.Unlock()
 }
 
+func reloadRenderedTextureIndex(cacheDir string) (int, error) {
+	resetRenderedTextureIndex()
+	return LoadRenderedTextureIndex(cacheDir)
+}
+
 func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	if strings.TrimSpace(cacheDir) == "" {
 		cwd, err := os.Getwd()
@@ -512,7 +517,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 
 	loaded := 0
 	for _, file := range files {
-		if file.IsDir() {
+		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".webp") {
 			continue
 		}
 
@@ -522,6 +527,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		minecraftID := ""
 		itemModel := ""
 		texturePack := ""
+		packSegments := 0
 		for _, part := range parts {
 			if strings.HasPrefix(part, "skyblock=") {
 				itemId = strings.TrimPrefix(part, "skyblock=")
@@ -530,15 +536,19 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 			} else if strings.HasPrefix(part, "itemmodel=") {
 				itemModel = debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
 			} else if strings.HasPrefix(part, "pack=") {
+				packSegments++
 				texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
 			}
+		}
+		if packSegments != 1 || !validRenderedTexturePackID(texturePack) {
+			continue
 		}
 
 		texture := AppliedItemTexture{
 			Texture:     publicCacheTextureURL(filepath.Join(renderedDir, fileName)),
 			TexturePack: texturePack,
 		}
-		if !validCachedTexture(texture, nil) {
+		if texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
 			continue
 		}
 		if itemId != "" && texturePack != "" {
@@ -556,6 +566,18 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	}
 
 	return loaded, nil
+}
+
+func validRenderedTexturePackID(packID string) bool {
+	packID = strings.TrimSpace(packID)
+	if packID == "" {
+		return false
+	}
+	if strings.EqualFold(packID, "vanilla") {
+		return true
+	}
+	_, known := knownResourcePackAliases()[canonicalPackAlias(packID)]
+	return known
 }
 
 func rememberRenderedTextureIndexCacheDir(cacheDir string) {
@@ -579,7 +601,7 @@ func lazyReloadRenderedTextureIndex() bool {
 	renderedTextureIndexLastLazyReload = now
 	renderedTextureIndexReloadMu.Unlock()
 
-	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
 	if err != nil {
 		return false
 	}

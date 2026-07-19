@@ -12,6 +12,7 @@ import (
 	"skycrypt/src/utility"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testDomain() string {
@@ -82,15 +83,24 @@ func withRenderItemGlobals(t *testing.T) {
 	previousRenderer := customResourceRenderer
 	previousItems := constants.ItemsSnapshot()
 	previousCache := itemTextureCache
+	previousRenderedIndex := renderedSkyBlockIndex
+	previousRenderedCacheDir := renderedTextureIndexCacheDir
+	previousRenderedReload := renderedTextureIndexLastLazyReload
 
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	itemTextureCache = map[string]AppliedItemTexture{}
+	renderedSkyBlockIndex = map[string]struct{}{}
+	renderedTextureIndexCacheDir = ""
+	renderedTextureIndexLastLazyReload = time.Time{}
 
 	t.Cleanup(func() {
 		customResourceRenderer = previousRenderer
 		constants.SetItems(previousItems)
 		itemTextureCache = previousCache
+		renderedSkyBlockIndex = previousRenderedIndex
+		renderedTextureIndexCacheDir = previousRenderedCacheDir
+		renderedTextureIndexLastLazyReload = previousRenderedReload
 	})
 }
 
@@ -479,6 +489,120 @@ func TestOverclockerPackCacheIsolation(t *testing.T) {
 	hypixelPackBytes := readAppliedTextureBytes(t, cacheDir, hypixelPack)
 	if bytes.Equal(hypixelPackBytes, allPacksBytes) {
 		t.Fatal("Hypixel-only texture reused H+ image bytes")
+	}
+
+	customResourceRenderer = nil
+	renderedTextureIndexLastLazyReload = time.Time{}
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded < 2 {
+		t.Fatalf("reloaded texture count = %d, want at least 2 custom pack entries", loaded)
+	}
+
+	reloadedAll, ok := cachedStableSkyBlockTexture(rawItem.NEUId, NewTextureApplyContext())
+	if !ok {
+		t.Fatal("reloaded index did not contain OVERCLOCKER_3000 for all packs")
+	}
+	if reloadedAll.TexturePack != "HYPIXEL_PLUS" || reloadedAll.Texture != allPacks.Texture {
+		t.Fatalf("reloaded all-packs texture = %#v, want original HYPIXEL_PLUS texture %#v", reloadedAll, allPacks)
+	}
+	reloadedHypixel, ok := cachedStableSkyBlockTexture(rawItem.NEUId, NewTextureApplyContext([]string{"HYPIXEL_PACK"}))
+	if !ok {
+		t.Fatal("reloaded index did not contain OVERCLOCKER_3000 for HYPIXEL_PACK")
+	}
+	if reloadedHypixel.TexturePack != "HYPIXEL_PACK" || reloadedHypixel.Texture != hypixelPack.Texture {
+		t.Fatalf("reloaded Hypixel-only texture = %#v, want original texture %#v", reloadedHypixel, hypixelPack)
+	}
+	for key, texture := range itemTextureCache {
+		if strings.Contains(key, "HYPIXEL_PLU|") || texture.TexturePack == "HYPIXEL_PLU" {
+			t.Fatalf("reloaded index retained truncated pack metadata: key=%q texture=%#v", key, texture)
+		}
+	}
+}
+
+func TestLoadRenderedTextureIndexRejectsMalformedPackSegments(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		"skyblock=VALID_ITEM__pack=HYPIXEL_PLUS__hash=valid.webp",
+		"skyblock=TRUNCATED_ITEM__pack=HYPIXEL_PLU__hash=truncated.webp",
+		"skyblock=MISSING_PACK__hash=missing.webp",
+		"skyblock=DUPLICATE_PACK__pack=HYPIXEL_PLUS__pack=HYPIXEL_PACK__hash=duplicate.webp",
+		"resourcepacks-manifest.json",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(renderedDir, name), []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded != 1 {
+		t.Fatalf("loaded texture count = %d, want 1 valid entry", loaded)
+	}
+	valid, ok := cachedStableSkyBlockTexture("VALID_ITEM", NewTextureApplyContext([]string{"HYPIXEL_PLUS"}))
+	if !ok || valid.TexturePack != "HYPIXEL_PLUS" {
+		t.Fatalf("valid rendered texture was not indexed correctly: %#v", valid)
+	}
+	for key, texture := range itemTextureCache {
+		if strings.Contains(key, "TRUNCATED_ITEM") || strings.Contains(key, "MISSING_PACK") || strings.Contains(key, "DUPLICATE_PACK") || texture.TexturePack == "HYPIXEL_PLU" {
+			t.Fatalf("malformed rendered texture was indexed: key=%q texture=%#v", key, texture)
+		}
+	}
+}
+
+func TestRendererCacheVersionInvalidationPrecedesIndexReload(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	appRoot, err := appRootDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheDir := t.TempDir()
+	stalePath := filepath.Join(cacheDir, "rendered", "skyblock=STALE_ITEM__pack=HYPIXEL_PLUS__hash=stale.webp")
+	if err := os.MkdirAll(filepath.Dir(stalePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stalePath, []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, ".renderer-cache-version"), []byte("9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	itemTextureCache["HYPIXEL_PLUS|skyblock:STALE_ITEM"] = AppliedItemTexture{
+		Texture:     publicCacheTextureURL(stalePath),
+		TexturePack: "HYPIXEL_PLUS",
+	}
+
+	if _, err := newRendererForPackIDs(
+		cacheDir,
+		filepath.Join(appRoot, "assets", "resourcepacks"),
+		filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft"),
+		[]string{"HYPIXEL_PLUS"},
+		false,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stalePath); !os.IsNotExist(err) {
+		t.Fatalf("stale v9 rendered file survived cache invalidation: %v", err)
+	}
+
+	loaded, err := reloadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded != 0 || itemTextureCacheLen() != 0 {
+		t.Fatalf("stale rendered index survived reload: loaded=%d cache=%#v", loaded, itemTextureCache)
 	}
 }
 
