@@ -3,6 +3,7 @@ package lib
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -86,6 +88,10 @@ func withRenderItemGlobals(t *testing.T) {
 	previousRenderedIndex := renderedSkyBlockIndex
 	previousRenderedCacheDir := renderedTextureIndexCacheDir
 	previousRenderedReload := renderedTextureIndexLastLazyReload
+	previousRenderedModTime := renderedTextureIndexLastDirModTime
+	previousRenderedInFlight := renderedTextureIndexReloadInFlight
+	previousLoader := loadRenderedTextureIndexForRefresh
+	previousReloadInterval := renderedTextureIndexLazyReloadInterval
 
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
@@ -93,6 +99,10 @@ func withRenderItemGlobals(t *testing.T) {
 	renderedSkyBlockIndex = map[string]struct{}{}
 	renderedTextureIndexCacheDir = ""
 	renderedTextureIndexLastLazyReload = time.Time{}
+	renderedTextureIndexLastDirModTime = time.Time{}
+	renderedTextureIndexReloadInFlight = false
+	loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
+	renderedTextureIndexLazyReloadInterval = 5 * time.Second
 
 	t.Cleanup(func() {
 		customResourceRenderer = previousRenderer
@@ -101,6 +111,10 @@ func withRenderItemGlobals(t *testing.T) {
 		renderedSkyBlockIndex = previousRenderedIndex
 		renderedTextureIndexCacheDir = previousRenderedCacheDir
 		renderedTextureIndexLastLazyReload = previousRenderedReload
+		renderedTextureIndexLastDirModTime = previousRenderedModTime
+		renderedTextureIndexReloadInFlight = previousRenderedInFlight
+		loadRenderedTextureIndexForRefresh = previousLoader
+		renderedTextureIndexLazyReloadInterval = previousReloadInterval
 	})
 }
 
@@ -604,6 +618,190 @@ func TestRendererCacheVersionInvalidationPrecedesIndexReload(t *testing.T) {
 	if loaded != 0 || itemTextureCacheLen() != 0 {
 		t.Fatalf("stale rendered index survived reload: loaded=%d cache=%#v", loaded, itemTextureCache)
 	}
+}
+
+func TestLazyRefreshIsNonBlockingAndSingleFlight(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(renderedDir, "skyblock=NEW_ITEM__pack=HYPIXEL_PLUS__hash=new.webp"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	itemTextureCache["runtime-only"] = AppliedItemTexture{Texture: "runtime-texture", TexturePack: "HYPIXEL_PLUS"}
+	renderedTextureIndexCacheDir = cacheDir
+	renderedTextureIndexLastLazyReload = time.Time{}
+	renderedTextureIndexLastDirModTime = time.Time{}
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	loadRenderedTextureIndexForRefresh = func(string) (int, error) {
+		if calls.Add(1) == 1 {
+			close(started)
+		}
+		<-release
+		return 0, nil
+	}
+
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+	if texture, ok := cachedTextureForStableKey("skyblock:MISSING_ITEM", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); ok {
+		t.Fatalf("unexpected cache hit: %#v", texture)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("background refresh did not start")
+	}
+	if texture := itemTextureCache["runtime-only"]; texture.Texture != "runtime-texture" {
+		t.Fatalf("background refresh cleared runtime cache entry: %#v", texture)
+	}
+
+	for range 20 {
+		cachedTextureForStableKey("skyblock:ANOTHER_MISS", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("refresh loader calls = %d, want 1", got)
+	}
+
+	close(release)
+	waitForRenderedTextureRefresh(t)
+}
+
+func TestLazyRefreshSkipsUnchangedDirectory(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cacheDir, "rendered"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reloadRenderedTextureIndex(cacheDir); err != nil {
+		t.Fatal(err)
+	}
+	renderedTextureIndexLastLazyReload = time.Time{}
+
+	var calls atomic.Int32
+	loadRenderedTextureIndexForRefresh = func(string) (int, error) {
+		calls.Add(1)
+		return 0, nil
+	}
+	scheduleRenderedTextureIndexRefresh()
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("unchanged directory triggered %d refreshes", got)
+	}
+}
+
+func TestLazyRefreshLoadsChangesWithoutClearingRuntimeCache(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reloadRenderedTextureIndex(cacheDir); err != nil {
+		t.Fatal(err)
+	}
+	itemTextureCache["runtime-only"] = AppliedItemTexture{Texture: "runtime-texture", TexturePack: "HYPIXEL_PLUS"}
+	newPath := filepath.Join(renderedDir, "skyblock=NEW_ITEM__pack=HYPIXEL_PLUS__hash=new.webp")
+	if err := os.WriteFile(newPath, []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(time.Second)
+	if err := os.Chtimes(renderedDir, future, future); err != nil {
+		t.Fatal(err)
+	}
+	renderedTextureIndexLastLazyReload = time.Time{}
+
+	scheduleRenderedTextureIndexRefresh()
+	waitForRenderedTextureRefresh(t)
+	if texture := itemTextureCache["runtime-only"]; texture.Texture != "runtime-texture" {
+		t.Fatalf("additive refresh cleared runtime cache entry: %#v", texture)
+	}
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+	texture, ok := cachedStableSkyBlockTexture("NEW_ITEM", context)
+	if !ok || texture.TexturePack != "HYPIXEL_PLUS" {
+		t.Fatalf("changed directory entry was not loaded: %#v", texture)
+	}
+}
+
+func TestLazyRefreshMissingDirectoryPreservesMemory(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	itemTextureCache["runtime-only"] = AppliedItemTexture{Texture: "runtime-texture", TexturePack: "HYPIXEL_PLUS"}
+	renderedTextureIndexCacheDir = filepath.Join(t.TempDir(), "missing-cache")
+	renderedTextureIndexLastLazyReload = time.Time{}
+	scheduleRenderedTextureIndexRefresh()
+	if texture := itemTextureCache["runtime-only"]; texture.Texture != "runtime-texture" {
+		t.Fatalf("missing rendered directory cleared runtime cache entry: %#v", texture)
+	}
+	if renderedTextureIndexReloadInFlight {
+		t.Fatal("missing rendered directory started a refresh")
+	}
+}
+
+func TestLazyRefreshClearsInFlightAfterFailureOrPanic(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		loader func(string) (int, error)
+	}{
+		{
+			name: "error",
+			loader: func(string) (int, error) {
+				return 0, errors.New("refresh failed")
+			},
+		},
+		{
+			name: "panic",
+			loader: func(string) (int, error) {
+				panic("refresh panicked")
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			withRenderItemGlobals(t)
+
+			cacheDir := t.TempDir()
+			renderedDir := filepath.Join(cacheDir, "rendered")
+			if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(renderedDir, "skyblock=NEW_ITEM__pack=HYPIXEL_PLUS__hash=new.webp"), []byte("test"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			renderedTextureIndexCacheDir = cacheDir
+			renderedTextureIndexLastLazyReload = time.Time{}
+			renderedTextureIndexLastDirModTime = time.Time{}
+			loadRenderedTextureIndexForRefresh = test.loader
+
+			scheduleRenderedTextureIndexRefresh()
+			waitForRenderedTextureRefresh(t)
+			renderedTextureIndexReloadMu.Lock()
+			inFlight := renderedTextureIndexReloadInFlight
+			renderedTextureIndexReloadMu.Unlock()
+			if inFlight {
+				t.Fatal("failed refresh left in-flight state set")
+			}
+		})
+	}
+}
+
+func waitForRenderedTextureRefresh(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		renderedTextureIndexReloadMu.Lock()
+		inFlight := renderedTextureIndexReloadInFlight
+		renderedTextureIndexReloadMu.Unlock()
+		if !inFlight {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("timed out waiting for rendered texture index refresh")
 }
 
 func readAppliedTextureBytes(t *testing.T, cacheDir string, texture AppliedItemTexture) []byte {

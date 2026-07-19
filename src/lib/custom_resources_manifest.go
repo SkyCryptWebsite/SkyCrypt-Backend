@@ -493,7 +493,12 @@ func resetRenderedTextureIndex() {
 
 func reloadRenderedTextureIndex(cacheDir string) (int, error) {
 	resetRenderedTextureIndex()
-	return LoadRenderedTextureIndex(cacheDir)
+	loaded, err := LoadRenderedTextureIndex(cacheDir)
+	if err != nil {
+		return 0, err
+	}
+	recordRenderedTextureIndexDirectoryState(cacheDir)
+	return loaded, nil
 }
 
 func LoadRenderedTextureIndex(cacheDir string) (int, error) {
@@ -515,6 +520,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		return 0, err
 	}
 
+	knownPacks := knownResourcePackAliases()
 	loaded := 0
 	for _, file := range files {
 		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".webp") {
@@ -540,7 +546,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 				texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
 			}
 		}
-		if packSegments != 1 || !validRenderedTexturePackID(texturePack) {
+		if packSegments != 1 || !validRenderedTexturePackID(texturePack, knownPacks) {
 			continue
 		}
 
@@ -568,7 +574,7 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	return loaded, nil
 }
 
-func validRenderedTexturePackID(packID string) bool {
+func validRenderedTexturePackID(packID string, knownPacks map[string]struct{}) bool {
 	packID = strings.TrimSpace(packID)
 	if packID == "" {
 		return false
@@ -576,7 +582,7 @@ func validRenderedTexturePackID(packID string) bool {
 	if strings.EqualFold(packID, "vanilla") {
 		return true
 	}
-	_, known := knownResourcePackAliases()[canonicalPackAlias(packID)]
+	_, known := knownPacks[canonicalPackAlias(packID)]
 	return known
 }
 
@@ -590,20 +596,78 @@ func rememberRenderedTextureIndexCacheDir(cacheDir string) {
 	renderedTextureIndexReloadMu.Unlock()
 }
 
-func lazyReloadRenderedTextureIndex() bool {
+func recordRenderedTextureIndexDirectoryState(cacheDir string) {
+	cacheDir = strings.TrimSpace(cacheDir)
+	modTime := time.Time{}
+	if cacheDir != "" {
+		if info, err := os.Stat(filepath.Join(cacheDir, "rendered")); err == nil {
+			modTime = info.ModTime()
+		}
+	}
+
 	renderedTextureIndexReloadMu.Lock()
+	if cacheDir != "" {
+		renderedTextureIndexCacheDir = cacheDir
+	}
+	renderedTextureIndexLastDirModTime = modTime
+	renderedTextureIndexLastLazyReload = time.Now()
+	renderedTextureIndexReloadInFlight = false
+	renderedTextureIndexReloadMu.Unlock()
+}
+
+func scheduleRenderedTextureIndexRefresh() {
 	now := time.Now()
-	if !renderedTextureIndexLastLazyReload.IsZero() && now.Sub(renderedTextureIndexLastLazyReload) < renderedTextureIndexLazyReloadInterval {
+	renderedTextureIndexReloadMu.Lock()
+	if renderedTextureIndexReloadInFlight ||
+		(!renderedTextureIndexLastLazyReload.IsZero() && now.Sub(renderedTextureIndexLastLazyReload) < renderedTextureIndexLazyReloadInterval) {
 		renderedTextureIndexReloadMu.Unlock()
-		return false
+		return
 	}
 	cacheDir := renderedTextureIndexCacheDir
+	lastModTime := renderedTextureIndexLastDirModTime
 	renderedTextureIndexLastLazyReload = now
 	renderedTextureIndexReloadMu.Unlock()
 
-	loaded, err := reloadRenderedTextureIndex(cacheDir)
-	if err != nil {
-		return false
+	if strings.TrimSpace(cacheDir) == "" {
+		return
 	}
-	return loaded > 0
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	info, err := os.Stat(renderedDir)
+	if err != nil || !info.IsDir() || !info.ModTime().After(lastModTime) {
+		return
+	}
+
+	renderedTextureIndexReloadMu.Lock()
+	if renderedTextureIndexReloadInFlight {
+		renderedTextureIndexReloadMu.Unlock()
+		return
+	}
+	renderedTextureIndexReloadInFlight = true
+	renderedTextureIndexReloadMu.Unlock()
+
+	go func() {
+		defer func() {
+			if recovered := recover(); recovered != nil && (utility.IsVerboseLogging() || strings.EqualFold(os.Getenv("VERBOSE_LOGGING"), "true")) {
+				logCustomResourceRoutine("[CUSTOM_RESOURCES] Rendered texture index refresh panicked: %v", recovered)
+			}
+			renderedTextureIndexReloadMu.Lock()
+			renderedTextureIndexReloadInFlight = false
+			renderedTextureIndexReloadMu.Unlock()
+		}()
+
+		if _, err := loadRenderedTextureIndexForRefresh(cacheDir); err != nil {
+			if utility.IsVerboseLogging() || strings.EqualFold(os.Getenv("VERBOSE_LOGGING"), "true") {
+				logCustomResourceRoutine("[CUSTOM_RESOURCES] Failed to refresh rendered texture index: %v", err)
+			}
+			return
+		}
+
+		modTime := info.ModTime()
+		if refreshedInfo, err := os.Stat(renderedDir); err == nil {
+			modTime = refreshedInfo.ModTime()
+		}
+		renderedTextureIndexReloadMu.Lock()
+		renderedTextureIndexLastDirModTime = modTime
+		renderedTextureIndexReloadMu.Unlock()
+	}()
 }

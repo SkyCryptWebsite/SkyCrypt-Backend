@@ -178,11 +178,7 @@ func cachedTextureForStableKey(stableKey string, packSignature string, enabledPa
 	if texture, ok := cachedTextureForStableKeyInMemory(stableKey, packSignature, enabledPackIDs, enabledPacks, legacyKeys...); ok {
 		return texture, true
 	}
-	if lazyReloadRenderedTextureIndex() {
-		if texture, ok := cachedTextureForStableKeyInMemory(stableKey, packSignature, enabledPackIDs, enabledPacks, legacyKeys...); ok {
-			return texture, true
-		}
-	}
+	scheduleRenderedTextureIndexRefresh()
 
 	return AppliedItemTexture{}, false
 }

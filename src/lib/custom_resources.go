@@ -25,6 +25,8 @@ var renderedSkyBlockIndexMu sync.RWMutex
 var renderedTextureIndexReloadMu sync.Mutex
 var renderedTextureIndexCacheDir string
 var renderedTextureIndexLastLazyReload time.Time
+var renderedTextureIndexLastDirModTime time.Time
+var renderedTextureIndexReloadInFlight bool
 var customResourcesOnce sync.Once
 var customResourcesErr error
 var customResourceRendererMu sync.Mutex
@@ -40,6 +42,7 @@ var vanillaModelTextureCache sync.Map
 var vanillaItemExistsCache sync.Map
 
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
+var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1
