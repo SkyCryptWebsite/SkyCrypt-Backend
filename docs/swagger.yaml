@@ -1867,6 +1867,8 @@ components:
           type: string
         sourceTab:
           $ref: '#/components/schemas/models.SourceTab'
+        texture_pack:
+          type: string
         texture_path:
           type: string
         wiki:

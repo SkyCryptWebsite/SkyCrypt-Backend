@@ -41,6 +41,7 @@ func StripItem(item *models.ProcessedItem, stripOpts ...models.StripOptions) *mo
 		Rarity:         item.Rarity,
 		Recombobulated: item.Recombobulated,
 		Texture:        item.Texture,
+		TexturePack:    item.TexturePack,
 		Shiny:          item.Shiny,
 	}
 

@@ -46,6 +46,7 @@ type StrippedItem struct {
 	ContainsItems  []StrippedItem `json:"containsItems,omitempty"`
 	Source         string         `json:"source,omitempty"`
 	Texture        string         `json:"texture_path,omitempty"`
+	TexturePack    string         `json:"texture_pack,omitempty"`
 	IsInactive     *bool          `json:"isInactive,omitempty"`
 	Count          *int           `json:"Count,omitempty"`
 	Shiny          bool           `json:"shiny,omitempty"`
