@@ -55,11 +55,16 @@ func isGenericPackedSkullTexture(input ItemTextureInput, texture AppliedItemText
 	if id == "" {
 		id = normalizeMinecraftItemID(input.ItemModel)
 	}
-	if skullIdentityFromInput(input) == "" && !isVanillaSkullItemID(id) {
+	hasSkullIdentity := skullIdentityFromInput(input) != ""
+	if !hasSkullIdentity && !isVanillaSkullItemID(id) {
 		return false
 	}
 
 	texturePath := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(texture.Texture), "\\", "/"))
+	if hasSkullIdentity && (sameTexturePack(texture.TexturePack, "vanilla") || strings.Contains(texturePath, "pack=vanilla")) {
+		return true
+	}
+
 	return strings.Contains(texturePath, "model=minecraft_item_template_skull") &&
 		strings.Contains(texturePath, "tex1=block_soul_sand")
 }

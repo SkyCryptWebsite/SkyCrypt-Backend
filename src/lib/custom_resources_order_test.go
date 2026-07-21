@@ -238,6 +238,95 @@ func TestApplyTextureInputRejectsGenericPackedSkullCache(t *testing.T) {
 	}
 }
 
+func TestApplyTextureInputRejectsVanillaCustomSkullCache(t *testing.T) {
+	tests := []struct {
+		name         string
+		enabledPacks []string
+		cacheKey     string
+		texture      AppliedItemTexture
+	}{
+		{
+			name:         "vanilla only",
+			enabledPacks: []string{},
+			cacheKey:     "vanilla",
+			texture: AppliedItemTexture{
+				Texture:     "/cache/rendered/skyblock=BURNING_KUUDRA_CORE__pack=vanilla__mc=minecraft_player_head__itemmodel=minecraft_player_head__model=minecraft_item_template_skull__hash=test.webp",
+				TexturePack: "vanilla",
+			},
+		},
+		{
+			name:         "Hypixel Pack only",
+			enabledPacks: []string{"HYPIXEL_PACK"},
+			cacheKey:     "enabled-v7:HYPIXEL_PACK",
+			texture: AppliedItemTexture{
+				Texture:     "/cache/rendered/skyblock=BURNING_KUUDRA_CORE__pack=vanilla__mc=minecraft_player_head__itemmodel=minecraft_player_head__model=minecraft_item_template_skull__hash=test.webp",
+				TexturePack: "vanilla",
+			},
+		},
+		{
+			name:         "legacy path without metadata",
+			enabledPacks: []string{"HYPIXEL_PACK"},
+			cacheKey:     "enabled-v7:HYPIXEL_PACK",
+			texture: AppliedItemTexture{
+				Texture: "/cache/rendered/skyblock=BURNING_KUUDRA_CORE__pack=vanilla__mc=minecraft_player_head__itemmodel=minecraft_player_head__model=minecraft_item_template_skull__hash=test.webp",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			previousCache := itemTextureCache
+			itemTextureCache = map[string]AppliedItemTexture{
+				textureCacheKey(test.cacheKey, "skyblock:BURNING_KUUDRA_CORE"): test.texture,
+			}
+			t.Cleanup(func() { itemTextureCache = previousCache })
+
+			context := NewTextureApplyContext(test.enabledPacks)
+			context.DisableRuntimeRender = true
+			texture := ApplyTextureInput(ItemTextureInput{
+				ID:         "minecraft:player_head",
+				ItemModel:  "minecraft:player_head",
+				SkyBlockID: "BURNING_KUUDRA_CORE",
+				Texture:    "burning-kuudra-core-hash",
+			}, context)
+
+			want := context.Domain + "/api/head/burning-kuudra-core-hash"
+			if texture.Texture != want || texture.TexturePack != "" {
+				t.Fatalf("texture = %#v, want head fallback %q", texture, want)
+			}
+		})
+	}
+}
+
+func TestGenericPackedSkullTexturePreservesCustomPackAndNonSkulls(t *testing.T) {
+	customSkullInput := ItemTextureInput{
+		ID:         "minecraft:player_head",
+		ItemModel:  "minecraft:player_head",
+		SkyBlockID: "CUSTOM_PACK_SKULL",
+		Texture:    "custom-pack-skull-hash",
+	}
+	customPackTexture := AppliedItemTexture{
+		Texture:     "/cache/rendered/skyblock=CUSTOM_PACK_SKULL__pack=HYPIXEL_PACK__model=minecraft_item_template_skull__hash=test.webp",
+		TexturePack: "HYPIXEL_PACK",
+	}
+	if isGenericPackedSkullTexture(customSkullInput, customPackTexture) {
+		t.Fatal("custom pack skull texture was classified as a generic vanilla skull")
+	}
+
+	nonSkullInput := ItemTextureInput{
+		ID:         "minecraft:iron_sword",
+		ItemModel:  "minecraft:iron_sword",
+		SkyBlockID: "NON_SKULL_ITEM",
+	}
+	vanillaTexture := AppliedItemTexture{
+		Texture:     "/cache/rendered/skyblock=NON_SKULL_ITEM__pack=vanilla__hash=test.webp",
+		TexturePack: "vanilla",
+	}
+	if isGenericPackedSkullTexture(nonSkullInput, vanillaTexture) {
+		t.Fatal("non-skull vanilla texture was classified as a generic skull")
+	}
+}
+
 func TestSortResourcePackConfigsUsesPriorityThenID(t *testing.T) {
 	configs := []models.ResourcePackConfig{
 		{Id: "B", Priority: 10},
