@@ -411,7 +411,7 @@ func GetPetScore(pets []models.ProcessedPet) models.PetScore {
 		}
 
 		rarityIndex := slices.Index(constants.RARITIES, strings.ToLower(pet.Rarity))
-		if rarityIndex > highestRarity[pet.Type] {
+		if rarityIndex > highestRarity[pet.Type] || highestRarity[pet.Type] == 0 {
 			highestRarity[pet.Type] = rarityIndex
 		}
 	}
