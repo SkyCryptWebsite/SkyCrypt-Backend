@@ -6,22 +6,6 @@ import (
 	"skycrypt/src/models"
 )
 
-type StatData struct {
-	ID                      string `json:"id"`
-	Name                    string `json:"name"`
-	NameLore                string `json:"nameLore"`
-	NameShort               string `json:"nameShort"`
-	NameTiny                string `json:"nameTiny"`
-	Symbol                  string `json:"symbol"`
-	Suffix                  string `json:"suffix"`
-	Color                   string `json:"color"`
-	Category                string `json:"category"`
-	Description             string `json:"description"`
-	Percent                 bool   `json:"percent,omitempty"`
-	Cap                     *int   `json:"cap,omitempty"`
-	DisabledOnPrivateIsland bool   `json:"disabledOnPrivateIsland,omitempty"`
-}
-
 var PLAYER_STATS = map[string]models.StatsInfo{
 	// Combat
 	"health":             {"base": 100},
@@ -120,7 +104,7 @@ var PLAYER_STATS = map[string]models.StatsInfo{
 	"hearts":            {"base": 10},
 }
 
-var STATS_DATA = []StatData{
+var STATS_DATA = []models.StatData{
 	// ---------------------------------------------------------------------
 	// Combat
 	// ---------------------------------------------------------------------
