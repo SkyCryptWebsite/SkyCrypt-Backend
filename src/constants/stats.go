@@ -1299,12 +1299,12 @@ func GetBonusStat(level int, key string, max int) map[string]float64 {
 	return bonus
 }
 
-func GetStatData(id string) (StatData, bool) {
+func GetStatData(id string) (models.StatData, bool) {
 	for _, stat := range STATS_DATA {
 		if stat.ID == id {
 			return stat, true
 		}
 	}
 
-	return StatData{}, false
+	return models.StatData{}, false
 }
