@@ -2385,6 +2385,32 @@ paths:
       summary: Get combined profile data
       tags:
       - Stats
+  /api/constants/packs:
+    get:
+      description: |-
+        Returns toggleable resource packs sorted by descending priority for the recommended default order.
+        The enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.
+        A missing preference uses the default order, while an explicit empty array uses vanilla textures only.
+        The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
+      operationId: listResourcePacks
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/models.ResourcePackConfig'
+                type: array
+          description: Resource packs returned successfully.
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.ProcessingError'
+          description: Resource pack metadata could not be read.
+      summary: List resource packs
+      tags:
+      - Rendering
   /api/constants/stats:
     get:
       description: Returns player stats constants.
@@ -2971,32 +2997,6 @@ paths:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Potion image could not be rendered.
       summary: Render a potion
-      tags:
-      - Rendering
-  /api/resourcepacks:
-    get:
-      description: |-
-        Returns toggleable resource packs sorted by descending priority for the recommended default order.
-        The enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.
-        A missing preference uses the default order, while an explicit empty array uses vanilla textures only.
-        The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
-      operationId: listResourcePacks
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                items:
-                  $ref: '#/components/schemas/models.ResourcePackConfig'
-                type: array
-          description: Resource packs returned successfully.
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Resource pack metadata could not be read.
-      summary: List resource packs
       tags:
       - Rendering
   /api/source:

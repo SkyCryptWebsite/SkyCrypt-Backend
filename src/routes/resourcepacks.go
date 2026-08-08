@@ -18,7 +18,7 @@ import (
 //	@Produce		json
 //	@Success		200	{array}		models.ResourcePackConfig	"Resource packs returned successfully."
 //	@Failure		500	{object}	models.ProcessingError		"Resource pack metadata could not be read."
-//	@Router			/api/resourcepacks [get]
+//	@Router			/api/constants/packs [get]
 func ResourcePacksConstantsHandler(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 
