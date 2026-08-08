@@ -222,7 +222,7 @@ func generateGemLore(gemType, tier, rarity string) string {
 				}
 
 				if statValue != nil {
-					statsData, statExists := constants.STATS_DATA[stat]
+					statsData, statExists := constants.GetStatData(stat)
 					if statExists {
 						colorChar := ""
 						if len(statsData.Color) > 0 {

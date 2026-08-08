@@ -14,7 +14,7 @@ var regex = regexp.MustCompile(`^([A-Za-z ]+): ([+-]([0-9]+(?:,[0-9]{3})*(?:\.[0
 func GetStatsFromItem(item models.ProcessedItem) ItemStats {
 	stats := make(ItemStats)
 
-	if item.Tag.Display.Lore == nil {
+	if item.Tag == nil || item.Tag.Display.Lore == nil {
 		return stats
 	}
 
@@ -31,25 +31,25 @@ func GetStatsFromItem(item models.ProcessedItem) ItemStats {
 		}
 
 		var statName string
-		for key, statInfo := range constants.STATS_DATA {
+
+		for _, statInfo := range constants.STATS_DATA {
 			if statInfo.NameLore == matches[1] {
-				statName = key
+				statName = statInfo.ID
 				break
 			}
 		}
 
-		if statName != "" {
-			statValueStr := strings.ReplaceAll(matches[2], ",", "")
-			statValue, err := strconv.ParseFloat(statValueStr, 64)
-			if err != nil {
-				continue
-			}
-
-			if _, exists := stats[statName]; !exists {
-				stats[statName] = 0
-			}
-			stats[statName] += statValue
+		if statName == "" {
+			continue
 		}
+
+		statValueStr := strings.ReplaceAll(matches[2], ",", "")
+		statValue, err := strconv.ParseFloat(statValueStr, 64)
+		if err != nil {
+			continue
+		}
+
+		stats[statName] += statValue
 	}
 
 	return stats

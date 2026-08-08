@@ -37,7 +37,9 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
+
 	cacheKey := responseCacheKey("playerStats", uuid, profileId)
+
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
@@ -48,9 +50,14 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 			"error": fmt.Sprintf("Failed to resolve player: %v", err),
 		})
 	}
+
 	resolvedUUID := resolvedPlayer.UUID
 
-	profile, err := api.GetProfileContext(reqCtx, resolvedUUID, profileId)
+	profile, err := api.GetProfileContext(
+		reqCtx,
+		resolvedUUID,
+		profileId,
+	)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get profile: %v", err),
@@ -60,13 +67,28 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	userProfileValue := profile.Members[resolvedUUID]
 	userProfile := &userProfileValue
 
-	output := stats.GetPlayerStats(userProfile, profile, profile.ProfileID, resolvedUUID)
+	output := stats.GetPlayerStats(
+		userProfile,
+		profile,
+		profile.ProfileID,
+		resolvedUUID,
+	)
 
-	utility.LogVerbose("Returning /api/playerStats/%s in %s", profileId, time.Since(timeNow))
+	utility.LogVerbose(
+		"Returning /api/playerStats/%s in %s",
+		profileId,
+		time.Since(timeNow),
+	)
 
 	formattedStats := models.Stats{
 		Stats: output,
 	}
 
-	return sendAndCacheJSON(c, reqCtx, cacheKey, formattedStats, 5*60)
+	return sendAndCacheJSON(
+		c,
+		reqCtx,
+		cacheKey,
+		formattedStats,
+		5*60,
+	)
 }
