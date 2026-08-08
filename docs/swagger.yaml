@@ -1,5 +1,34 @@
 components:
   schemas:
+    constants.StatData:
+      properties:
+        cap:
+          type: integer
+        category:
+          type: string
+        color:
+          type: string
+        description:
+          type: string
+        disabledOnPrivateIsland:
+          type: boolean
+        id:
+          type: string
+        name:
+          type: string
+        nameLore:
+          type: string
+        nameShort:
+          type: string
+        nameTiny:
+          type: string
+        percent:
+          type: boolean
+        suffix:
+          type: string
+        symbol:
+          type: string
+      type: object
     models.ArmorResult:
       properties:
         armor:
@@ -2354,6 +2383,24 @@ paths:
       security:
       - ApiTokenHeader: []
       summary: Get combined profile data
+      tags:
+      - Stats
+  /api/constants/stats:
+    get:
+      description: Returns player stats constants.
+      operationId: listPlayerStatsConstants
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  items:
+                    $ref: '#/components/schemas/constants.StatData'
+                  type: array
+                type: array
+          description: Player stats constants returned successfully.
+      summary: List player stats constants
       tags:
       - Stats
   /api/embed/{uuid}:
