@@ -2,12 +2,7 @@
 
 set -eu
 
-if ! command -v swag >/dev/null 2>&1; then
-  echo "swag is not installed or not on PATH" >&2
-  exit 1
-fi
-
-swag init -g main.go --v3.1 --parseDependency --parseInternal
+go run github.com/swaggo/swag/v2/cmd/swag@v2.0.0-rc5 init -g main.go --v3.1 --parseDependency --parseInternal
 
 git add docs
 if git diff --cached --quiet; then

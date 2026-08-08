@@ -2616,23 +2616,19 @@ paths:
       responses:
         "200":
           content:
-            application/json:
-              schema:
-                type: file
             image/png:
               schema:
-                format: binary
-                type: string
+                type: file
           description: PNG image bytes returned successfully.
         "400":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Texture identifier is missing or invalid.
         "500":
           content:
-            application/json:
+            image/png:
               schema:
                 type: string
           description: Head image could not be rendered.
@@ -2758,17 +2754,13 @@ paths:
       responses:
         "200":
           content:
-            application/json:
-              schema:
-                type: file
             image/png:
               schema:
-                format: binary
-                type: string
+                type: file
           description: PNG image bytes returned successfully.
         "302":
           content:
-            application/json:
+            image/png:
               schema:
                 type: string
           description: Redirects to a canonical rendered asset URL.
@@ -2779,13 +2771,13 @@ paths:
                 type: string
         "400":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Item identifier is missing or invalid.
         "500":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Item image could not be rendered.
@@ -2849,23 +2841,19 @@ paths:
       responses:
         "200":
           content:
-            application/json:
-              schema:
-                type: file
             image/png:
               schema:
-                format: binary
-                type: string
+                type: file
           description: PNG image bytes returned successfully.
         "400":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Armor type or color is missing or invalid.
         "500":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Leather armor image could not be rendered.
@@ -2990,23 +2978,19 @@ paths:
       responses:
         "200":
           content:
-            application/json:
-              schema:
-                type: file
             image/png:
               schema:
-                format: binary
-                type: string
+                type: file
           description: PNG image bytes returned successfully.
         "400":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Potion type or color is missing or invalid.
         "500":
           content:
-            application/json:
+            image/png:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Potion image could not be rendered.
