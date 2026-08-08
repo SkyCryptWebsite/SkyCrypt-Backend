@@ -2414,7 +2414,7 @@ paths:
   /api/constants/stats:
     get:
       description: Returns player stats constants.
-      operationId: listPlayerStatsConstants
+      operationId: getStatsConstants
       responses:
         "200":
           content:

@@ -6,15 +6,15 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// PlayerStatsConstantsHandler godoc
+// StatsConstantsHandler godoc
 //
 //	@Summary		List player stats constants
 //	@Description	Returns player stats constants.
-//	@ID				listPlayerStatsConstants
+//	@ID				getStatsConstants
 //	@Tags			Stats
 //	@Produce		json
 //	@Success		200	{array}		models.StatData	"Player stats constants returned successfully."
 //	@Router			/api/constants/stats [get]
-func PlayerStatsConstantsHandler(c *fiber.Ctx) error {
+func StatsConstantsHandler(c *fiber.Ctx) error {
 	return c.JSON(constants.STATS_DATA)
 }
