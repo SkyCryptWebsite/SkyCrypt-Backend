@@ -22,15 +22,6 @@ type StatData struct {
 	DisabledOnPrivateIsland bool   `json:"disabledOnPrivateIsland,omitempty"`
 }
 
-/*
-PLAYER_STATS contains calculation/base values only.
-
-Display metadata belongs in STATS_DATA below.
-
-Values are based on the current Hypixel SkyBlock Wiki where a base
-value is explicitly listed. Stats without a listed base value default
-to 0 here.
-*/
 var PLAYER_STATS = map[string]models.StatsInfo{
 	// Combat
 	"health":             {"base": 100},
@@ -129,14 +120,6 @@ var PLAYER_STATS = map[string]models.StatsInfo{
 	"hearts":            {"base": 10},
 }
 
-/*
-STATS_DATA contains presentation and descriptive metadata.
-
-The stat ID is explicitly stored on the object rather than being
-the key of a map.
-
-Icons/colors reflect the current 0.26 stat icon overhaul.
-*/
 var STATS_DATA = []StatData{
 	// ---------------------------------------------------------------------
 	// Combat

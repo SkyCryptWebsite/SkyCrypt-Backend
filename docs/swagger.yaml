@@ -1369,6 +1369,37 @@ components:
         uuid:
           type: string
       type: object
+    models.PlayerStat:
+      properties:
+        cap:
+          type: integer
+        category:
+          type: string
+        color:
+          type: string
+        description:
+          type: string
+        disabledOnPrivateIsland:
+          type: boolean
+        id:
+          type: string
+        name:
+          type: string
+        nameLore:
+          type: string
+        nameShort:
+          type: string
+        nameTiny:
+          type: string
+        percent:
+          type: boolean
+        statsInfo:
+          $ref: '#/components/schemas/models.StatsInfo'
+        suffix:
+          type: string
+        symbol:
+          type: string
+      type: object
     models.PlotLayout:
       properties:
         barnSkin:
@@ -1780,9 +1811,10 @@ components:
     models.Stats:
       properties:
         stats:
-          additionalProperties:
-            $ref: '#/components/schemas/models.StatsInfo'
-          type: object
+          items:
+            $ref: '#/components/schemas/models.PlayerStat'
+          type: array
+          uniqueItems: false
       type: object
     models.StatsInfo:
       additionalProperties:
