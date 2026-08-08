@@ -13,11 +13,10 @@ func StripItems(items *[]models.ProcessedItem, stripOpts ...models.StripOptions)
 	output := make([]models.StrippedItem, len(*items))
 	for i, item := range *items {
 		output[i] = *StripItem(&item, opts)
-
 		if len(item.ContainsItems) > 0 {
+			output[i].DisplayInline = true
 			output[i].ContainsItems = StripItems(&item.ContainsItems, models.StripOptions{
 				Search: opts.Search,
-				Nested: true, // All nested items should be displayed inline
 			})
 		}
 	}
@@ -59,10 +58,6 @@ func StripItem(item *models.ProcessedItem, stripOpts ...models.StripOptions) *mo
 
 	if item.Wiki != nil {
 		output.Wiki = item.Wiki
-	}
-
-	if opts.Nested && item.DisplayName != "" && item.ContainsItems != nil {
-		output.DisplayInline = true
 	}
 
 	return output

@@ -210,7 +210,8 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/item/:itemId", routes.ItemHandlers)
 	api.Get("/potion/:type/:color", routes.PotionHandlers)
 	api.Get("/leather/:type/:color", routes.LeatherHandlers)
-	api.Get("/resourcepacks", routes.ResourcePackHandler)
+	api.Get("/constants/stats", routes.PlayerStatsConstantsHandler)
+	api.Get("/constants/packs", routes.ResourcePacksConstantsHandler)
 
 	// OTHER
 	api.Get("/emojis", routes.EmojisHandler)

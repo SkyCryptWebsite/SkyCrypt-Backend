@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// ResourcePackHandler godoc
+// ResourcePacksConstantsHandler godoc
 //
 //	@Summary		List resource packs
 //	@Description	Returns toggleable resource packs sorted by descending priority for the recommended default order.
@@ -19,7 +19,7 @@ import (
 //	@Success		200	{array}		models.ResourcePackConfig	"Resource packs returned successfully."
 //	@Failure		500	{object}	models.ProcessingError		"Resource pack metadata could not be read."
 //	@Router			/api/resourcepacks [get]
-func ResourcePackHandler(c *fiber.Ctx) error {
+func ResourcePacksConstantsHandler(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 
 	configs, err := lib.ResourcePackConfigs()
