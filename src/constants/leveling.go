@@ -13,7 +13,7 @@ var DEFAULT_SKILL_CAPS = map[string]int{
 	"runecrafting":  25,
 	"social":        25,
 	"dungeoneering": 50,
-	"hunting":       25,
+	"hunting":       50,
 }
 
 const NON_RUNECRAFTING_LEVEL_CAP = 3

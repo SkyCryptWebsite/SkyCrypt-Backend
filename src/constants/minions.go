@@ -96,12 +96,12 @@ var MINIONS = map[string]map[string]minionInfo{
 		"VAMPIRE":    {Texture: "/api/head/5b0c2db42e90f83fae6551c96e83669211a77c2c155c54d1523af3079f9565ed"},
 	},
 	"foraging": {
-		"OAK":      {Texture: "/api/head/57e4a30f361204ea9cded3fbff850160731a0081cc452cfe26aed48e97f6364b"},
-		"BIRCH":    {Texture: "/api/head/eb74109dbb88178afb7a9874afc682904cedb3df75978a51f7beeb28f924251"},
-		"SPRUCE":   {Texture: "/api/head/7ba04bfe516955fd43932dcb33bd5eac20b38a231d9fa8415b3fb301f60f7363"},
-		"DARK_OAK": {Texture: "/api/head/5ecdc8d6b2b7e081ed9c36609052c91879b89730b9953adbc987e25bf16c5581"},
-		"ACACIA":   {Texture: "/api/head/42183eaf5b133b838db13d145247e389ab4b4f33c67846363792dc3d82b524c0"},
-		"JUNGLE":   {Texture: "/api/head/2fe73d981690c1be346a16331819c4e8800859fcdc3e5153718c6ad45861924c"},
+		"OAK":      {Texture: "/api/head/57e4a30f361204ea9cded3fbff850160731a0081cc452cfe26aed48e97f6364b", MaxTier: 12},
+		"BIRCH":    {Texture: "/api/head/eb74109dbb88178afb7a9874afc682904cedb3df75978a51f7beeb28f924251", MaxTier: 12},
+		"SPRUCE":   {Texture: "/api/head/7ba04bfe516955fd43932dcb33bd5eac20b38a231d9fa8415b3fb301f60f7363", MaxTier: 12},
+		"DARK_OAK": {Texture: "/api/head/5ecdc8d6b2b7e081ed9c36609052c91879b89730b9953adbc987e25bf16c5581", MaxTier: 12},
+		"ACACIA":   {Texture: "/api/head/42183eaf5b133b838db13d145247e389ab4b4f33c67846363792dc3d82b524c0", MaxTier: 12},
+		"JUNGLE":   {Texture: "/api/head/2fe73d981690c1be346a16331819c4e8800859fcdc3e5153718c6ad45861924c", MaxTier: 12},
 		"FLOWER":   {Texture: "/api/head/baa7c59b2f792d8d091aecacf47a19f8ab93f3fd3c48f6930b1c2baeb09e0f9b", MaxTier: 12},
 	},
 	"fishing": {
