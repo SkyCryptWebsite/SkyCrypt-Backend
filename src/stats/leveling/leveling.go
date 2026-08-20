@@ -189,7 +189,7 @@ func GetSkillLevelCaps(userProfile *skycrypttypes.Member, player *skycrypttypes.
 		"farming":      50,
 		"taming":       50,
 		"runecrafting": 3,
-		"foraging":     54,
+		"foraging":     57,
 	}
 
 	if userProfile.JacobsContest.Perks != nil {

@@ -21,7 +21,7 @@ const NON_RUNECRAFTING_LEVEL_CAP = 3
 var MaxedSkillCaps = map[string]int{
 	"farming":  60,
 	"taming":   60,
-	"foraging": 54,
+	"foraging": 57,
 }
 
 var RUNECRAFTING_XP = map[int]int{
