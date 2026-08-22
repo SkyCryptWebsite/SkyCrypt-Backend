@@ -39,6 +39,6 @@ var InternalServerError = fiber.Map{
 }
 
 var FAIRY_SOULS = map[string]int{
-	"normal":   273,
+	"normal":   289,
 	"stranded": 4,
 }

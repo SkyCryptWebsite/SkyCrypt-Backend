@@ -26,7 +26,7 @@ var PLAYER_STATS = map[string]models.StatsInfo{
 	// Mining
 	"breaking_power":        {"base": 0},
 	"mining_speed":          {"base": 0},
-	"mining_spread":         {"base": 10000},
+	"mining_spread":         {"base": 0},
 	"gemstone_spread":       {"base": 0},
 	"pristine":              {"base": 0},
 	"mining_fortune":        {"base": 0},

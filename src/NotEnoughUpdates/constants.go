@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"skycrypt/src/models"
+	"strings"
 	"sync"
 
 	jsoniter "github.com/json-iterator/go"
@@ -18,6 +19,7 @@ type rawNEUItemWiki struct {
 }
 
 func GetItem(name string) (models.NEUItem, error) {
+	name = strings.Clone(name)
 	if item, ok := CACHED_NEU_ITEMS.Load(name); ok {
 		return item.(models.NEUItem), nil
 	}
@@ -59,6 +61,7 @@ func GetItem(name string) (models.NEUItem, error) {
 }
 
 func GetItemWiki(name string) ([]string, bool) {
+	name = strings.Clone(name)
 	if item, ok := CACHED_NEU_ITEMS.Load(name); ok {
 		return cloneWiki(item.(models.NEUItem).Wiki), true
 	}
