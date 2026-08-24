@@ -46,25 +46,44 @@ func itemTextureResolutionCacheKey(itemID string, damage int, enabledPacks []str
 }
 
 func resolveItemTextureSingleflight(cacheKey string, resolve func() (AppliedItemTexture, error)) (AppliedItemTexture, error) {
-	if cached, ok := resolvedItemTextureCache.Load(cacheKey); ok {
-		return cached.(AppliedItemTexture), nil
+	if cached, ok := loadResolvedItemTexture(cacheKey); ok {
+		return cached, nil
 	}
 
 	result, err, _ := itemTextureResolutionGroup.Do(cacheKey, func() (any, error) {
-		if cached, ok := resolvedItemTextureCache.Load(cacheKey); ok {
-			return cached.(AppliedItemTexture), nil
+		if cached, ok := loadResolvedItemTexture(cacheKey); ok {
+			return cached, nil
 		}
 		texture, err := resolve()
 		if err != nil {
 			return AppliedItemTexture{}, err
 		}
-		resolvedItemTextureCache.Store(cacheKey, texture)
+		storeResolvedItemTexture(cacheKey, texture)
 		return texture, nil
 	})
 	if err != nil {
 		return AppliedItemTexture{}, err
 	}
 	return result.(AppliedItemTexture), nil
+}
+
+func loadResolvedItemTexture(cacheKey string) (AppliedItemTexture, bool) {
+	resolvedItemTextureCacheMu.RLock()
+	texture, ok := resolvedItemTextureCache[cacheKey]
+	resolvedItemTextureCacheMu.RUnlock()
+	return texture, ok
+}
+
+func storeResolvedItemTexture(cacheKey string, texture AppliedItemTexture) {
+	resolvedItemTextureCacheMu.Lock()
+	resolvedItemTextureCache[cacheKey] = texture
+	resolvedItemTextureCacheMu.Unlock()
+}
+
+func clearResolvedItemTextureCache() {
+	resolvedItemTextureCacheMu.Lock()
+	resolvedItemTextureCache = make(map[string]AppliedItemTexture)
+	resolvedItemTextureCacheMu.Unlock()
 }
 
 func resolveItemTextureUncached(itemID string, damage int, enabledPacks []string, returnBarrierIfNone bool) (AppliedItemTexture, error) {

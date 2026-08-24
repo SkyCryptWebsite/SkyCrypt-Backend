@@ -100,7 +100,7 @@ func withRenderItemGlobals(t testing.TB) {
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	itemTextureCache = map[string]AppliedItemTexture{}
-	resolvedItemTextureCache.Clear()
+	clearResolvedItemTextureCache()
 	itemTextureResolutionGroup = singleflight.Group{}
 	renderedSkyBlockIndex = map[string]struct{}{}
 	renderedTextureIndexCacheDir = ""
@@ -121,7 +121,7 @@ func withRenderItemGlobals(t testing.TB) {
 		renderedTextureIndexReloadInFlight = previousRenderedInFlight
 		loadRenderedTextureIndexForRefresh = previousLoader
 		renderedTextureIndexLazyReloadInterval = previousReloadInterval
-		resolvedItemTextureCache.Clear()
+		clearResolvedItemTextureCache()
 		itemTextureResolutionGroup = singleflight.Group{}
 	})
 }
