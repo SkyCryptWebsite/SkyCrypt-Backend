@@ -78,11 +78,9 @@ func SetupApplication() error {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
 
-		go func() {
-			if err := lib.StartCustomResources(); err != nil {
-				log.Printf("failed to start custom resources: %v", err)
-			}
-		}()
+		if err := lib.StartCustomResources(); err != nil {
+			return fmt.Errorf("failed to start custom resources: %v", err)
+		}
 
 		go func() {
 			_, err := skyhelpernetworthgo.GetPrices(true, 0, 0)

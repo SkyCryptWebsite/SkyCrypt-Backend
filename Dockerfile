@@ -41,6 +41,7 @@ COPY . .
 #                           → cold build ~60 s, warm rebuild ~3-8 s
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    test "$(go env GOVERSION)" = "go1.26.4" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build \
         -a \
