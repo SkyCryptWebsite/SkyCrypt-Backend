@@ -360,15 +360,18 @@ func vanillaItemResourceExists(id string) bool {
 	if id == "" {
 		return false
 	}
-	if cached, ok := vanillaItemExistsCache.Load(id); ok {
-		return cached.(bool)
+	vanillaItemExistsCacheMu.RLock()
+	cached, ok := vanillaItemExistsCache[id]
+	vanillaItemExistsCacheMu.RUnlock()
+	if ok {
+		return cached
 	}
 	if vanillaTextureURL(id).Texture != "" {
-		vanillaItemExistsCache.Store(id, true)
+		storeVanillaItemResourceExists(id, true)
 		return true
 	}
 	if vanillaModelTextureURL(id).Texture != "" {
-		vanillaItemExistsCache.Store(id, true)
+		storeVanillaItemResourceExists(id, true)
 		return true
 	}
 
@@ -383,13 +386,19 @@ func vanillaItemResourceExists(id string) bool {
 		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/models/block/%s.json", id),
 	} {
 		if _, err := os.Stat(filepath.Join(appRoot, filepath.FromSlash(relativePath))); err == nil {
-			vanillaItemExistsCache.Store(id, true)
+			storeVanillaItemResourceExists(id, true)
 			return true
 		}
 	}
 
-	vanillaItemExistsCache.Store(id, false)
+	storeVanillaItemResourceExists(id, false)
 	return false
+}
+
+func storeVanillaItemResourceExists(id string, exists bool) {
+	vanillaItemExistsCacheMu.Lock()
+	vanillaItemExistsCache[id] = exists
+	vanillaItemExistsCacheMu.Unlock()
 }
 
 func publicCacheTextureURL(texturePath string) string {

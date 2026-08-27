@@ -40,7 +40,8 @@ var resourcePackConfigsErr error
 var vanillaTextureCache sync.Map
 var vanillaAssetTextureCache sync.Map
 var vanillaModelTextureCache sync.Map
-var vanillaItemExistsCache sync.Map
+var vanillaItemExistsCache = make(map[string]bool)
+var vanillaItemExistsCacheMu sync.RWMutex
 var resolvedItemTextureCache = make(map[string]AppliedItemTexture)
 var resolvedItemTextureCacheMu sync.RWMutex
 var itemTextureResolutionGroup singleflight.Group
