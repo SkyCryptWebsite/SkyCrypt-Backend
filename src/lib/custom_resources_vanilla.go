@@ -137,7 +137,6 @@ func vanillaTextureURL(id string) AppliedItemTexture {
 
 	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
 	if _, err := os.Stat(localPath); err != nil {
-		vanillaTextureCache.Store(id, AppliedItemTexture{})
 		return AppliedItemTexture{}
 	}
 
@@ -163,7 +162,6 @@ func vanillaAssetTextureURL(texturePath string) AppliedItemTexture {
 
 	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
 	if _, err := os.Stat(localPath); err != nil {
-		vanillaAssetTextureCache.Store(texturePath, AppliedItemTexture{})
 		return AppliedItemTexture{}
 	}
 
@@ -238,7 +236,9 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 	}
 
 	texture := vanillaBlockTextureURL(id)
-	vanillaModelTextureCache.Store(id, texture)
+	if texture.Texture != "" {
+		vanillaModelTextureCache.Store(id, texture)
+	}
 	return texture
 }
 
@@ -391,11 +391,13 @@ func vanillaItemResourceExists(id string) bool {
 		}
 	}
 
-	storeVanillaItemResourceExists(id, false)
 	return false
 }
 
 func storeVanillaItemResourceExists(id string, exists bool) {
+	if !exists {
+		return
+	}
 	vanillaItemExistsCacheMu.Lock()
 	vanillaItemExistsCache[id] = exists
 	vanillaItemExistsCacheMu.Unlock()
