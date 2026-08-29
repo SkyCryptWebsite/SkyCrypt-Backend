@@ -125,9 +125,12 @@ func vanillaTextureURL(id string) AppliedItemTexture {
 	if id == "" {
 		return AppliedItemTexture{}
 	}
-	if cached, ok := vanillaTextureCache.Load(id); ok {
-		return cached.(AppliedItemTexture)
+	vanillaTextureCacheMu.RLock()
+	if cached, ok := vanillaTextureCache[id]; ok {
+		vanillaTextureCacheMu.RUnlock()
+		return cached
 	}
+	vanillaTextureCacheMu.RUnlock()
 
 	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/%s.png", id)
 	appRoot, err := appRootDir()
@@ -141,7 +144,9 @@ func vanillaTextureURL(id string) AppliedItemTexture {
 	}
 
 	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
-	vanillaTextureCache.Store(id, texture)
+	vanillaTextureCacheMu.Lock()
+	vanillaTextureCache[id] = texture
+	vanillaTextureCacheMu.Unlock()
 	return texture
 }
 
@@ -150,9 +155,12 @@ func vanillaAssetTextureURL(texturePath string) AppliedItemTexture {
 	if texturePath == "" {
 		return AppliedItemTexture{}
 	}
-	if cached, ok := vanillaAssetTextureCache.Load(texturePath); ok {
-		return cached.(AppliedItemTexture)
+	vanillaAssetTextureCacheMu.RLock()
+	if cached, ok := vanillaAssetTextureCache[texturePath]; ok {
+		vanillaAssetTextureCacheMu.RUnlock()
+		return cached
 	}
+	vanillaAssetTextureCacheMu.RUnlock()
 
 	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/%s.png", texturePath)
 	appRoot, err := appRootDir()
@@ -166,7 +174,9 @@ func vanillaAssetTextureURL(texturePath string) AppliedItemTexture {
 	}
 
 	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
-	vanillaAssetTextureCache.Store(texturePath, texture)
+	vanillaAssetTextureCacheMu.Lock()
+	vanillaAssetTextureCache[texturePath] = texture
+	vanillaAssetTextureCacheMu.Unlock()
 	return texture
 }
 
@@ -196,9 +206,12 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 	if id == "" {
 		return AppliedItemTexture{}
 	}
-	if cached, ok := vanillaModelTextureCache.Load(id); ok {
-		return cached.(AppliedItemTexture)
+	vanillaModelTextureCacheMu.RLock()
+	if cached, ok := vanillaModelTextureCache[id]; ok {
+		vanillaModelTextureCacheMu.RUnlock()
+		return cached
 	}
+	vanillaModelTextureCacheMu.RUnlock()
 
 	appRoot, err := appRootDir()
 	if err != nil {
@@ -230,14 +243,18 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 			continue
 		}
 		if texture := textureFromVanillaModel(model); texture.Texture != "" {
-			vanillaModelTextureCache.Store(id, texture)
+			vanillaModelTextureCacheMu.Lock()
+			vanillaModelTextureCache[id] = texture
+			vanillaModelTextureCacheMu.Unlock()
 			return texture
 		}
 	}
 
 	texture := vanillaBlockTextureURL(id)
 	if texture.Texture != "" {
-		vanillaModelTextureCache.Store(id, texture)
+		vanillaModelTextureCacheMu.Lock()
+		vanillaModelTextureCache[id] = texture
+		vanillaModelTextureCacheMu.Unlock()
 	}
 	return texture
 }

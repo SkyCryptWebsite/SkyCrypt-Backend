@@ -58,7 +58,11 @@ func init() {
 	_ = godotenv.Load()
 	domain = os.Getenv("DOMAIN")
 	if domain == "" {
-		domain = "https://sky.shiiyu.moe"
+		if os.Getenv("DEV") == "true" {
+			domain = "http://localhost:8080"
+		} else {
+			domain = "https://sky.shiiyu.moe"
+		}
 	}
 
 	verboseLogging = os.Getenv("VERBOSE_LOGGING") == "true"

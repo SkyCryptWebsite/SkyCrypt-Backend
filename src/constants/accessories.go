@@ -23,6 +23,10 @@ func getDomain() string {
 		return output
 	}
 
+	if os.Getenv("DEV") == "true" {
+		return "http://localhost:8080"
+	}
+
 	return "https://sky.shiiyu.moe"
 }
 

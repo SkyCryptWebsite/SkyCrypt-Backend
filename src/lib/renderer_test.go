@@ -149,6 +149,25 @@ func TestRenderItemHandlesKnownSkyBlockItem(t *testing.T) {
 	}
 }
 
+func TestVanillaTextureCachesAreConcurrencySafe(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				_ = vanillaTextureURL("popped_chorus_fruit")
+				_ = vanillaTextureURL("apple")
+				_ = vanillaAssetTextureURL("item/apple")
+				_ = vanillaModelTextureURL("popped_chorus_fruit")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func TestPreferredItemModelUsesHypixelBeforeNEU(t *testing.T) {
 	got := preferredItemModel(" minecraft:bamboo ", "hypixel_skyblock:item/combat_1/arack")
 	if got != "minecraft:bamboo" {
