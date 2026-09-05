@@ -287,6 +287,22 @@ func skullFallbackTexture(input ItemTextureInput, textureCtx TextureApplyContext
 	return AppliedItemTexture{}
 }
 
+func rendererPackIDsForInput(input ItemTextureInput, enabledPackIDs []string) []string {
+	model := normalizeMinecraftItemID(input.ItemModel)
+	if !strings.HasPrefix(model, "hypixel_skyblock:item/") {
+		return enabledPackIDs
+	}
+
+	supported := make([]string, 0, len(enabledPackIDs))
+	for _, packID := range enabledPackIDs {
+		if canonicalPackAlias(packID) == "aether_pack" {
+			continue
+		}
+		supported = append(supported, packID)
+	}
+	return supported
+}
+
 const textureDecisionSampleLimit = 50
 
 func textureDebugTraceEnabled() bool {
@@ -477,7 +493,8 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	if canRuntimeRender {
 		itemMap = itemTextureInputRenderMap(input)
 		renderStart := time.Now()
-		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, packIDsForRenderer(textureCtx.EnabledPackIDs))
+		renderPackIDs := rendererPackIDsForInput(input, textureCtx.EnabledPackIDs)
+		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, packIDsForRenderer(renderPackIDs))
 		renderDuration := time.Since(renderStart)
 		if stats != nil {
 			stats.RenderAttempts++
@@ -508,7 +525,7 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
 			if vanillaItem := vanillaRenderItem(itemMap, id); vanillaItem != nil {
 				renderStart := time.Now()
-				customTexture, err := renderer.RenderItemNBTWithPackIDs(vanillaItem, packIDsForRenderer(textureCtx.EnabledPackIDs))
+				customTexture, err := renderer.RenderItemNBTWithPackIDs(vanillaItem, packIDsForRenderer(renderPackIDs))
 				renderDuration := time.Since(renderStart)
 				if stats != nil {
 					stats.RenderAttempts++

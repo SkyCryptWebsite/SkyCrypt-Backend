@@ -1,7 +1,9 @@
 package lib
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,7 +50,7 @@ var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1
-	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.5"
+	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.5|hypixel-model-pack-filter-v1"
 	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
 )
 
@@ -272,6 +274,9 @@ func startCustomResources() error {
 		return err
 	}
 	rememberCustomResourceRendererConfig(config)
+	if err := normalizeResourcePackJSON(config.ResourcePacksPath); err != nil {
+		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to normalize resource-pack JSON: %v", err)
+	}
 
 	cacheDir := config.CacheDir
 	resourcePacksPath := config.ResourcePacksPath
@@ -357,6 +362,38 @@ func startCustomResources() error {
 	logCustomResourceRoutine("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully with %s textures in %s", utility.AddCommas(itemTextureCacheLen()), time.Since(timeNow))
 
 	return nil
+}
+
+func normalizeResourcePackJSON(resourcePacksPath string) error {
+	return filepath.WalkDir(resourcePacksPath, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".json") {
+			return nil
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var decoded any
+		if json.Unmarshal(data, &decoded) == nil {
+			return nil
+		}
+
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		var firstValue json.RawMessage
+		if err := decoder.Decode(&firstValue); err != nil || !json.Valid(firstValue) {
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, append(firstValue, '\n'), info.Mode())
+	})
 }
 
 func InitRenderer(cacheDir string, resourcePacksPath string, assetsPath string, preload bool) error {

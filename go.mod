@@ -3,7 +3,7 @@ module skycrypt
 go 1.26.4
 
 require (
-	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.5
+	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.6
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.26
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.21
 	github.com/gofiber/fiber/v2 v2.52.13
@@ -17,7 +17,7 @@ require (
 
 // replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
 // replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
-// replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
+replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
 
 require (
 	github.com/HugoSmits86/nativewebp v1.3.0 // indirect

@@ -25,6 +25,60 @@ func testDomain() string {
 	return utility.GetDomain()
 }
 
+func TestNormalizeResourcePackJSON(t *testing.T) {
+	packRoot := t.TempDir()
+	modelDir := filepath.Join(packRoot, "Vanilla", "assets", "minecraft", "models", "block")
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	withTrailer := filepath.Join(modelDir, "fire_floor1.json")
+	if err := os.WriteFile(withTrailer, []byte(`{"parent":"minecraft:block/template_fire_floor"}\n\n// Modified by Oculie\nhttps://modrinth.com/user/Oculie\n`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	invalid := filepath.Join(modelDir, "invalid.json")
+	if err := os.WriteFile(invalid, []byte(`{"parent":`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := normalizeResourcePackJSON(packRoot); err != nil {
+		t.Fatalf("normalizeResourcePackJSON() error = %v", err)
+	}
+
+	data, err := os.ReadFile(withTrailer)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("normalized JSON is invalid: %v", err)
+	}
+	if decoded["parent"] != "minecraft:block/template_fire_floor" {
+		t.Fatalf("normalized parent = %v", decoded["parent"])
+	}
+
+	invalidData, err := os.ReadFile(invalid)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(invalidData) != `{"parent":` {
+		t.Fatalf("invalid JSON was unexpectedly changed to %q", invalidData)
+	}
+}
+
+func TestRendererPackIDsForHypixelModelSkipsAetherPack(t *testing.T) {
+	input := ItemTextureInput{ItemModel: "hypixel_skyblock:item/island_relevant/foraging_3/equipment/honeycomb_necklace"}
+	got := rendererPackIDsForInput(input, []string{"AETHER_PACK", "HYPIXEL_PACK"})
+	if len(got) != 1 || got[0] != "HYPIXEL_PACK" {
+		t.Fatalf("rendererPackIDsForInput() = %#v, want [HYPIXEL_PACK]", got)
+	}
+
+	vanilla := rendererPackIDsForInput(ItemTextureInput{ItemModel: "minecraft:item/paper"}, []string{"AETHER_PACK"})
+	if len(vanilla) != 1 || vanilla[0] != "AETHER_PACK" {
+		t.Fatalf("vanilla renderer pack IDs = %#v, want [AETHER_PACK]", vanilla)
+	}
+}
+
 func TestLocalStaticTexturePath(t *testing.T) {
 	appRoot, err := appRootDir()
 	if err != nil {
