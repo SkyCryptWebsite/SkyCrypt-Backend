@@ -1,10 +1,16 @@
 package lib
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
@@ -13,6 +19,11 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/utility"
 )
+
+var customModelSupportCache = struct {
+	sync.RWMutex
+	values map[string]bool
+}{values: make(map[string]bool)}
 
 func stableTextureKeysFromInput(input ItemTextureInput) []string {
 	keys := make([]string, 0, 4)
@@ -289,18 +300,106 @@ func skullFallbackTexture(input ItemTextureInput, textureCtx TextureApplyContext
 
 func rendererPackIDsForInput(input ItemTextureInput, enabledPackIDs []string) []string {
 	model := normalizeMinecraftItemID(input.ItemModel)
-	if !strings.HasPrefix(model, "hypixel_skyblock:item/") {
+	if model == "" || strings.HasPrefix(model, "minecraft:") {
 		return enabledPackIDs
 	}
 
 	supported := make([]string, 0, len(enabledPackIDs))
 	for _, packID := range enabledPackIDs {
-		if canonicalPackAlias(packID) == "aether_pack" {
-			continue
+		if resourcePackContainsModel(packID, model) {
+			supported = append(supported, packID)
 		}
-		supported = append(supported, packID)
 	}
 	return supported
+}
+
+func resourcePackContainsModel(packID string, model string) bool {
+	key := strings.ToLower(strings.TrimSpace(packID) + "|" + model)
+	customModelSupportCache.RLock()
+	if supported, ok := customModelSupportCache.values[key]; ok {
+		customModelSupportCache.RUnlock()
+		return supported
+	}
+	customModelSupportCache.RUnlock()
+
+	supported := resourcePackContainsModelUncached(packID, model)
+	customModelSupportCache.Lock()
+	customModelSupportCache.values[key] = supported
+	customModelSupportCache.Unlock()
+	return supported
+}
+
+func resourcePackContainsModelUncached(packID string, model string) bool {
+	appRoot, err := appRootDir()
+	if err != nil {
+		return false
+	}
+	resourcePacksPath := filepath.Join(appRoot, "assets", "resourcepacks")
+	entries, err := os.ReadDir(resourcePacksPath)
+	if err != nil {
+		return false
+	}
+	modelParts := strings.SplitN(model, ":", 2)
+	if len(modelParts) != 2 {
+		return false
+	}
+	relativeModelPath := filepath.FromSlash("assets/" + modelParts[0] + "/models/" + modelParts[1] + ".json")
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		packDir := filepath.Join(resourcePacksPath, entry.Name())
+		metaFile, err := os.Open(filepath.Join(packDir, "meta.json"))
+		if err != nil {
+			continue
+		}
+		var meta resourcePackMeta
+		decodeErr := json.NewDecoder(metaFile).Decode(&meta)
+		_ = metaFile.Close()
+		if decodeErr != nil || !strings.EqualFold(strings.TrimSpace(meta.ID), strings.TrimSpace(packID)) {
+			continue
+		}
+
+		if _, err := os.Stat(filepath.Join(packDir, relativeModelPath)); err == nil {
+			return true
+		}
+		files, err := os.ReadDir(packDir)
+		if err != nil {
+			return false
+		}
+		for _, file := range files {
+			if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".zip") {
+				continue
+			}
+			archive, err := zip.OpenReader(filepath.Join(packDir, file.Name()))
+			if err != nil {
+				continue
+			}
+			for _, archiveFile := range archive.File {
+				if archiveFile.Name == filepath.ToSlash(relativeModelPath) {
+					_ = archive.Close()
+					return true
+				}
+				if archiveFile.Name != "pack.cats" {
+					continue
+				}
+				reader, err := archiveFile.Open()
+				if err != nil {
+					continue
+				}
+				data, readErr := io.ReadAll(reader)
+				_ = reader.Close()
+				modelFilename := filepath.Base(relativeModelPath)
+				if readErr == nil && (bytes.Contains(data, []byte(filepath.ToSlash(relativeModelPath))) || bytes.Contains(data, []byte(modelFilename))) {
+					_ = archive.Close()
+					return true
+				}
+			}
+			_ = archive.Close()
+		}
+		return false
+	}
+	return false
 }
 
 const textureDecisionSampleLimit = 50

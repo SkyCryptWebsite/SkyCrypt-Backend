@@ -50,7 +50,7 @@ var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1
-	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.5|hypixel-model-pack-filter-v1"
+	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.6|custom-model-pack-filter-v2"
 	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
 )
 
