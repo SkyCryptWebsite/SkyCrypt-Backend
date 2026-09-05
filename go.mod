@@ -17,7 +17,7 @@ require (
 
 // replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
 // replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
-replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
+// replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
 
 require (
 	github.com/HugoSmits86/nativewebp v1.3.0 // indirect
