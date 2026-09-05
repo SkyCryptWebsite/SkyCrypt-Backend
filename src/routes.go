@@ -46,18 +46,17 @@ func SetupApplication() error {
 	}
 
 	mongoURI := os.Getenv("MONGO_URI")
-	if mongoURI == "" {
-		mongoURI = "mongodb://localhost:27017"
-	}
+	if mongoURI != "" {
+		mongoDBName := os.Getenv("MONGO_DB_NAME")
+		if mongoDBName == "" {
+			mongoDBName = "SkyCrypt"
+		}
 
-	mongoDBName := os.Getenv("MONGO_DB_NAME")
-	if mongoDBName == "" {
-		mongoDBName = "SkyCrypt"
-	}
-
-	err = db.InitMongo(mongoURI, mongoDBName)
-	if err != nil {
-		return fmt.Errorf("failed to connect to MongoDB: %v", err)
+		if err := db.InitMongo(mongoURI, mongoDBName); err != nil {
+			log.Printf("MongoDB unavailable, emoji caching disabled: %v", err)
+		}
+	} else {
+		log.Println("MONGO_URI not set, emoji caching disabled")
 	}
 
 	// Main process: fetch all remote data, init/update repos, then parse

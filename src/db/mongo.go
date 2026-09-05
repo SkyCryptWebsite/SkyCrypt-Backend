@@ -19,9 +19,7 @@ var mongoDatabase *mongo.Database
 var mongoMutex sync.RWMutex
 var mongoCommandCollections sync.Map
 
-var EMOJIS map[string]string = map[string]string{
-	"4855c53ee4fb4100997600a92fc50984": "🦆",
-}
+var EMOJIS = map[string]string{}
 
 func InitMongo(uri string, dbName string) error {
 	mongoMutex.Lock()
@@ -59,6 +57,7 @@ func InitMongo(uri string, dbName string) error {
 
 	err = client.Ping(ctx, nil)
 	if err != nil {
+		_ = client.Disconnect(context.Background())
 		return fmt.Errorf("could not ping MongoDB: %v", err)
 	}
 
@@ -151,7 +150,16 @@ func indexCollections() error {
 func GetMongoCollection(name string) *mongo.Collection {
 	mongoMutex.RLock()
 	defer mongoMutex.RUnlock()
+	if mongoDatabase == nil {
+		return nil
+	}
 	return mongoDatabase.Collection(name)
+}
+
+func IsMongoAvailable() bool {
+	mongoMutex.RLock()
+	defer mongoMutex.RUnlock()
+	return mongoDatabase != nil
 }
 
 func UpdateEmoji(uuid string, emoji string) error {
@@ -159,6 +167,9 @@ func UpdateEmoji(uuid string, emoji string) error {
 	defer cancel()
 
 	collection := GetMongoCollection("emojis")
+	if collection == nil {
+		return fmt.Errorf("MongoDB is unavailable")
+	}
 	opts := options.UpdateOne().SetUpsert(true)
 	filter := bson.M{"uuid": uuid}
 	update := bson.M{"$set": bson.M{"emoji": emoji}}
@@ -176,6 +187,9 @@ func GetEmoji(uuid string) (string, error) {
 	defer cancel()
 
 	collection := GetMongoCollection("emojis")
+	if collection == nil {
+		return "", nil
+	}
 	filter := bson.M{"uuid": uuid}
 
 	var result struct {
@@ -207,6 +221,9 @@ func CloseMongo() error {
 
 func populateEmojis() {
 	collection := GetMongoCollection("emojis")
+	if collection == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

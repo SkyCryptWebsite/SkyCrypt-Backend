@@ -26,6 +26,12 @@ func EmojisHandler(c *fiber.Ctx) error {
 	}
 
 	timeNow := time.Now()
+	if !db.IsMongoAvailable() {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"fetched_at": timeNow.Unix(),
+			"emojis":     []map[string]interface{}{},
+		})
+	}
 
 	emojis := db.GetMongoCollection("emojis")
 	ctx := c.UserContext()
