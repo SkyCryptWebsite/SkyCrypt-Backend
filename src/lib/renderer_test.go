@@ -149,7 +149,7 @@ func TestRenderItemHandlesKnownSkyBlockItem(t *testing.T) {
 	}
 }
 
-func TestVanillaTextureCachesAreConcurrencySafe(t *testing.T) {
+func TestVanillaAssetIndexIsConcurrencySafe(t *testing.T) {
 	withRenderItemGlobals(t)
 
 	var wg sync.WaitGroup
@@ -166,6 +166,24 @@ func TestVanillaTextureCachesAreConcurrencySafe(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestVanillaAssetIndexResolvesKnownItemsWithoutCachingMisses(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	if !vanillaItemResourceExists("minecraft:apple") {
+		t.Fatal("expected apple to exist in the Vanilla asset index")
+	}
+	if vanillaItemResourceExists("minecraft:not_an_item") {
+		t.Fatal("unexpected Vanilla asset index hit for missing item")
+	}
+
+	if texture := vanillaTextureURL("minecraft:apple"); texture.Texture == "" {
+		t.Fatal("expected apple texture URL")
+	}
+	if texture := vanillaTextureURL("not_an_item"); texture.Texture != "" {
+		t.Fatalf("missing item texture URL = %#v", texture)
+	}
 }
 
 func TestPreferredItemModelUsesHypixelBeforeNEU(t *testing.T) {

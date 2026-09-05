@@ -10,6 +10,90 @@ import (
 	"skycrypt/src/utility"
 )
 
+type vanillaAssetIndex struct {
+	root       string
+	items      map[string]string
+	models     map[string]string
+	textures   map[string]string
+	assetFiles map[string]struct{}
+}
+
+func currentVanillaAssetIndex() *vanillaAssetIndex {
+	appRoot, err := appRootDir()
+	if err != nil {
+		return nil
+	}
+	vanillaRoot := filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft")
+
+	vanillaAssetsMu.RLock()
+	index := vanillaAssets
+	vanillaAssetsMu.RUnlock()
+	if index != nil && index.root == vanillaRoot {
+		return index
+	}
+
+	built := buildVanillaAssetIndex(vanillaRoot)
+	vanillaAssetsMu.Lock()
+	if vanillaAssets == nil || vanillaAssets.root != vanillaRoot {
+		vanillaAssets = built
+	} else {
+		built = vanillaAssets
+	}
+	vanillaAssetsMu.Unlock()
+	return built
+}
+
+func buildVanillaAssetIndex(root string) *vanillaAssetIndex {
+	index := &vanillaAssetIndex{
+		root:       root,
+		items:      make(map[string]string),
+		models:     make(map[string]string),
+		textures:   make(map[string]string),
+		assetFiles: make(map[string]struct{}),
+	}
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		relative = filepath.ToSlash(relative)
+		index.assetFiles[relative] = struct{}{}
+		withoutExtension := strings.TrimSuffix(relative, filepath.Ext(relative))
+		switch {
+		case strings.HasPrefix(withoutExtension, "items/") && strings.EqualFold(filepath.Ext(relative), ".json"):
+			index.items[strings.TrimPrefix(withoutExtension, "items/")] = path
+		case strings.HasPrefix(withoutExtension, "models/") && strings.EqualFold(filepath.Ext(relative), ".json"):
+			index.models[strings.TrimPrefix(withoutExtension, "models/")] = path
+		case strings.HasPrefix(withoutExtension, "textures/") && strings.EqualFold(filepath.Ext(relative), ".png"):
+			index.textures[strings.TrimPrefix(withoutExtension, "textures/")] = path
+		}
+		return nil
+	})
+	return index
+}
+
+func normalizedVanillaID(id string) string {
+	return strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+}
+
+func vanillaTextureURLFromPath(path string) AppliedItemTexture {
+	if strings.TrimSpace(path) == "" {
+		return AppliedItemTexture{}
+	}
+	index := currentVanillaAssetIndex()
+	if index == nil {
+		return AppliedItemTexture{}
+	}
+	relative, err := filepath.Rel(index.root, path)
+	if err != nil {
+		return AppliedItemTexture{}
+	}
+	return AppliedItemTexture{Texture: utility.GetDomain() + "/assets/resourcepacks/Vanilla/assets/minecraft/" + filepath.ToSlash(relative)}
+}
+
 func skyblockIDFromItem(itemMap map[string]any) string {
 	if skyblockID := textureString(itemMap, "skyblock_id", "skyblockId", "SkyblockID"); skyblockID != "" {
 		return skyblockID
@@ -121,63 +205,27 @@ func displayColorFromItem(itemMap map[string]any) string {
 }
 
 func vanillaTextureURL(id string) AppliedItemTexture {
-	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	id = normalizedVanillaID(id)
 	if id == "" {
 		return AppliedItemTexture{}
 	}
-	vanillaTextureCacheMu.RLock()
-	if cached, ok := vanillaTextureCache[id]; ok {
-		vanillaTextureCacheMu.RUnlock()
-		return cached
-	}
-	vanillaTextureCacheMu.RUnlock()
-
-	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/item/%s.png", id)
-	appRoot, err := appRootDir()
-	if err != nil {
+	index := currentVanillaAssetIndex()
+	if index == nil {
 		return AppliedItemTexture{}
 	}
-
-	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
-	if _, err := os.Stat(localPath); err != nil {
-		return AppliedItemTexture{}
-	}
-
-	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
-	vanillaTextureCacheMu.Lock()
-	vanillaTextureCache[id] = texture
-	vanillaTextureCacheMu.Unlock()
-	return texture
+	return vanillaTextureURLFromPath(index.textures["item/"+id])
 }
 
 func vanillaAssetTextureURL(texturePath string) AppliedItemTexture {
-	texturePath = strings.TrimSpace(strings.TrimPrefix(texturePath, "minecraft:"))
+	texturePath = normalizedVanillaID(texturePath)
 	if texturePath == "" {
 		return AppliedItemTexture{}
 	}
-	vanillaAssetTextureCacheMu.RLock()
-	if cached, ok := vanillaAssetTextureCache[texturePath]; ok {
-		vanillaAssetTextureCacheMu.RUnlock()
-		return cached
-	}
-	vanillaAssetTextureCacheMu.RUnlock()
-
-	publicPath := fmt.Sprintf("/assets/resourcepacks/Vanilla/assets/minecraft/textures/%s.png", texturePath)
-	appRoot, err := appRootDir()
-	if err != nil {
+	index := currentVanillaAssetIndex()
+	if index == nil {
 		return AppliedItemTexture{}
 	}
-
-	localPath := filepath.Join(appRoot, filepath.FromSlash(strings.TrimPrefix(publicPath, "/")))
-	if _, err := os.Stat(localPath); err != nil {
-		return AppliedItemTexture{}
-	}
-
-	texture := AppliedItemTexture{Texture: utility.GetDomain() + publicPath}
-	vanillaAssetTextureCacheMu.Lock()
-	vanillaAssetTextureCache[texturePath] = texture
-	vanillaAssetTextureCacheMu.Unlock()
-	return texture
+	return vanillaTextureURLFromPath(index.textures[texturePath])
 }
 
 func vanillaBlockTextureURL(id string) AppliedItemTexture {
@@ -202,26 +250,21 @@ func vanillaBlockTextureURL(id string) AppliedItemTexture {
 }
 
 func vanillaModelTextureURL(id string) AppliedItemTexture {
-	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	id = normalizedVanillaID(id)
 	if id == "" {
 		return AppliedItemTexture{}
 	}
-	vanillaModelTextureCacheMu.RLock()
-	if cached, ok := vanillaModelTextureCache[id]; ok {
-		vanillaModelTextureCacheMu.RUnlock()
-		return cached
-	}
-	vanillaModelTextureCacheMu.RUnlock()
-
-	appRoot, err := appRootDir()
-	if err != nil {
+	index := currentVanillaAssetIndex()
+	if index == nil {
 		return AppliedItemTexture{}
 	}
 
 	modelRefs := []string{}
-	if itemDefinition := readVanillaJSON(filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft", "items", id+".json")); itemDefinition != nil {
-		if modelRef := findVanillaModelRef(itemDefinition); modelRef != "" {
-			modelRefs = append(modelRefs, modelRef)
+	if itemPath := index.items[id]; itemPath != "" {
+		if itemDefinition := readVanillaJSON(itemPath); itemDefinition != nil {
+			if modelRef := findVanillaModelRef(itemDefinition); modelRef != "" {
+				modelRefs = append(modelRefs, modelRef)
+			}
 		}
 	}
 	modelRefs = append(modelRefs, "minecraft:item/"+id, "minecraft:block/"+id)
@@ -237,25 +280,20 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 		}
 		seen[modelRef] = struct{}{}
 
-		modelPath := filepath.Join(appRoot, "assets", "resourcepacks", "Vanilla", "assets", "minecraft", "models", filepath.FromSlash(modelRef+".json"))
+		modelPath := index.models[modelRef]
+		if modelPath == "" {
+			continue
+		}
 		model := readVanillaJSON(modelPath)
 		if model == nil {
 			continue
 		}
 		if texture := textureFromVanillaModel(model); texture.Texture != "" {
-			vanillaModelTextureCacheMu.Lock()
-			vanillaModelTextureCache[id] = texture
-			vanillaModelTextureCacheMu.Unlock()
 			return texture
 		}
 	}
 
 	texture := vanillaBlockTextureURL(id)
-	if texture.Texture != "" {
-		vanillaModelTextureCacheMu.Lock()
-		vanillaModelTextureCache[id] = texture
-		vanillaModelTextureCacheMu.Unlock()
-	}
 	return texture
 }
 
@@ -373,51 +411,25 @@ func vanillaTextureFromModelRef(textureRef string, textures map[string]string) A
 }
 
 func vanillaItemResourceExists(id string) bool {
-	id = strings.TrimSpace(strings.ToLower(strings.TrimPrefix(id, "minecraft:")))
+	id = normalizedVanillaID(id)
 	if id == "" {
 		return false
 	}
-	vanillaItemExistsCacheMu.RLock()
-	cached, ok := vanillaItemExistsCache[id]
-	vanillaItemExistsCacheMu.RUnlock()
-	if ok {
-		return cached
-	}
-	if vanillaTextureURL(id).Texture != "" {
-		storeVanillaItemResourceExists(id, true)
-		return true
-	}
-	if vanillaModelTextureURL(id).Texture != "" {
-		storeVanillaItemResourceExists(id, true)
-		return true
-	}
-
-	appRoot, err := appRootDir()
-	if err != nil {
+	index := currentVanillaAssetIndex()
+	if index == nil {
 		return false
 	}
-
-	for _, relativePath := range []string{
-		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/items/%s.json", id),
-		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/models/item/%s.json", id),
-		fmt.Sprintf("assets/resourcepacks/Vanilla/assets/minecraft/models/block/%s.json", id),
-	} {
-		if _, err := os.Stat(filepath.Join(appRoot, filepath.FromSlash(relativePath))); err == nil {
-			storeVanillaItemResourceExists(id, true)
-			return true
-		}
+	if _, ok := index.items[id]; ok {
+		return true
 	}
-
-	return false
-}
-
-func storeVanillaItemResourceExists(id string, exists bool) {
-	if !exists {
-		return
+	if _, ok := index.models["item/"+id]; ok {
+		return true
 	}
-	vanillaItemExistsCacheMu.Lock()
-	vanillaItemExistsCache[id] = exists
-	vanillaItemExistsCacheMu.Unlock()
+	if _, ok := index.models["block/"+id]; ok {
+		return true
+	}
+	_, ok := index.textures["item/"+id]
+	return ok
 }
 
 func publicCacheTextureURL(texturePath string) string {
