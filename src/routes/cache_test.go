@@ -106,6 +106,27 @@ func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 	}
 }
 
+func TestEmbedResponseCacheHeaders(t *testing.T) {
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		setResponseCacheHeaders(c, "embed")
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	response, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
+	want := "public, max-age=300, s-maxage=300, stale-while-revalidate=30, stale-if-error=60"
+	if got := response.Header.Get(fiber.HeaderCacheControl); got != want {
+		t.Fatalf("Cache-Control = %q, want %q", got, want)
+	}
+}
+
 func TestEnabledPacksCachePartPreservesNormalizedOrder(t *testing.T) {
 	got := enabledPacksCachePart([]string{"fsr", "HPLUS", "", "unknown", "hplus"})
 	want := "enabled-v7:FSR,HYPIXEL_PLUS"

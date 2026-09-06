@@ -58,6 +58,7 @@ func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 	if responseRAMCacheEnabled(cacheKey.endpoint) {
 		if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
 			recordResponseCache(c.UserContext(), cacheKey.endpoint, "ram")
+			setResponseCacheHeaders(c, cacheKey.endpoint)
 			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 			c.Set("X-SkyCrypt-Backend-Cache", "ram")
 			return true, c.SendString(cached)
@@ -73,6 +74,7 @@ func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, cached, 30*time.Second, 30*time.Second)
 	}
 	recordResponseCache(c.UserContext(), cacheKey.endpoint, "redis")
+	setResponseCacheHeaders(c, cacheKey.endpoint)
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	c.Set("X-SkyCrypt-Backend-Cache", "redis")
 	return true, c.SendString(cached)
@@ -103,8 +105,15 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 	}()
 
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+	setResponseCacheHeaders(c, cacheKey.endpoint)
 	c.Set("X-SkyCrypt-Backend-Cache", "miss")
 	return c.SendString(body)
+}
+
+func setResponseCacheHeaders(c *fiber.Ctx, endpoint string) {
+	if endpoint == "embed" {
+		c.Set(fiber.HeaderCacheControl, "public, max-age=300, s-maxage=300, stale-while-revalidate=30, stale-if-error=60")
+	}
 }
 
 func responseCacheForEndpoint(endpoint string) *localcache.LocalCache[string] {
