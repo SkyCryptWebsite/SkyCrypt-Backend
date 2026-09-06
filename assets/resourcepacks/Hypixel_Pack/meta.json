@@ -5,5 +5,5 @@
     "author": "Hypixel",
     "url": "https://hypixel.net/",
     "icon": "/assets/resourcepacks/Hypixel_Pack/pack.webp",
-    "priority": 0
+    "priority": 100
 }
