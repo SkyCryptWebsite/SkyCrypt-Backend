@@ -112,7 +112,7 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 
 func setResponseCacheHeaders(c *fiber.Ctx, endpoint string) {
 	if endpoint == "embed" {
-		c.Set(fiber.HeaderCacheControl, "public, max-age=300, s-maxage=300, stale-while-revalidate=30, stale-if-error=60")
+		c.Set(fiber.HeaderCacheControl, "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60")
 	}
 }
 

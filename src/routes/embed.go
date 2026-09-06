@@ -164,7 +164,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
 
-	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
+	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 60*60)
 }
 
 // SelectedProfileEmbedHandler godoc

@@ -121,7 +121,7 @@ func TestEmbedResponseCacheHeaders(t *testing.T) {
 		_ = response.Body.Close()
 	}()
 
-	want := "public, max-age=300, s-maxage=300, stale-while-revalidate=30, stale-if-error=60"
+	want := "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60"
 	if got := response.Header.Get(fiber.HeaderCacheControl); got != want {
 		t.Fatalf("Cache-Control = %q, want %q", got, want)
 	}
