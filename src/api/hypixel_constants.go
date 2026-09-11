@@ -186,10 +186,27 @@ func processCollections(collections map[string]models.HypixelCollection) models.
 		}
 
 		for collectionId, collectionData := range categoryData.Items {
+			baseCollectionID := collectionId
+			itemDamage := 0
+			if splitIndex := strings.LastIndex(collectionId, ":"); splitIndex > 0 {
+				if damage, err := utility.ParseInt(collectionId[splitIndex+1:]); err == nil {
+					baseCollectionID = collectionId[:splitIndex]
+					itemDamage = damage
+				}
+			}
+
+			textureID := collectionId
+			if numericID := constants.BUKKIT_TO_ID[strings.ToUpper(baseCollectionID)]; numericID != 0 {
+				textureID = constants.GetVanillaItemId(constants.ItemModel{
+					NumericId:  numericID,
+					ItemDamage: itemDamage,
+				})
+			}
+
 			processedItem := models.ProcessedHypixelCollectionItem{
 				Id:      collectionId,
 				Name:    collectionData.Name,
-				Texture: fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), collectionId),
+				Texture: fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), textureID),
 				MaxTier: collectionData.MaxTiers,
 				Tiers:   collectionData.Tiers,
 			}
