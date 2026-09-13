@@ -100,7 +100,7 @@ var MAX_ENCHANTS = []string{
 	"Smoldering V",
 	"Snipe IV",
 	"Spiked Hook VII",
-	"Stealth I",
+	"Stealth VI",
 	"Strong Mana X",
 	"Sugar Rush III",
 	"Sunder VI",
