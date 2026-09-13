@@ -106,7 +106,7 @@ var MAX_ENCHANTS = []string{
 	"Sunder VI",
 	"Tabasco III",
 	"Thorns IV",
-	"Thunderbolt VI",
+	"Thunderbolt VII",
 	"Thunderlord VII",
 	"Tidal III",
 	"Titan Killer VII",
