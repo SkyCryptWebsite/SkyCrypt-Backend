@@ -75,11 +75,9 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 	}
 
 	recordResponseCache(ctx, cacheKey.endpoint, "cold")
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = db.SetContext(cacheCtx, cacheKey.key, body, ttlSeconds)
-	}()
+	cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_ = db.SetContext(cacheCtx, cacheKey.key, body, ttlSeconds)
 
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	setResponseCacheHeaders(c, cacheKey.endpoint)

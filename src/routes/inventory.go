@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"skycrypt/src/api"
@@ -199,16 +200,16 @@ func InventoryHandler(c *fiber.Ctx) error {
 	}
 	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
 
-	// Cache the full inventory for search functionality
-	go func() {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		jsonData, err := json.Marshal(output)
-		if err != nil {
-			fmt.Printf("Error marshaling items for caching: %v\n", err)
-		} else {
-			_ = db.Set(fmt.Sprintf("items:%s:%s:%s", profileId, uuid, enabledPacksCachePart(enabledPacks)), string(jsonData), 5*60) // Cache for 5 minutes
-		}
-	}()
+	// Cache the full inventory for search functionality without retaining it in a detached goroutine.
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	jsonData, err := json.Marshal(output)
+	if err != nil {
+		fmt.Printf("Error marshaling items for caching: %v\n", err)
+	} else {
+		cacheCtx, cancel := context.WithTimeout(reqCtx, 2*time.Second)
+		defer cancel()
+		_ = db.SetContext(cacheCtx, fmt.Sprintf("items:%s:%s:%s", profileId, uuid, enabledPacksCachePart(enabledPacks)), string(jsonData), 5*60)
+	}
 
 	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
 }
