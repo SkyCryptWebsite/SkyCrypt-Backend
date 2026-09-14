@@ -28,9 +28,7 @@ func cacheSelectedProfileID(ctx context.Context, uuid string, profileID string) 
 	}
 
 	key := selectedProfileCacheKey(uuid)
-	go func() {
-		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = db.SetContext(cacheCtx, key, profileID, selectedProfileTTLSeconds)
-	}()
+	cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_ = db.SetContext(cacheCtx, key, profileID, selectedProfileTTLSeconds)
 }
