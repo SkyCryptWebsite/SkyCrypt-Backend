@@ -573,10 +573,6 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 			usernameKey := fmt.Sprintf("mowojangUsername:%s", strings.ToLower(name))
 			values[uuidKey] = body
 			values[usernameKey] = body
-			mowojang := &models.MowojangResponse{UUID: uuid, Name: name}
-			if err := jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal([]byte(body), mowojang); err != nil {
-				mowojang = &models.MowojangResponse{UUID: uuid, Name: name}
-			}
 		}
 	}
 	_ = redis.SetManyContext(ctx, values, 24*60*60)
