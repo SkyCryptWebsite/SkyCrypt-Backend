@@ -138,15 +138,6 @@ func cachedStableSkyBlockTexture(skyblockID string, textureCtx TextureApplyConte
 	return cachedTextureForStableKey("skyblock:"+skyblockID, textureCtx.PackSignature, textureCtx.EnabledPackIDs, textureCtx.EnabledPackSet)
 }
 
-func setCachedTextureForInput(input ItemTextureInput, textureCtx TextureApplyContext, texture AppliedItemTexture) {
-	if texture.Texture == "" {
-		return
-	}
-	for _, stableKey := range stableTextureKeysFromInput(input) {
-		setCachedTextureForStableKey(textureCtx.PackSignature, stableKey, texture)
-	}
-}
-
 func itemTextureInputRenderMap(input ItemTextureInput) map[string]any {
 	id := normalizeMinecraftItemID(input.ID)
 	if id == "" && input.NumericID > 0 {
@@ -614,9 +605,6 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 				if stats != nil {
 					stats.RenderHits++
 				}
-				if len(textureCtx.EnabledPackIDs) > 0 {
-					setCachedTextureForInput(input, textureCtx, outputTexture)
-				}
 				return finishFallback("runtime_render_hit", "", outputTexture)
 			}
 		}
@@ -644,9 +632,6 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 					if !isGenericPackedSkullTexture(input, outputTexture) {
 						if stats != nil {
 							stats.RenderHits++
-						}
-						if len(textureCtx.EnabledPackIDs) > 0 {
-							setCachedTextureForInput(input, textureCtx, outputTexture)
 						}
 						return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
 					}

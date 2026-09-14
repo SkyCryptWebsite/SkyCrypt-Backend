@@ -3,7 +3,6 @@ package stats
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -182,17 +181,9 @@ func GetCombinedContext(
 		itemProcessingStats.LogIfEnabled(itemProcessingDuration)
 	}
 
-	sectionsStart := time.Now()
-	sectionStart := time.Now()
 	gear := GetGear(processedItems, allItems)
-	gearDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	accessories := GetAccessories(userProfile, processedItems, enabledPacks)
-	accessoriesDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	pets := GetPets(userProfile, profile)
-	petsDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	loadouts := GetLoadouts(
 		member.Loadout,
 		armorSets,
@@ -202,46 +193,20 @@ func GetCombinedContext(
 		userProfile,
 		member.AccessoryBagStorage.Tuning.Slots,
 	)
-	loadoutsDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	mining := GetMining(userProfile, player, skillGearItems)
 	foraging := GetForaging(userProfile, player, skillGearItems)
 	farming := GetFarming(userProfile, skillGearItems)
 	fishing := GetFishing(userProfile, skillGearItems)
 	enchanting := GetEnchanting(userProfile)
 	hunting := GetAttributeShards(userProfile)
-	skillsDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	dungeons := GetDungeons(userProfile)
 	slayer := GetSlayers(userProfile)
 	minions := GetMinions(profile)
 	bestiary := GetBestiary(userProfile)
-	combatDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	collections := getCollectionsWithUsernames(userProfile, profile, memberUsernameMap(members))
-	collectionsDuration := time.Since(sectionStart)
-	sectionStart = time.Now()
 	crimsonIsle := GetCrimsonIsle(userProfile)
 	rift := GetRift(userProfile, processedItems)
 	misc := GetMisc(userProfile, profile, player)
-	miscDuration := time.Since(sectionStart)
-
-	sectionsDuration := time.Since(sectionsStart)
-	if sectionsDuration > 50*time.Millisecond {
-		fmt.Printf(
-			"Combined sections in %v pid=%d gear=%v accessories=%v pets=%v loadouts=%v skills=%v combat=%v collections=%v misc=%v\n",
-			sectionsDuration,
-			os.Getpid(),
-			gearDuration,
-			accessoriesDuration,
-			petsDuration,
-			loadoutsDuration,
-			skillsDuration,
-			combatDuration,
-			collectionsDuration,
-			miscDuration,
-		)
-	}
 
 	return &models.CombinedOutput{
 		Gear:        gear,

@@ -485,7 +485,6 @@ func resetRenderedTextureIndex() {
 	itemTextureCacheMu.Lock()
 	itemTextureCache = make(map[string]AppliedItemTexture)
 	itemTextureCacheMu.Unlock()
-	clearResolvedItemTextureCache()
 
 	renderedSkyBlockIndexMu.Lock()
 	renderedSkyBlockIndex = make(map[string]struct{})
@@ -512,7 +511,6 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	}
 	rememberRenderedTextureIndexCacheDir(cacheDir)
 	clearPackSignatureTextureCache()
-	clearResolvedItemTextureCache()
 
 	renderedDir := filepath.Join(cacheDir, "rendered")
 	files, err := os.ReadDir(renderedDir)

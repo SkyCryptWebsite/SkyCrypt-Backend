@@ -154,7 +154,6 @@ func withRenderItemGlobals(t testing.TB) {
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	itemTextureCache = map[string]AppliedItemTexture{}
-	clearResolvedItemTextureCache()
 	itemTextureResolutionGroup = singleflight.Group{}
 	renderedSkyBlockIndex = map[string]struct{}{}
 	renderedTextureIndexCacheDir = ""
@@ -175,7 +174,6 @@ func withRenderItemGlobals(t testing.TB) {
 		renderedTextureIndexReloadInFlight = previousRenderedInFlight
 		loadRenderedTextureIndexForRefresh = previousLoader
 		renderedTextureIndexLazyReloadInterval = previousReloadInterval
-		clearResolvedItemTextureCache()
 		itemTextureResolutionGroup = singleflight.Group{}
 	})
 }
@@ -887,7 +885,7 @@ func TestLazyRefreshMissingDirectoryPreservesMemory(t *testing.T) {
 	}
 }
 
-func TestResolveItemTextureSingleflightCachesSuccessfulResolution(t *testing.T) {
+func TestResolveItemTextureSingleflightDeduplicatesConcurrentResolution(t *testing.T) {
 	withRenderItemGlobals(t)
 
 	var calls atomic.Int32
@@ -916,8 +914,8 @@ func TestResolveItemTextureSingleflightCachesSuccessfulResolution(t *testing.T) 
 	if _, err := resolveItemTextureSingleflight("shared-key", resolve); err != nil {
 		t.Fatal(err)
 	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("cached resolver calls = %d, want 1", got)
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("sequential resolver calls = %d, want 2", got)
 	}
 }
 

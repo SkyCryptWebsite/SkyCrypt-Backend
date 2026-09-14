@@ -72,14 +72,12 @@ func GetItemWiki(name string) ([]string, bool) {
 	itemPath := fmt.Sprintf("NotEnoughUpdates-REPO/items/%s.json", name)
 	data, err := os.ReadFile(itemPath)
 	if err != nil {
-		CACHED_NEU_ITEM_WIKIS.Store(name, []string{})
 		return nil, false
 	}
 
 	var item rawNEUItemWiki
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &item); err != nil {
-		CACHED_NEU_ITEM_WIKIS.Store(name, []string{})
 		return nil, false
 	}
 

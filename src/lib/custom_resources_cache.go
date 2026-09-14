@@ -194,7 +194,6 @@ func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, e
 
 	for _, packID := range enabledPackIDs {
 		if texture, ok := cachedTextureByPackVariant(packID, stableKey, enabledPacks, seenKeys); ok {
-			cacheTextureForPackSignature(packSignature, stableKey, texture)
 			return texture, true
 		}
 	}
@@ -207,17 +206,6 @@ func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, e
 		}
 	}
 	return AppliedItemTexture{}, false
-}
-
-func cacheTextureForPackSignature(packSignature string, stableKey string, texture AppliedItemTexture) {
-	packSignature = strings.TrimSpace(packSignature)
-	stableKey = strings.TrimSpace(stableKey)
-	if packSignature == "" || stableKey == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
-		return
-	}
-	itemTextureCacheMu.Lock()
-	itemTextureCache[textureCacheKey(packSignature, stableKey)] = texture
-	itemTextureCacheMu.Unlock()
 }
 
 func clearPackSignatureTextureCache() {

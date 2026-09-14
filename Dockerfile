@@ -77,25 +77,21 @@ RUN mkdir -p logs cache
 
 # ── Go Runtime Tuning ─────────────────────────────────────────────────────────
 #
-# GOMEMLIMIT  Set to ~87% of the 8 GB container limit (≈7 GiB), leaving ~1 GB
-#             headroom for Alpine, tini, git, and kernel buffers.
-#             Prevents silent OOM kills while still letting the heap breathe freely.
+# GOMEMLIMIT  Keep the Go heap below 5 GiB in the 8 GiB container so native
+#             allocations, stacks, buffers, and the runtime have headroom.
 #
-# GOGC=300    Container has 8 GB and CPU sits at <30% — GC pauses are the enemy,
-#             not memory pressure. GOGC=300 means GC only triggers when the live
-#             heap has grown 3× since the last collection (vs 1× at the default 100).
-#             Effect: far fewer GC cycles, lower p99 latency, higher steady-state
-#             memory usage — exactly the right trade-off here.
-#             If RSS ever climbs past 6 GB in practice, dial back to 200.
+# GOGC=100    Collect at the default target instead of allowing the heap to grow
+#             several times between collections. This keeps allocation spikes from
+#             turning into multi-gigabyte RSS spikes.
 #
-# GODEBUG=netdns=go
-#             Forces the pure-Go DNS resolver, bypassing the cgo libc resolver.
-#             No /etc/nsswitch.conf quirks, marginally faster for high-QPS outbound.
+# GODEBUG=netdns=go,madvdontneed=1
+#             Use the pure-Go DNS resolver and return scavenged pages to Linux
+#             promptly so RSS follows live heap more closely.
 #
 ENV SOURCE_COMMIT=$SOURCE_COMMIT \
     GOMEMLIMIT=7GiB \
-    GOGC=300 \
-    GODEBUG=netdns=go
+    GOGC=100 \
+    GODEBUG=netdns=go,madvdontneed=1
 
 # Expose port
 EXPOSE 8080

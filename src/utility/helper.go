@@ -38,16 +38,12 @@ var (
 	cacheDuration   = 15 * time.Minute
 )
 
-var (
-	skinHashCacheMutex sync.RWMutex
-	skinHashCache      = make(map[string]string)
-	base64Encodings    = []*base64.Encoding{
-		base64.RawStdEncoding, // Standard base64 without padding
-		base64.StdEncoding,    // Standard base64 with padding
-		base64.RawURLEncoding, // URL-safe base64 without padding
-		base64.URLEncoding,    // URL-safe base64 with padding
-	}
-)
+var base64Encodings = []*base64.Encoding{
+	base64.RawStdEncoding, // Standard base64 without padding
+	base64.StdEncoding,    // Standard base64 with padding
+	base64.RawURLEncoding, // URL-safe base64 without padding
+	base64.URLEncoding,    // URL-safe base64 with padding
+}
 
 var domain string
 var verboseLogging bool
@@ -268,21 +264,7 @@ func GetSkinHash(base64String string) string {
 	if base64String == "" {
 		return ""
 	}
-
-	skinHashCacheMutex.RLock()
-	if cached, exists := skinHashCache[base64String]; exists {
-		skinHashCacheMutex.RUnlock()
-		return cached
-	}
-	skinHashCacheMutex.RUnlock()
-
-	result := computeSkinHash(base64String)
-
-	skinHashCacheMutex.Lock()
-	skinHashCache[base64String] = result
-	skinHashCacheMutex.Unlock()
-
-	return result
+	return computeSkinHash(base64String)
 }
 
 func computeSkinHash(base64String string) string {
@@ -544,6 +526,11 @@ func shouldSendError(errorHash string) bool {
 	defer errorCacheMutex.Unlock()
 
 	now := time.Now()
+	for key, cached := range errorCacheMap {
+		if now.Sub(cached.lastSent) >= cacheDuration {
+			delete(errorCacheMap, key)
+		}
+	}
 	cache, exists := errorCacheMap[errorHash]
 
 	if !exists {

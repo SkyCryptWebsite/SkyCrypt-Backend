@@ -112,6 +112,7 @@ func (c *LocalCache[T]) pruneToLocked(target int) {
 	if target < 0 {
 		target = 0
 	}
+	c.compactOrderLocked()
 	for len(c.values) > target && len(c.order) > 0 {
 		key := c.order[0]
 		c.order = c.order[1:]
@@ -126,6 +127,25 @@ func (c *LocalCache[T]) pruneToLocked(target int) {
 			break
 		}
 	}
+}
+
+func (c *LocalCache[T]) compactOrderLocked() {
+	if len(c.order) == 0 {
+		return
+	}
+	order := c.order[:0]
+	seen := make(map[string]struct{}, len(c.values))
+	for _, key := range c.order {
+		if _, exists := c.values[key]; !exists {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		order = append(order, key)
+	}
+	c.order = order
 }
 
 func memoryPressure() bool {

@@ -41,8 +41,6 @@ var resourcePackConfigsErr error
 
 var vanillaAssetsMu sync.RWMutex
 var vanillaAssets *vanillaAssetIndex
-var resolvedItemTextureCache = make(map[string]AppliedItemTexture)
-var resolvedItemTextureCacheMu sync.RWMutex
 var itemTextureResolutionGroup singleflight.Group
 
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
