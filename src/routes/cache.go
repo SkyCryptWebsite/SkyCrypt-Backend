@@ -9,10 +9,8 @@ import (
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
-	"skycrypt/src/localcache"
 	"skycrypt/src/utility"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,11 +23,6 @@ type responseCacheHandle struct {
 	endpoint string
 	key      string
 }
-
-var (
-	responseCachesMu sync.RWMutex
-	responseCaches   = make(map[string]*localcache.LocalCache[string])
-)
 
 func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 	h := sha1.New()
@@ -55,24 +48,11 @@ func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 		return false, nil
 	}
 
-	if responseRAMCacheEnabled(cacheKey.endpoint) {
-		if cached, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
-			recordResponseCache(c.UserContext(), cacheKey.endpoint, "ram")
-			setResponseCacheHeaders(c, cacheKey.endpoint)
-			c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-			c.Set("X-SkyCrypt-Backend-Cache", "ram")
-			return true, c.SendString(cached)
-		}
-	}
-
 	cached, err := db.GetContext(c.UserContext(), cacheKey.key)
 	if err != nil || cached == "" {
 		return false, nil
 	}
 
-	if responseRAMCacheEnabled(cacheKey.endpoint) {
-		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, cached, 30*time.Second, 30*time.Second)
-	}
 	recordResponseCache(c.UserContext(), cacheKey.endpoint, "redis")
 	setResponseCacheHeaders(c, cacheKey.endpoint)
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
@@ -94,9 +74,6 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 		return c.SendString(body)
 	}
 
-	if responseRAMCacheEnabled(cacheKey.endpoint) {
-		responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, body, 30*time.Second, 30*time.Second)
-	}
 	recordResponseCache(ctx, cacheKey.endpoint, "cold")
 	go func() {
 		cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -114,39 +91,6 @@ func setResponseCacheHeaders(c *fiber.Ctx, endpoint string) {
 	if endpoint == "embed" {
 		c.Set(fiber.HeaderCacheControl, "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60")
 	}
-}
-
-func responseCacheForEndpoint(endpoint string) *localcache.LocalCache[string] {
-	responseCachesMu.RLock()
-	cache := responseCaches[endpoint]
-	responseCachesMu.RUnlock()
-	if cache != nil {
-		return cache
-	}
-
-	responseCachesMu.Lock()
-	defer responseCachesMu.Unlock()
-	if cache = responseCaches[endpoint]; cache != nil {
-		return cache
-	}
-	cache = localcache.NewLocalCache[string](responseCacheLimit(endpoint))
-	responseCaches[endpoint] = cache
-	return cache
-}
-
-func responseCacheLimit(endpoint string) int {
-	switch endpoint {
-	case "embed", "stats", "combined":
-		return 128
-	case "uuid", "username":
-		return 1024
-	default:
-		return 0
-	}
-}
-
-func responseRAMCacheEnabled(endpoint string) bool {
-	return endpoint == "embed" || endpoint == "stats" || endpoint == "combined" || endpoint == "uuid" || endpoint == "username"
 }
 
 func processedResponseCacheEnabled() bool {

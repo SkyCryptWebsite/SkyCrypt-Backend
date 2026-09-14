@@ -178,7 +178,6 @@ func GetCombinedContext(
 	skillGearItems = append(skillGearItems, statsItems.GetOwnedMuseumItems(museum, enabledPacks)...)
 
 	itemProcessingDuration := time.Since(timeNow)
-	fmt.Printf("Processed %d items in %v pid=%d\n", len(allItems), itemProcessingDuration, os.Getpid())
 	if itemProcessingStats != nil {
 		itemProcessingStats.LogIfEnabled(itemProcessingDuration)
 	}

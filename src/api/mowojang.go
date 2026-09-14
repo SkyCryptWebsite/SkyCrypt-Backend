@@ -23,10 +23,7 @@ var resolvePlayerGroup singleflight.Group
 const identityCacheTTL = 24 * time.Hour
 
 var (
-	uuidLocalCache             = localcache.NewLocalCache[string](8192)
-	usernameLocalCache         = localcache.NewLocalCache[string](8192)
-	mowojangUUIDLocalCache     = localcache.NewLocalCache[*models.MowojangResponse](8192)
-	mowojangUsernameLocalCache = localcache.NewLocalCache[*models.MowojangResponse](8192)
+	usernameLocalCache = localcache.NewLocalCache[string](8192)
 )
 
 func GetUUID(username string, throwAnError ...bool) (string, error) {
@@ -46,12 +43,8 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 	var post models.MowojangResponse
 
 	key := fmt.Sprintf("uuid:%s", strings.ToLower(username))
-	if cachedUUID, ok, _ := uuidLocalCache.Get(key); ok {
-		return cachedUUID, nil
-	}
 	cachedUUID, err := redis.GetContext(ctx, key)
 	if err == nil && cachedUUID != "" {
-		uuidLocalCache.Set(key, cachedUUID, identityCacheTTL, identityCacheTTL)
 		return cachedUUID, nil
 	}
 
@@ -236,10 +229,6 @@ func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*mode
 			continue
 		}
 		key := fmt.Sprintf("mowojangUUID:%s", uuid)
-		if cached, ok, _ := mowojangUUIDLocalCache.Get(key); ok {
-			resolved[uuid] = cached
-			continue
-		}
 		if _, exists := keyToUUID[key]; exists {
 			continue
 		}
@@ -255,7 +244,6 @@ func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*mode
 			if err := json.Unmarshal([]byte(value), &post); err == nil && post.UUID != "" {
 				mowojang := &post
 				resolved[keyToUUID[key]] = mowojang
-				mowojangUUIDLocalCache.Set(key, mowojang, identityCacheTTL, identityCacheTTL)
 			}
 		}
 	}
@@ -352,15 +340,11 @@ func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.Mowoj
 	var post models.MowojangResponse
 
 	key := fmt.Sprintf("mowojangUUID:%s", uuid)
-	if cached, ok, _ := mowojangUUIDLocalCache.Get(key); ok {
-		return cached, nil
-	}
 	cache, err := redis.GetContext(ctx, key)
 	if err == nil && cache != "" {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &post)
 		if err == nil {
-			mowojangUUIDLocalCache.Set(key, &post, identityCacheTTL, identityCacheTTL)
 			return &post, nil
 		}
 	}
@@ -581,7 +565,6 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 		fmt.Sprintf("uuid:%s", strings.ToLower(name)): uuid,
 		fmt.Sprintf("username:%s", uuid):              name,
 	}
-	uuidLocalCache.Set(fmt.Sprintf("uuid:%s", strings.ToLower(name)), uuid, identityCacheTTL, identityCacheTTL)
 	usernameLocalCache.Set(fmt.Sprintf("username:%s", uuid), name, identityCacheTTL, identityCacheTTL)
 	if body != "" {
 		values[fmt.Sprintf("mowojang:%s", uuid)] = body
@@ -594,8 +577,6 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 			if err := jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal([]byte(body), mowojang); err != nil {
 				mowojang = &models.MowojangResponse{UUID: uuid, Name: name}
 			}
-			mowojangUUIDLocalCache.Set(uuidKey, mowojang, identityCacheTTL, identityCacheTTL)
-			mowojangUsernameLocalCache.Set(usernameKey, mowojang, identityCacheTTL, identityCacheTTL)
 		}
 	}
 	_ = redis.SetManyContext(ctx, values, 24*60*60)

@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -48,7 +47,6 @@ func TestProcessedResponseCacheEnabledOutsideDevelopment(t *testing.T) {
 func TestSendCachedJSONIgnoresRAMCacheInDevelopment(t *testing.T) {
 	t.Setenv("DEV", "true")
 	cacheKey := responseCacheKey("stats", "development-ram-read")
-	responseCacheForEndpoint(cacheKey.endpoint).Set(cacheKey.key, `{"cached":true}`, time.Minute, time.Minute)
 
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -100,9 +98,6 @@ func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 	}
 	if got := response.Header.Get("X-SkyCrypt-Backend-Cache"); got != "bypass" {
 		t.Fatalf("cache header = %q, want %q", got, "bypass")
-	}
-	if _, ok, _ := responseCacheForEndpoint(cacheKey.endpoint).Get(cacheKey.key); ok {
-		t.Fatal("development response should not populate the RAM cache")
 	}
 }
 

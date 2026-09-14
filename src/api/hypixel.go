@@ -10,7 +10,6 @@ import (
 	"os"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
-	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/security"
 	"skycrypt/src/utility"
@@ -28,21 +27,10 @@ var hypixelFetchGroup singleflight.Group
 var hypixelRequestTimeout = 30 * time.Second
 
 const (
-	playerCacheTTL       = 24 * time.Hour
-	playerCacheRefresh   = 5 * time.Minute
-	profilesCacheTTL     = 5 * time.Minute
-	profilesCacheRefresh = 1 * time.Minute
-	museumCacheTTL       = 30 * time.Minute
-	museumCacheRefresh   = 5 * time.Minute
-	gardenCacheTTL       = 30 * time.Minute
-	gardenCacheRefresh   = 5 * time.Minute
-)
-
-var (
-	playerLocalCache   = localcache.NewLocalCache[*skycrypttypes.Player](128)
-	profilesLocalCache = localcache.NewLocalCache[*models.HypixelProfilesResponse](64)
-	museumLocalCache   = localcache.NewLocalCache[map[string]*skycrypttypes.Museum](64)
-	gardenLocalCache   = localcache.NewLocalCache[*skycrypttypes.Garden](64)
+	playerCacheTTL   = 24 * time.Hour
+	profilesCacheTTL = 5 * time.Minute
+	museumCacheTTL   = 30 * time.Minute
+	gardenCacheTTL   = 30 * time.Minute
 )
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
@@ -63,14 +51,6 @@ func GetPlayerContext(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 		}
 
 		uuid = respUUID
-	}
-
-	playerKey := fmt.Sprintf(`player:%s`, uuid)
-	if player, ok, refresh := playerLocalCache.Get(playerKey); ok {
-		if refresh {
-			refreshPlayerInBackground(uuid)
-		}
-		return player, nil
 	}
 
 	if player, ok := getPlayerFromCache(ctx, uuid); ok {
@@ -108,7 +88,6 @@ func getPlayerFromCache(ctx context.Context, uuid string) (*skycrypttypes.Player
 	}
 
 	player := &rawReponse.Player
-	playerLocalCache.Set(key, player, playerCacheTTL, playerCacheRefresh)
 	return player, true
 }
 
@@ -127,7 +106,6 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	}
 
 	key := fmt.Sprintf(`player:%s`, uuid)
-	playerLocalCache.Set(key, &rawReponse.Player, playerCacheTTL, playerCacheRefresh)
 	_ = redis.SetContext(ctx, key, string(body), int(playerCacheTTL.Seconds()))
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -157,14 +135,6 @@ func GetProfilesContext(ctx context.Context, uuid string) (*models.HypixelProfil
 		}
 
 		uuid = respUUID
-	}
-
-	profilesKey := fmt.Sprintf(`profiles:%s`, uuid)
-	if profiles, ok, refresh := profilesLocalCache.Get(profilesKey); ok {
-		if refresh {
-			refreshProfilesInBackground(uuid)
-		}
-		return profiles, nil
 	}
 
 	if profiles, ok := getProfilesFromCache(ctx, uuid); ok {
@@ -201,7 +171,6 @@ func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProf
 		return nil, false
 	}
 
-	profilesLocalCache.Set(key, &response, profilesCacheTTL, profilesCacheRefresh)
 	return &response, true
 }
 
@@ -223,7 +192,6 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 	}
 
 	key := fmt.Sprintf(`profiles:%s`, uuid)
-	profilesLocalCache.Set(key, &response, profilesCacheTTL, profilesCacheRefresh)
 	_ = redis.SetContext(ctx, key, string(body), int(profilesCacheTTL.Seconds()))
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -285,14 +253,6 @@ func GetMuseumContext(ctx context.Context, profileId string) (map[string]*skycry
 		defer forensics.TrackSpan("api.GetMuseum")()
 	}
 
-	museumKey := fmt.Sprintf(`museum:%s`, profileId)
-	if museum, ok, refresh := museumLocalCache.Get(museumKey); ok {
-		if refresh {
-			refreshMuseumInBackground(profileId)
-		}
-		return museum, nil
-	}
-
 	if museum, ok := getMuseumFromCache(ctx, profileId); ok {
 		return museum, nil
 	}
@@ -327,7 +287,6 @@ func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skyc
 		return nil, false
 	}
 
-	museumLocalCache.Set(key, rawReponse.Members, museumCacheTTL, museumCacheRefresh)
 	return rawReponse.Members, true
 }
 
@@ -345,7 +304,6 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 	}
 
 	key := fmt.Sprintf(`museum:%s`, profileId)
-	museumLocalCache.Set(key, rawReponse.Members, museumCacheTTL, museumCacheRefresh)
 	_ = redis.SetContext(ctx, key, string(body), int(museumCacheTTL.Seconds()))
 	return rawReponse.Members, nil
 }
@@ -357,14 +315,6 @@ func GetGarden(profileId string) (*skycrypttypes.Garden, error) {
 func GetGardenContext(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("api.GetGarden")()
-	}
-
-	gardenKey := fmt.Sprintf(`garden:%s`, profileId)
-	if garden, ok, refresh := gardenLocalCache.Get(gardenKey); ok {
-		if refresh {
-			refreshGardenInBackground(profileId)
-		}
-		return garden, nil
 	}
 
 	if garden, ok := getGardenFromCache(ctx, profileId); ok {
@@ -402,7 +352,6 @@ func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.G
 	}
 
 	garden := &rawReponse.Garden
-	gardenLocalCache.Set(key, garden, gardenCacheTTL, gardenCacheRefresh)
 	return garden, true
 }
 
@@ -420,61 +369,8 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 	}
 
 	key := fmt.Sprintf(`garden:%s`, profileId)
-	gardenLocalCache.Set(key, &rawReponse.Garden, gardenCacheTTL, gardenCacheRefresh)
 	_ = redis.SetContext(ctx, key, string(body), int(gardenCacheTTL.Seconds()))
 	return &rawReponse.Garden, nil
-}
-
-func refreshPlayerInBackground(uuid string) {
-	key := fmt.Sprintf(`player:%s`, uuid)
-	if !playerLocalCache.StartRefresh(key) {
-		return
-	}
-	go func() {
-		defer playerLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
-		defer cancel()
-		_, _ = fetchPlayerFresh(ctx, uuid)
-	}()
-}
-
-func refreshProfilesInBackground(uuid string) {
-	key := fmt.Sprintf(`profiles:%s`, uuid)
-	if !profilesLocalCache.StartRefresh(key) {
-		return
-	}
-	go func() {
-		defer profilesLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
-		defer cancel()
-		_, _ = fetchProfilesFresh(ctx, uuid)
-	}()
-}
-
-func refreshMuseumInBackground(profileId string) {
-	key := fmt.Sprintf(`museum:%s`, profileId)
-	if !museumLocalCache.StartRefresh(key) {
-		return
-	}
-	go func() {
-		defer museumLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
-		defer cancel()
-		_, _ = fetchMuseumFresh(ctx, profileId)
-	}()
-}
-
-func refreshGardenInBackground(profileId string) {
-	key := fmt.Sprintf(`garden:%s`, profileId)
-	if !gardenLocalCache.StartRefresh(key) {
-		return
-	}
-	go func() {
-		defer gardenLocalCache.FinishRefresh(key)
-		ctx, cancel := context.WithTimeout(context.Background(), hypixelRequestTimeout)
-		defer cancel()
-		_, _ = fetchGardenFresh(ctx, profileId)
-	}()
 }
 
 func detachedFetchContext(ctx context.Context) (context.Context, context.CancelFunc) {
