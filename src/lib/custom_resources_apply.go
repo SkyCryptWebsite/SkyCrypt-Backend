@@ -2,7 +2,6 @@ package lib
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +23,12 @@ var customModelSupportCache = struct {
 	sync.RWMutex
 	values map[string]bool
 }{values: make(map[string]bool)}
+
+var resourcePackModelIndex = struct {
+	sync.RWMutex
+	root   string
+	models map[string]map[string]struct{}
+}{}
 
 func stableTextureKeysFromInput(input ItemTextureInput) []string {
 	keys := make([]string, 0, 4)
@@ -326,15 +331,56 @@ func resourcePackContainsModelUncached(packID string, model string) bool {
 		return false
 	}
 	resourcePacksPath := filepath.Join(appRoot, "assets", "resourcepacks")
+	modelPath := resourcePackModelPath(model)
+	if modelPath == "" {
+		return false
+	}
+	if err := ensureResourcePackModelIndex(resourcePacksPath); err != nil {
+		return false
+	}
+
+	resourcePackModelIndex.RLock()
+	models := resourcePackModelIndex.models[strings.ToLower(strings.TrimSpace(packID))]
+	_, supported := models[modelPath]
+	resourcePackModelIndex.RUnlock()
+	return supported
+}
+
+func resourcePackModelPath(model string) string {
+	modelParts := strings.SplitN(strings.TrimSpace(model), ":", 2)
+	if len(modelParts) != 2 || strings.TrimSpace(modelParts[0]) == "" || strings.TrimSpace(modelParts[1]) == "" {
+		return ""
+	}
+	return strings.ToLower(filepath.ToSlash(filepath.Join("assets", modelParts[0], "models", modelParts[1]+".json")))
+}
+
+func ensureResourcePackModelIndex(resourcePacksPath string) error {
+	resourcePackModelIndex.RLock()
+	ready := resourcePackModelIndex.root == resourcePacksPath && resourcePackModelIndex.models != nil
+	resourcePackModelIndex.RUnlock()
+	if ready {
+		return nil
+	}
+
+	models, err := buildResourcePackModelIndex(resourcePacksPath)
+	if err != nil {
+		return err
+	}
+	resourcePackModelIndex.Lock()
+	if resourcePackModelIndex.root != resourcePacksPath || resourcePackModelIndex.models == nil {
+		resourcePackModelIndex.root = resourcePacksPath
+		resourcePackModelIndex.models = models
+	}
+	resourcePackModelIndex.Unlock()
+	return nil
+}
+
+func buildResourcePackModelIndex(resourcePacksPath string) (map[string]map[string]struct{}, error) {
 	entries, err := os.ReadDir(resourcePacksPath)
 	if err != nil {
-		return false
+		return nil, err
 	}
-	modelParts := strings.SplitN(model, ":", 2)
-	if len(modelParts) != 2 {
-		return false
-	}
-	relativeModelPath := filepath.FromSlash("assets/" + modelParts[0] + "/models/" + modelParts[1] + ".json")
+	indexed := make(map[string]map[string]struct{})
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -347,50 +393,109 @@ func resourcePackContainsModelUncached(packID string, model string) bool {
 		var meta resourcePackMeta
 		decodeErr := json.NewDecoder(metaFile).Decode(&meta)
 		_ = metaFile.Close()
-		if decodeErr != nil || !strings.EqualFold(strings.TrimSpace(meta.ID), strings.TrimSpace(packID)) {
+		packID := strings.ToLower(strings.TrimSpace(meta.ID))
+		if decodeErr != nil || packID == "" {
 			continue
 		}
+		packModels := make(map[string]struct{})
+		if err := indexResourcePackDirectory(packDir, packModels); err != nil {
+			continue
+		}
+		if err := indexResourcePackArchives(packDir, packModels); err != nil {
+			continue
+		}
+		indexed[packID] = packModels
+	}
+	return indexed, nil
+}
 
-		if _, err := os.Stat(filepath.Join(packDir, relativeModelPath)); err == nil {
-			return true
-		}
-		files, err := os.ReadDir(packDir)
+func indexResourcePackDirectory(packDir string, models map[string]struct{}) error {
+	return filepath.WalkDir(packDir, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
-			return false
+			return err
 		}
-		for _, file := range files {
-			if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".zip") {
+		if entry.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(packDir, path)
+		if err != nil {
+			return err
+		}
+		normalized := strings.ToLower(filepath.ToSlash(relative))
+		if strings.HasPrefix(normalized, "assets/") && strings.Contains(normalized, "/models/") && strings.HasSuffix(normalized, ".json") {
+			models[normalized] = struct{}{}
+		}
+		return nil
+	})
+}
+
+func indexResourcePackArchives(packDir string, models map[string]struct{}) error {
+	files, err := os.ReadDir(packDir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".zip") {
+			continue
+		}
+		archive, err := zip.OpenReader(filepath.Join(packDir, file.Name()))
+		if err != nil {
+			continue
+		}
+		for _, archiveFile := range archive.File {
+			archivePath := strings.ToLower(filepath.ToSlash(archiveFile.Name))
+			if strings.HasPrefix(archivePath, "assets/") && strings.Contains(archivePath, "/models/") && strings.HasSuffix(archivePath, ".json") {
+				models[archivePath] = struct{}{}
+			}
+			if archivePath != "pack.cats" {
 				continue
 			}
-			archive, err := zip.OpenReader(filepath.Join(packDir, file.Name()))
+			reader, err := archiveFile.Open()
 			if err != nil {
 				continue
 			}
-			for _, archiveFile := range archive.File {
-				if archiveFile.Name == filepath.ToSlash(relativeModelPath) {
-					_ = archive.Close()
-					return true
-				}
-				if archiveFile.Name != "pack.cats" {
-					continue
-				}
-				reader, err := archiveFile.Open()
-				if err != nil {
-					continue
-				}
-				data, readErr := io.ReadAll(reader)
-				_ = reader.Close()
-				modelFilename := filepath.Base(relativeModelPath)
-				if readErr == nil && (bytes.Contains(data, []byte(filepath.ToSlash(relativeModelPath))) || bytes.Contains(data, []byte(modelFilename))) {
-					_ = archive.Close()
-					return true
-				}
+			data, readErr := io.ReadAll(reader)
+			_ = reader.Close()
+			if readErr != nil {
+				continue
 			}
-			_ = archive.Close()
+			for modelPath := range extractResourcePackModelPaths(data) {
+				models[modelPath] = struct{}{}
+			}
 		}
-		return false
+		_ = archive.Close()
 	}
-	return false
+	return nil
+}
+
+func extractResourcePackModelPaths(data []byte) map[string]struct{} {
+	paths := make(map[string]struct{})
+	content := strings.ToLower(filepath.ToSlash(string(data)))
+	for searchFrom := 0; searchFrom < len(content); {
+		start := strings.Index(content[searchFrom:], "assets/")
+		if start < 0 {
+			break
+		}
+		start += searchFrom
+		end := start
+		for end < len(content) {
+			isDelimiter := false
+			switch content[end] {
+			case 0, '\n', '\r', '\t', ' ', '"', '\'', ',', ':', ';', '}', ']', ')':
+				isDelimiter = true
+			}
+			if isDelimiter {
+				break
+			}
+			end++
+		}
+		candidate := content[start:end]
+		if strings.Contains(candidate, "/models/") && strings.HasSuffix(candidate, ".json") {
+			paths[candidate] = struct{}{}
+		}
+		searchFrom = start + len("assets/")
+	}
+	return paths
 }
 
 const textureDecisionSampleLimit = 50
