@@ -3,12 +3,16 @@ package forensics
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/gofiber/fiber/v2"
 )
 
 func TestClassifyCacheStatus(t *testing.T) {
@@ -109,6 +113,8 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 		},
 		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "req-2", "method": "GET", "path": "/api/stats/ducky/Kiwi", "status_code": 200, "duration_ms": 120, "response_size": 100},
 		{"level": "info", "timestamp": now, "msg": "span_completed", "span": "api.GetProfiles", "duration_us": 1500},
+		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": 101, "cpu_percent": 12.5, "rss_mb": 80, "virtual_mb": 200, "read_mb": 10, "write_mb": 20, "network_rx_mb": 30, "network_tx_mb": 40, "disk_used_percent": 70.5, "disk_free_gb": 12, "available": true},
+		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": 101, "cpu_percent": 25.0, "rss_mb": 100, "virtual_mb": 220, "read_mb": 15, "write_mb": 25, "network_rx_mb": 35, "network_tx_mb": 50, "disk_used_percent": 71.0, "disk_free_gb": 11, "available": true},
 		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "legacy", "method": "GET", "path": "/api/legacy", "status_code": 200, "duration_ms": 50, "response_size": 10},
 		{"level": "error", "timestamp": now, "msg": "error_recorded", "error_type": "ignored", "error": "ignored"},
 	}
@@ -148,6 +154,21 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 	if len(report.TopSpans) != 1 || report.TopSpans[0].Operation != "api.GetProfiles" {
 		t.Fatalf("unexpected TopSpans: %+v", report.TopSpans)
 	}
+	if report.ResourceUsage.Samples != 2 || report.ResourceUsage.Current.RSSMB != 100 {
+		t.Fatalf("unexpected current resource usage: %+v", report.ResourceUsage)
+	}
+	if report.ResourceUsage.PeakCPU.CPUPercent != 25 || report.ResourceUsage.PeakRSS.RSSMB != 100 || report.ResourceUsage.PeakNetworkTx.NetworkTxMB != 50 {
+		t.Fatalf("unexpected resource peaks: %+v", report.ResourceUsage)
+	}
+	html := renderDashboardHTML(report, dashboardOptions{Window: time.Hour, Limit: 50000})
+	for _, expected := range []string{"Memory Analyzer", "Top Retained Heap Allocation Sites", "/api/forensics/dashboard?download=heap"} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("dashboard HTML missing %q", expected)
+		}
+	}
+	if strings.Contains(html, "%!") {
+		t.Fatalf("dashboard HTML contains fmt formatting error: %s", html)
+	}
 	seenReq2 := 0
 	for _, req := range report.SlowestRequests {
 		if req.RequestID == "req-2" {
@@ -173,5 +194,32 @@ func TestRedactURL(t *testing.T) {
 	}
 	if !strings.Contains(got, "key=REDACTED") {
 		t.Fatalf("RedactURL did not redact key: %s", got)
+	}
+}
+
+func TestDashboardHTMLServesProfilesThroughDownloadQuery(t *testing.T) {
+	app := fiber.New()
+	app.Get("/api/forensics/dashboard", DashboardHTMLHandler())
+
+	profileResponse, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/forensics/dashboard?download=heap", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profileResponse.StatusCode != http.StatusOK {
+		t.Fatalf("profile status = %d, want %d", profileResponse.StatusCode, http.StatusOK)
+	}
+	if got := profileResponse.Header.Get("Content-Disposition"); !strings.Contains(got, "heap.pprof") {
+		t.Fatalf("profile content disposition = %q", got)
+	}
+
+	htmlResponse, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/forensics/dashboard", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if htmlResponse.StatusCode != http.StatusOK {
+		t.Fatalf("dashboard status = %d, want %d", htmlResponse.StatusCode, http.StatusOK)
+	}
+	if contentType := htmlResponse.Header.Get("Content-Type"); !strings.Contains(contentType, "text/html") {
+		t.Fatalf("dashboard content type = %q", contentType)
 	}
 }

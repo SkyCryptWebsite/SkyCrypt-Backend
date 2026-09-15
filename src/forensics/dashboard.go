@@ -31,6 +31,9 @@ func DashboardHandler() fiber.Handler {
 
 func DashboardHTMLHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if profile := c.Query("download"); profile != "" {
+			return writeMemoryProfile(c, profile)
+		}
 		opts := dashboardOptionsFromCtx(c)
 		report := generateDashboardReport(opts)
 		html := renderDashboardHTML(report, opts)
@@ -62,7 +65,18 @@ type dashboardReport struct {
 	UpstreamSummary         []dependencyReportEntry   `json:"upstream_summary"`
 	RedisSummary            []dependencyReportEntry   `json:"redis_summary"`
 	MongoSummary            []dependencyReportEntry   `json:"mongo_summary"`
+	ResourceUsage           resourceReport            `json:"resource_usage"`
+	Memory                  memoryAnalysis            `json:"memory_analysis"`
 	LogStats                logStatsReport            `json:"log_stats"`
+}
+
+type resourceReport struct {
+	Current       resourceUsage `json:"current"`
+	PeakCPU       resourceUsage `json:"peak_cpu"`
+	PeakRSS       resourceUsage `json:"peak_rss"`
+	PeakDiskWrite resourceUsage `json:"peak_disk_write"`
+	PeakNetworkTx resourceUsage `json:"peak_network_tx"`
+	Samples       int           `json:"samples"`
 }
 
 type slowRequestEntry struct {
@@ -233,6 +247,18 @@ type logLine struct {
 	AllocDeltaBytes       int64                  `json:"alloc_delta_bytes,omitempty"`
 	Dependencies          []DependencySummary    `json:"dependencies,omitempty"`
 	RepeatedDeps          []RepeatedDependency   `json:"repeated_dependencies,omitempty"`
+	PID                   int                    `json:"pid,omitempty"`
+	CPUPercent            float64                `json:"cpu_percent,omitempty"`
+	RSSMB                 uint64                 `json:"rss_mb,omitempty"`
+	VirtualMB             uint64                 `json:"virtual_mb,omitempty"`
+	ReadMB                uint64                 `json:"read_mb,omitempty"`
+	WriteMB               uint64                 `json:"write_mb,omitempty"`
+	NetworkRxMB           uint64                 `json:"network_rx_mb,omitempty"`
+	NetworkTxMB           uint64                 `json:"network_tx_mb,omitempty"`
+	DiskUsedPercent       float64                `json:"disk_used_percent,omitempty"`
+	DiskFreeGB            uint64                 `json:"disk_free_gb,omitempty"`
+	Available             bool                   `json:"available,omitempty"`
+	ResourceError         string                 `json:"error,omitempty"`
 	Extra                 map[string]interface{} `json:"-"`
 }
 
@@ -306,6 +332,7 @@ func generateDashboardReport(opts dashboardOptions) dashboardReport {
 		NumCPU:      runtime.NumCPU(),
 		PID:         os.Getpid(),
 	}
+	report.Memory = collectMemoryAnalysis()
 
 	parseLogFile(&report, opts)
 	return report
@@ -520,6 +547,31 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			}
 			if entry.DurationUs > agg.MaxUs {
 				agg.MaxUs = entry.DurationUs
+			}
+
+		case "resource_usage":
+			usage := resourceUsage{
+				PID: entry.PID, CPUPercent: entry.CPUPercent, RSSMB: entry.RSSMB, VirtualMB: entry.VirtualMB,
+				ReadMB: entry.ReadMB, WriteMB: entry.WriteMB, NetworkRxMB: entry.NetworkRxMB, NetworkTxMB: entry.NetworkTxMB,
+				DiskUsedPercent: entry.DiskUsedPercent, DiskFreeGB: entry.DiskFreeGB, Timestamp: entry.Timestamp,
+				Available: entry.Available, Error: entry.ResourceError,
+			}
+			if !usage.Available {
+				continue
+			}
+			report.ResourceUsage.Samples++
+			report.ResourceUsage.Current = usage
+			if usage.CPUPercent > report.ResourceUsage.PeakCPU.CPUPercent {
+				report.ResourceUsage.PeakCPU = usage
+			}
+			if usage.RSSMB > report.ResourceUsage.PeakRSS.RSSMB {
+				report.ResourceUsage.PeakRSS = usage
+			}
+			if usage.WriteMB > report.ResourceUsage.PeakDiskWrite.WriteMB {
+				report.ResourceUsage.PeakDiskWrite = usage
+			}
+			if usage.NetworkTxMB > report.ResourceUsage.PeakNetworkTx.NetworkTxMB {
+				report.ResourceUsage.PeakNetworkTx = usage
 			}
 
 		case "redis_cache_hit":
@@ -855,6 +907,12 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
   .status-err { color: #f85149; }
   .status-warn { color: #d29922; }
   .slow-req { background: #f8514911; }
+	.tabs { display: flex; gap: 8px; margin: 20px 0; border-bottom: 1px solid #30363d; }
+	.tab { background: transparent; color: #8b949e; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 4px; cursor: pointer; font: inherit; }
+	.tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+	.tab-panel { display: none; }
+	.tab-panel.active { display: block; }
+	.note { color: #8b949e; font-size: 13px; border-left: 3px solid #d29922; padding: 8px 12px; margin: 12px 0; }
 </style>
 </head>
 <body>
@@ -864,6 +922,12 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 		esc(r.GeneratedAt), esc(r.Uptime), r.Runtime.PID, window, limit,
 		esc(r.LogStats.LogFileSize), r.LogStats.LinesProcessed, r.LogStats.ParseTimeMs,
 	)
+
+	out += `<nav class="tabs" aria-label="Dashboard sections">
+  <button class="tab active" data-tab="overview" onclick="showTab('overview')">Overview</button>
+  <button class="tab" data-tab="resources" onclick="showTab('resources')">Resource Usage</button>
+</nav>
+<div id="overview" class="tab-panel active">`
 
 	out += fmt.Sprintf(`
 <h2>Runtime</h2>
@@ -907,6 +971,8 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 	out += renderDependencyTable("Mongo Operations", "mongo-table", r.MongoSummary)
 	out += renderOperationsTable(r.TopSpans)
 	out += renderSlowestRequestsTable(r.SlowestRequests)
+	out += `</div>`
+	out += renderResourceUsage(r.ResourceUsage, r.Memory)
 
 	out += `
 <div style="margin-top:30px;padding-top:15px;border-top:1px solid #30363d;">
@@ -940,8 +1006,102 @@ function downloadFile(content, filename, mime) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+function showTab(tabName) {
+	document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.toggle('active', panel.id === tabName));
+	document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.dataset.tab === tabName));
+}
 </script></body></html>`
 	return out
+}
+
+func renderMemoryAnalysis(analysis memoryAnalysis) string {
+	out := fmt.Sprintf(`<h2>Memory Analyzer</h2>
+<div class="note">Live heap shows objects retained after the last GC. Cumulative allocations show churn since process start and are not current memory. The stack names identify where memory was allocated; use the downloadable profiles for interactive drill-down with pprof.</div>
+<div class="grid">
+  <div class="card"><div class="label">Heap In Use</div><div class="value">%d MB</div></div>
+	<div class="card"><div class="label">Heap Alloc / System</div><div class="value">%d / %d MB</div></div>
+  <div class="card"><div class="label">Heap Idle / Released</div><div class="value">%d / %d MB</div></div>
+	<div class="card"><div class="label">Stacks / Other System</div><div class="value">%d / %d MB</div></div>
+  <div class="card"><div class="label">Live Objects</div><div class="value">%d</div></div>
+  <div class="card"><div class="label">Total Allocated</div><div class="value">%d MB</div></div>
+  <div class="card"><div class="label">Mallocs / Frees</div><div class="value">%d / %d</div></div>
+  <div class="card"><div class="label">Next GC Target</div><div class="value">%d MB</div></div>
+	<div class="card"><div class="label">GC CPU / Pause Total</div><div class="value">%.2f%% / %d ms</div></div>
+	<div class="card"><div class="label">Last GC</div><div class="value">%s</div></div>
+</div>
+<div class="btn-group">
+	<a class="btn" href="/api/forensics/dashboard?download=heap">Download Live Heap Profile</a>
+	<a class="btn" href="/api/forensics/dashboard?download=allocs">Download Allocation Profile</a>
+	<a class="btn" href="/api/forensics/dashboard?download=goroutine">Download Goroutine Profile</a>
+</div>
+<h3>Largest Live Object Size Classes</h3>
+<table id="memory-size-classes"><tr><th>Object Size</th><th>Live Objects</th><th>Estimated Live Bytes</th></tr>`,
+		analysis.HeapInuseMB, analysis.HeapAllocMB, analysis.SysMB,
+		analysis.HeapIdleMB, analysis.HeapReleasedMB,
+		analysis.StackInuseMB, analysis.OtherSysMB,
+		analysis.HeapObjects, analysis.TotalAllocMB,
+		analysis.Mallocs, analysis.Frees, analysis.NextGCMB,
+		analysis.GCCPUPercent, analysis.PauseTotalMs, analysis.LastGC,
+	)
+	for _, class := range analysis.SizeClasses {
+		out += fmt.Sprintf(`<tr><td>%d bytes</td><td>%d</td><td>%d MB</td></tr>`, class.ObjectSize, class.Live, class.LiveBytes/1024/1024)
+	}
+	if len(analysis.SizeClasses) == 0 {
+		out += `<tr><td colspan="3" class="empty">No object size data available.</td></tr>`
+	}
+	out += `</table><h3>Top Retained Heap Allocation Sites</h3>`
+	out += renderMemorySitesTable("memory-heap-sites", analysis.TopHeapSites, "retained")
+	out += `<h3>Top Cumulative Allocation Sites</h3>`
+	out += renderMemorySitesTable("memory-allocation-sites", analysis.TopAllocationSites, "allocated")
+	return out
+}
+
+func renderMemorySitesTable(id string, sites []memoryProfileSite, valueLabel string) string {
+	out := fmt.Sprintf(`<table id="%s"><tr><th>Full Allocation Stack</th><th>Flat Objects</th><th>Flat Bytes %s</th><th>Cumulative Bytes</th></tr>`, id, valueLabel)
+	for _, site := range sites {
+		out += fmt.Sprintf(`<tr><td><code style="white-space:pre-wrap">%s</code></td><td>%d</td><td>%d MB</td><td>%d MB</td></tr>`, esc(site.Stack), site.InUseObjects, site.InUseBytes/1024/1024, site.CumulativeBytes/1024/1024)
+	}
+	if len(sites) == 0 {
+		out += `<tr><td colspan="4" class="empty">No profile samples available.</td></tr>`
+	}
+	return out + `</table>`
+}
+
+func renderResourceUsage(report resourceReport, memory memoryAnalysis) string {
+	current := report.Current
+	if report.Samples == 0 {
+		return `<div id="resources" class="tab-panel">` + renderMemoryAnalysis(memory) + `<h2>Resource Usage</h2><div class="empty">No resource samples recorded yet.</div></div>`
+	}
+	return fmt.Sprintf(`<div id="resources" class="tab-panel">%s
+<h2>Resource Usage</h2>
+<div class="note">Process and container-level telemetry sampled every 10 seconds while forensics is enabled. CPU, disk I/O, and network I/O cannot be attributed exactly to individual concurrent requests; use the existing request and operation tables for route-level cost signals.</div>
+<div class="grid">
+  <div class="card"><div class="label">Current CPU</div><div class="value">%.1f%%</div></div>
+  <div class="card"><div class="label">Current RSS</div><div class="value">%d MB</div></div>
+  <div class="card"><div class="label">Virtual Memory</div><div class="value">%d MB</div></div>
+  <div class="card"><div class="label">Disk Read / Write</div><div class="value">%d / %d MB</div></div>
+  <div class="card"><div class="label">Network In / Out</div><div class="value">%d / %d MB</div></div>
+  <div class="card"><div class="label">Filesystem Used</div><div class="value">%.1f%%</div></div>
+  <div class="card"><div class="label">Filesystem Free</div><div class="value">%d GB</div></div>
+  <div class="card"><div class="label">Samples / PID</div><div class="value">%d / %d</div></div>
+</div>
+<h2>Peaks in Window</h2>
+<table id="resource-peaks-table"><tr><th>Resource</th><th>Peak</th><th>Observed At</th><th>PID</th></tr>
+<tr><td>CPU</td><td>%.1f%%</td><td>%s</td><td>%d</td></tr>
+<tr><td>RSS</td><td>%d MB</td><td>%s</td><td>%d</td></tr>
+<tr><td>Disk Written</td><td>%d MB</td><td>%s</td><td>%d</td></tr>
+<tr><td>Network Sent</td><td>%d MB</td><td>%s</td><td>%d</td></tr>
+</table>
+</div>`,
+		renderMemoryAnalysis(memory),
+		current.CPUPercent, current.RSSMB, current.VirtualMB, current.ReadMB, current.WriteMB,
+		current.NetworkRxMB, current.NetworkTxMB, current.DiskUsedPercent, current.DiskFreeGB,
+		report.Samples, current.PID,
+		report.PeakCPU.CPUPercent, esc(report.PeakCPU.Timestamp), report.PeakCPU.PID,
+		report.PeakRSS.RSSMB, esc(report.PeakRSS.Timestamp), report.PeakRSS.PID,
+		report.PeakDiskWrite.WriteMB, esc(report.PeakDiskWrite.Timestamp), report.PeakDiskWrite.PID,
+		report.PeakNetworkTx.NetworkTxMB, esc(report.PeakNetworkTx.Timestamp), report.PeakNetworkTx.PID,
+	)
 }
 
 func renderCacheLatencyTable(entries []cacheLatencyEntry) string {
