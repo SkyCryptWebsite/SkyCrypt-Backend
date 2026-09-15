@@ -44,6 +44,7 @@ var MAX_ENCHANTS = []string{
 	"Fortune IV",
 	"Frail VII",
 	"Giant Killer VII",
+	"Great Spook I",
 	"Gravity VI",
 	"Green Thumb V",
 	"Growth VII",
