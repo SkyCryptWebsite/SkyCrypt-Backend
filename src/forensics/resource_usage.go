@@ -42,8 +42,6 @@ type resourceCounters struct {
 	processCPUTicks uint64
 	readBytes       uint64
 	writeBytes      uint64
-	networkRxBytes  uint64
-	networkTxBytes  uint64
 }
 
 func StartResourceMonitor() {
@@ -183,7 +181,7 @@ func readNetworkBytes() (uint64, uint64) {
 	if err != nil {
 		return 0, 0
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var received, transmitted uint64
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
