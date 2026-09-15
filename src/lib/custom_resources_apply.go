@@ -342,6 +342,9 @@ func resourcePackContainsModelUncached(packID string, model string) bool {
 	resourcePackModelIndex.RLock()
 	models := resourcePackModelIndex.models[strings.ToLower(strings.TrimSpace(packID))]
 	_, supported := models[modelPath]
+	if !supported {
+		_, supported = models[filepath.Base(modelPath)]
+	}
 	resourcePackModelIndex.RUnlock()
 	return supported
 }
@@ -490,10 +493,19 @@ func extractResourcePackModelPaths(data []byte) map[string]struct{} {
 			end++
 		}
 		candidate := content[start:end]
-		if strings.Contains(candidate, "/models/") && strings.HasSuffix(candidate, ".json") {
+		if strings.HasSuffix(candidate, ".json") {
 			paths[candidate] = struct{}{}
+			paths[filepath.Base(candidate)] = struct{}{}
 		}
 		searchFrom = start + len("assets/")
+	}
+	for _, token := range strings.FieldsFunc(content, func(r rune) bool {
+		return r == '\x00' || r == '\n' || r == '\r' || r == '\t' || r == ' ' || r == '"' || r == '\'' || r == ',' || r == ':' || r == ';' || r == '}' || r == ']' || r == ')'
+	}) {
+		if strings.HasSuffix(token, ".json") {
+			paths[token] = struct{}{}
+			paths[filepath.Base(token)] = struct{}{}
+		}
 	}
 	return paths
 }
