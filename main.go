@@ -51,6 +51,7 @@ func main() {
 
 		runtimeMonitor := forensics.NewRuntimeMonitor()
 		go runtimeMonitor.Start()
+		go forensics.StartResourceMonitor()
 		go forensics.GlobalErrorTracker.StartPeriodicSummary()
 		go forensics.GlobalCPAnalyzer.StartPeriodicReport()
 		go forensics.GlobalNPlus1Detector.CleanupOldPatterns()
