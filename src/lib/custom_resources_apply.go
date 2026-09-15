@@ -499,15 +499,29 @@ func extractResourcePackModelPaths(data []byte) map[string]struct{} {
 		}
 		searchFrom = start + len("assets/")
 	}
-	for _, token := range strings.FieldsFunc(content, func(r rune) bool {
-		return r == '\x00' || r == '\n' || r == '\r' || r == '\t' || r == ' ' || r == '"' || r == '\'' || r == ',' || r == ':' || r == ';' || r == '}' || r == ']' || r == ')'
-	}) {
-		if strings.HasSuffix(token, ".json") {
-			paths[token] = struct{}{}
-			paths[filepath.Base(token)] = struct{}{}
+	for searchFrom := 0; searchFrom < len(content); {
+		suffixOffset := strings.Index(content[searchFrom:], ".json")
+		if suffixOffset < 0 {
+			break
 		}
+		suffixOffset += searchFrom
+		end := suffixOffset + len(".json")
+		start := suffixOffset
+		for start > 0 && isResourcePackFilenameByte(content[start-1]) {
+			start--
+		}
+		candidate := content[start:end]
+		if strings.Contains(candidate, "/models/") || strings.Contains(candidate, "_") {
+			paths[candidate] = struct{}{}
+			paths[filepath.Base(candidate)] = struct{}{}
+		}
+		searchFrom = end
 	}
 	return paths
+}
+
+func isResourcePackFilenameByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9' || value == '/' || value == '_' || value == '-' || value == '.'
 }
 
 const textureDecisionSampleLimit = 50
