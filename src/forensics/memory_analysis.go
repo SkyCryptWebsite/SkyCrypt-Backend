@@ -1,8 +1,10 @@
 package forensics
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"runtime"
 	"runtime/pprof"
 	"sort"
@@ -112,11 +114,30 @@ func profileSites(name string) []memoryProfileSite {
 	if profile == nil {
 		return nil
 	}
-	var output bytes.Buffer
-	if err := profile.WriteTo(&output, 1); err != nil {
+
+	reader, writer := io.Pipe()
+	writeDone := make(chan error, 1)
+	go func() {
+		err := profile.WriteTo(writer, 1)
+		_ = writer.CloseWithError(err)
+		writeDone <- err
+	}()
+
+	sites, parseErr := parseProfileSites(reader)
+	if parseErr != nil {
+		_ = reader.CloseWithError(parseErr)
+		<-writeDone
 		return nil
 	}
+	if err := <-writeDone; err != nil {
+		return nil
+	}
+	return sites
+}
 
+func parseProfileSites(reader io.Reader) ([]memoryProfileSite, error) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	sitesByStack := make(map[string]*memoryProfileSite)
 	var pending *memoryProfileSite
 	var stackLines []string
@@ -135,7 +156,8 @@ func profileSites(name string) []memoryProfileSite {
 		pending = nil
 		stackLines = nil
 	}
-	for _, line := range strings.Split(output.String(), "\n") {
+	for scanner.Scan() {
+		line := scanner.Text()
 		fields := strings.Fields(line)
 		if len(fields) < 2 || !strings.HasSuffix(fields[0], ":") {
 			if pending != nil && strings.HasPrefix(strings.TrimSpace(line), "#") {
@@ -159,6 +181,9 @@ func profileSites(name string) []memoryProfileSite {
 		}
 	}
 	flush()
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
 	sites := make([]memoryProfileSite, 0, len(sitesByStack))
 	for _, site := range sitesByStack {
 		sites = append(sites, *site)
@@ -169,7 +194,7 @@ func profileSites(name string) []memoryProfileSite {
 	if len(sites) > 15 {
 		sites = sites[:15]
 	}
-	return sites
+	return sites, nil
 }
 
 func profileStackName(line string) string {

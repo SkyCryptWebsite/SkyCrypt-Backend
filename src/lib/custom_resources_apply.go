@@ -26,9 +26,12 @@ var customModelSupportCache = struct {
 
 var resourcePackModelIndex = struct {
 	sync.RWMutex
-	root   string
-	models map[string]map[string]struct{}
+	buildMu sync.Mutex
+	root    string
+	models  map[string]map[string]struct{}
 }{}
+
+var buildResourcePackModelIndexFunc = buildResourcePackModelIndex
 
 func stableTextureKeysFromInput(input ItemTextureInput) []string {
 	keys := make([]string, 0, 4)
@@ -365,7 +368,17 @@ func ensureResourcePackModelIndex(resourcePacksPath string) error {
 		return nil
 	}
 
-	models, err := buildResourcePackModelIndex(resourcePacksPath)
+	resourcePackModelIndex.buildMu.Lock()
+	defer resourcePackModelIndex.buildMu.Unlock()
+
+	resourcePackModelIndex.RLock()
+	ready = resourcePackModelIndex.root == resourcePacksPath && resourcePackModelIndex.models != nil
+	resourcePackModelIndex.RUnlock()
+	if ready {
+		return nil
+	}
+
+	models, err := buildResourcePackModelIndexFunc(resourcePacksPath)
 	if err != nil {
 		return err
 	}
