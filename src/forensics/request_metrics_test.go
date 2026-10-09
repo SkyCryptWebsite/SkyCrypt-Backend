@@ -113,8 +113,9 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 		},
 		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "req-2", "method": "GET", "path": "/api/stats/ducky/Kiwi", "status_code": 200, "duration_ms": 120, "response_size": 100},
 		{"level": "info", "timestamp": now, "msg": "span_completed", "span": "api.GetProfiles", "duration_us": 1500},
-		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": 101, "cpu_percent": 12.5, "rss_mb": 80, "virtual_mb": 200, "read_mb": 10, "write_mb": 20, "network_rx_mb": 30, "network_tx_mb": 40, "disk_used_percent": 70.5, "disk_free_gb": 12, "available": true},
-		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": 101, "cpu_percent": 25.0, "rss_mb": 100, "virtual_mb": 220, "read_mb": 15, "write_mb": 25, "network_rx_mb": 35, "network_tx_mb": 50, "disk_used_percent": 71.0, "disk_free_gb": 11, "available": true},
+		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": os.Getpid(), "process_role": "main", "command_line": "test", "cpu_percent": 12.5, "rss_mb": 80, "virtual_mb": 200, "read_mb": 10, "write_mb": 20, "network_rx_mb": 30, "network_tx_mb": 40, "disk_used_percent": 70.5, "disk_free_gb": 12, "available": true},
+		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": 999999, "process_role": "prefork-child", "command_line": "child", "cpu_percent": 99, "rss_mb": 999, "virtual_mb": 999, "available": true},
+		{"level": "info", "timestamp": now, "msg": "resource_usage", "pid": os.Getpid(), "process_role": "main", "command_line": "test", "cpu_percent": 25.0, "rss_mb": 100, "virtual_mb": 220, "read_mb": 15, "write_mb": 25, "network_rx_mb": 35, "network_tx_mb": 50, "disk_used_percent": 71.0, "disk_free_gb": 11, "available": true},
 		{"level": "info", "timestamp": now, "msg": "request_completed", "request_id": "legacy", "method": "GET", "path": "/api/legacy", "status_code": 200, "duration_ms": 50, "response_size": 10},
 		{"level": "error", "timestamp": now, "msg": "error_recorded", "error_type": "ignored", "error": "ignored"},
 	}
@@ -159,6 +160,12 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 	}
 	if report.ResourceUsage.PeakCPU.CPUPercent != 25 || report.ResourceUsage.PeakRSS.RSSMB != 100 || report.ResourceUsage.PeakNetworkTx.NetworkTxMB != 50 {
 		t.Fatalf("unexpected resource peaks: %+v", report.ResourceUsage)
+	}
+	if report.ResourceUsage.Current.PID != report.Runtime.PID {
+		t.Fatalf("resource PID = %d, runtime PID = %d", report.ResourceUsage.Current.PID, report.Runtime.PID)
+	}
+	if report.Runtime.ProcessRole == "" || report.Runtime.CommandLine == "" {
+		t.Fatalf("runtime process metadata is incomplete: %+v", report.Runtime)
 	}
 	html := renderDashboardHTML(report, dashboardOptions{Window: time.Hour, Limit: 50000})
 	for _, expected := range []string{"Memory Analyzer", "Top Retained Heap Allocation Sites", "/api/forensics/dashboard?download=heap"} {

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"skycrypt/src/api"
@@ -18,7 +19,6 @@ import (
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
-	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -49,7 +49,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("inventory", uuid, profileId, enabledPacksCachePart(enabledPacks))
+	cacheKey := inventoryCacheKey(uuid, profileId, enabledPacks)
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
@@ -200,15 +200,16 @@ func InventoryHandler(c *fiber.Ctx) error {
 	}
 	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
 
-	// Cache the full inventory for search functionality without retaining it in a detached goroutine.
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	jsonData, err := json.Marshal(output)
-	if err != nil {
-		fmt.Printf("Error marshaling items for caching: %v\n", err)
-	} else {
+	if !processedResponseCacheEnabled() {
+		jsonData, err := json.Marshal(output)
+		if err != nil {
+			return fmt.Errorf("failed to marshal inventory cache: %v", err)
+		}
 		cacheCtx, cancel := context.WithTimeout(reqCtx, 2*time.Second)
 		defer cancel()
-		_ = db.SetContext(cacheCtx, fmt.Sprintf("items:%s:%s:%s", profileId, uuid, enabledPacksCachePart(enabledPacks)), string(jsonData), 5*60)
+		if err := db.SetContext(cacheCtx, cacheKey.key, string(jsonData), 5*60); err != nil {
+			return fmt.Errorf("failed to cache inventory for search: %v", err)
+		}
 	}
 
 	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)

@@ -189,6 +189,8 @@ DISABLE_SERVER_API_AUTH="true"
 | `REDIS_HOST` | Redis server hostname | `localhost` | No |
 | `REDIS_PORT` | Redis server port | `6379` | No |
 | `REDIS_PASSWORD` | Redis authentication password | - | No |
+| `REDIS_MAXMEMORY` | Redis maximum memory when using the bundled Compose deployment | `8gb` | No |
+| `REDIS_MAXMEMORY_POLICY` | Redis eviction policy when the maximum is reached | `allkeys-lfu` | No |
 | `SERVER_API_TOKEN` | Shared token required by protected API routes through the `X-API-Token` header | - | Yes in production |
 | `DISABLE_SERVER_API_AUTH` | Disable `X-API-Token` checks for local development only | `false` | No |
 

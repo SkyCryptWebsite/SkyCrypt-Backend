@@ -102,6 +102,8 @@ type runtimeReport struct {
 	GoVersion   string `json:"go_version"`
 	NumCPU      int    `json:"num_cpu"`
 	PID         int    `json:"pid"`
+	ProcessRole string `json:"process_role"`
+	CommandLine string `json:"command_line"`
 }
 
 type cacheReport struct {
@@ -248,6 +250,8 @@ type logLine struct {
 	Dependencies          []DependencySummary    `json:"dependencies,omitempty"`
 	RepeatedDeps          []RepeatedDependency   `json:"repeated_dependencies,omitempty"`
 	PID                   int                    `json:"pid,omitempty"`
+	ProcessRole           string                 `json:"process_role,omitempty"`
+	CommandLine           string                 `json:"command_line,omitempty"`
 	CPUPercent            float64                `json:"cpu_percent,omitempty"`
 	RSSMB                 uint64                 `json:"rss_mb,omitempty"`
 	VirtualMB             uint64                 `json:"virtual_mb,omitempty"`
@@ -332,6 +336,7 @@ func generateDashboardReport(opts dashboardOptions) dashboardReport {
 		NumCPU:      runtime.NumCPU(),
 		PID:         os.Getpid(),
 	}
+	report.Runtime.ProcessRole, report.Runtime.CommandLine = currentProcessMetadata()
 	report.Memory = collectMemoryAnalysis()
 
 	parseLogFile(&report, opts)
@@ -550,8 +555,12 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			}
 
 		case "resource_usage":
+			if entry.PID != report.Runtime.PID {
+				continue
+			}
 			usage := resourceUsage{
-				PID: entry.PID, CPUPercent: entry.CPUPercent, RSSMB: entry.RSSMB, VirtualMB: entry.VirtualMB,
+				PID: entry.PID, ProcessRole: entry.ProcessRole, CommandLine: entry.CommandLine,
+				CPUPercent: entry.CPUPercent, RSSMB: entry.RSSMB, VirtualMB: entry.VirtualMB,
 				ReadMB: entry.ReadMB, WriteMB: entry.WriteMB, NetworkRxMB: entry.NetworkRxMB, NetworkTxMB: entry.NetworkTxMB,
 				DiskUsedPercent: entry.DiskUsedPercent, DiskFreeGB: entry.DiskFreeGB, Timestamp: entry.Timestamp,
 				Available: entry.Available, Error: entry.ResourceError,
