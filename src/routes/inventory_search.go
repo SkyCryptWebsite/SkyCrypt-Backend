@@ -43,7 +43,7 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 	profileId := c.Params("profileId")
 	searchParam := c.Params("searchParam")
 
-	cache, err := db.GetContext(c.UserContext(), fmt.Sprintf("items:%s:%s:%s", profileId, uuid, enabledPacksCachePart(enabledPacks)))
+	cache, err := db.GetContext(c.UserContext(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get items: %v", err),

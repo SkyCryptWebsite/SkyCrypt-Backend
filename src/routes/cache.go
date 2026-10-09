@@ -38,6 +38,13 @@ func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 	}
 }
 
+func inventoryCacheKey(uuid string, profileID string, enabledPacks []string) responseCacheHandle {
+	return responseCacheHandle{
+		endpoint: "inventory",
+		key:      fmt.Sprintf("items:%s:%s:%s", profileID, uuid, enabledPacksCachePart(enabledPacks)),
+	}
+}
+
 func enabledPacksCachePart(enabledPacks []string) string {
 	normalized := lib.NormalizeEnabledPacks(enabledPacks)
 	return "enabled-v7:" + strings.Join(normalized, ",")

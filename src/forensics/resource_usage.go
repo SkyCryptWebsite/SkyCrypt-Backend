@@ -17,6 +17,8 @@ const resourceSampleInterval = 10 * time.Second
 
 type resourceUsage struct {
 	PID             int     `json:"pid"`
+	ProcessRole     string  `json:"process_role"`
+	CommandLine     string  `json:"command_line"`
 	CPUPercent      float64 `json:"cpu_percent"`
 	RSSMB           uint64  `json:"rss_mb"`
 	VirtualMB       uint64  `json:"virtual_mb"`
@@ -29,6 +31,22 @@ type resourceUsage struct {
 	Timestamp       string  `json:"timestamp"`
 	Available       bool    `json:"available"`
 	Error           string  `json:"error,omitempty"`
+}
+
+func currentProcessMetadata() (string, string) {
+	role := "main"
+	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+		role = "prefork-child"
+	}
+
+	commandLine := strings.Join(os.Args, " ")
+	if data, err := os.ReadFile("/proc/self/cmdline"); err == nil {
+		parts := strings.Split(strings.TrimRight(string(data), "\x00"), "\x00")
+		if len(parts) > 0 && parts[0] != "" {
+			commandLine = strings.Join(parts, " ")
+		}
+	}
+	return role, commandLine
 }
 
 type resourceSampler struct {
@@ -61,6 +79,8 @@ func (s *resourceSampler) log() {
 	}
 	Logger.Info("resource_usage",
 		zap.Int("pid", usage.PID),
+		zap.String("process_role", usage.ProcessRole),
+		zap.String("command_line", usage.CommandLine),
 		zap.Float64("cpu_percent", usage.CPUPercent),
 		zap.Uint64("rss_mb", usage.RSSMB),
 		zap.Uint64("virtual_mb", usage.VirtualMB),
@@ -76,7 +96,13 @@ func (s *resourceSampler) log() {
 }
 
 func (s *resourceSampler) sample() resourceUsage {
-	usage := resourceUsage{PID: os.Getpid(), Timestamp: time.Now().Format(time.RFC3339Nano)}
+	role, commandLine := currentProcessMetadata()
+	usage := resourceUsage{
+		PID:         os.Getpid(),
+		ProcessRole: role,
+		CommandLine: commandLine,
+		Timestamp:   time.Now().Format(time.RFC3339Nano),
+	}
 	if runtime.GOOS != "linux" {
 		usage.Error = "resource sampling is supported on Linux only"
 		return usage
