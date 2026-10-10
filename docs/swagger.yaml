@@ -2399,6 +2399,22 @@ paths:
       summary: Get combined profile data
       tags:
       - Stats
+  /api/constants/enchantments:
+    get:
+      description: Returns the lore strings for enchantments at their maximum level.
+      operationId: listEnchantments
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  type: string
+                type: array
+          description: Max-level enchantments returned successfully.
+      summary: List max-level enchantments
+      tags:
+      - Constants
   /api/constants/packs:
     get:
       description: |-

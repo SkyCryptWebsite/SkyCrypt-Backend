@@ -209,6 +209,7 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/leather/:type/:color", routes.LeatherHandlers)
 	api.Get("/constants/stats", routes.StatsConstantsHandler)
 	api.Get("/constants/packs", routes.ResourcePacksConstantsHandler)
+	api.Get("/constants/enchantments", routes.EnchantmentsConstantsHandler)
 
 	// OTHER
 	api.Get("/emojis", routes.EmojisHandler)
