@@ -414,8 +414,8 @@ func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []m
 			}
 
 			itemTexture := fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), itemId)
-			if NEUItem.NBT.SkullOwner != nil {
-				itemTexture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), rawItemId)
+			if NEUItem.NBT.ExtraAttributes != nil {
+				itemTexture = fmt.Sprintf("%s/api/item/%s", utility.GetDomain(), NEUItem.NBT.ExtraAttributes.Id)
 			}
 
 			itemAmount := sackContents[rawItemId]
