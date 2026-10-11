@@ -3625,6 +3625,31 @@
                 ]
             }
         },
+        "/api/constants/enchantments": {
+            "get": {
+                "description": "Returns the lore strings for enchantments at their maximum level.",
+                "operationId": "listEnchantments",
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "description": "Max-level enchantments returned successfully."
+                    }
+                },
+                "summary": "List max-level enchantments",
+                "tags": [
+                    "Constants"
+                ]
+            }
+        },
         "/api/constants/packs": {
             "get": {
                 "description": "Returns toggleable resource packs sorted by descending priority for the recommended default order.\nThe enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.\nA missing preference uses the default order, while an explicit empty array uses vanilla textures only.\nThe vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.",
