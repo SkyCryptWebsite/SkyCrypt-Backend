@@ -27,10 +27,11 @@ var hypixelFetchGroup singleflight.Group
 var hypixelRequestTimeout = 30 * time.Second
 
 const (
-	playerCacheTTL   = 24 * time.Hour
-	profilesCacheTTL = 5 * time.Minute
-	museumCacheTTL   = 30 * time.Minute
-	gardenCacheTTL   = 30 * time.Minute
+	playerCacheTTL         = 24 * time.Hour
+	profilesCacheTTL       = 5 * time.Minute
+	museumCacheTTL         = 30 * time.Minute
+	gardenCacheTTL         = 30 * time.Minute
+	hypixelRequestAttempts = 2
 )
 
 func GetPlayer(uuid string) (*skycrypttypes.Player, error) {
@@ -378,33 +379,59 @@ func detachedFetchContext(ctx context.Context) (context.Context, context.CancelF
 }
 
 func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]byte, error) {
-	req, err := buildHypixelRequest(ctx, endpoint, query)
-	if err != nil {
-		return nil, err
+	for attempt := 0; attempt < hypixelRequestAttempts; attempt++ {
+		req, err := buildHypixelRequest(ctx, endpoint, query)
+		if err != nil {
+			return nil, err
+		}
+
+		resp, err := HTTPClient.Do(req)
+		if err != nil {
+			if shouldRetryHypixelRequest(ctx, err, attempt) {
+				HTTPClient.CloseIdleConnections()
+				continue
+			}
+			return nil, security.RedactError(fmt.Errorf("error making request: %w", err))
+		}
+
+		body, readErr := func() ([]byte, error) {
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+
+			if resp.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+			}
+
+			return io.ReadAll(resp.Body)
+		}()
+		if readErr != nil {
+			if resp.StatusCode == http.StatusOK && shouldRetryHypixelRequest(ctx, readErr, attempt) {
+				HTTPClient.CloseIdleConnections()
+				continue
+			}
+			if resp.StatusCode == http.StatusOK {
+				return nil, fmt.Errorf("error reading response: %v", readErr)
+			}
+			return nil, readErr
+		}
+
+		if len(body) == 0 {
+			return nil, fmt.Errorf("received empty response from API")
+		}
+
+		return body, nil
 	}
 
-	resp, err := HTTPClient.Do(req)
-	if err != nil {
-		return nil, security.RedactError(fmt.Errorf("error making request: %w", err))
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
+	return nil, fmt.Errorf("failed after %d request attempts", hypixelRequestAttempts)
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+func shouldRetryHypixelRequest(ctx context.Context, err error, attempt int) bool {
+	if attempt+1 >= hypixelRequestAttempts {
+		return false
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
-	}
-
-	if len(body) == 0 {
-		return nil, fmt.Errorf("received empty response from API")
-	}
-
-	return body, nil
+	return ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
 func buildHypixelRequest(ctx context.Context, endpoint string, query url.Values) (*http.Request, error) {

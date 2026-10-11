@@ -22,6 +22,7 @@ import (
 	"skycrypt/src/api"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/singleflight"
 )
@@ -493,6 +494,9 @@ func To3DHead(img image.Image) *image.RGBA {
 // ========== SHARED UTILITY FUNCTIONS ==========
 
 var imageCache sync.Map
+var imageCacheEntries atomic.Int64
+
+const imageCacheMaxEntries int64 = 1024
 
 func loadImage(path string) (image.Image, error) {
 	if cached, ok := imageCache.Load(path); ok {
@@ -512,7 +516,11 @@ func loadImage(path string) (image.Image, error) {
 		return nil, err
 	}
 
-	imageCache.Store(path, img)
+	if imageCacheEntries.Load() < imageCacheMaxEntries {
+		if _, loaded := imageCache.LoadOrStore(path, img); !loaded {
+			imageCacheEntries.Add(1)
+		}
+	}
 	return img, nil
 }
 
