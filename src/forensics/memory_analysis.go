@@ -126,7 +126,9 @@ func profileSites(name string) []memoryProfileSite {
 	sites, parseErr := parseProfileSites(reader)
 	if parseErr != nil {
 		_ = reader.CloseWithError(parseErr)
-		<-writeDone
+		if err := <-writeDone; err != nil {
+			return nil
+		}
 		return nil
 	}
 	if err := <-writeDone; err != nil {
