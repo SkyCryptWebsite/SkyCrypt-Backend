@@ -138,7 +138,7 @@ LOG_STDOUT="0"
 # Public backend origin used when building rendered asset URLs.
 DOMAIN="http://localhost:8080"
 
-# Commit hash exposed by /source. Docker builds set this automatically.
+# Commit hash exposed by /api/source. Docker builds set this automatically.
 SOURCE_COMMIT=""
 
 # PostgreSQL connection for the fallback cache. Leave empty to disable it.
@@ -165,10 +165,10 @@ DISABLE_SERVER_API_AUTH="true"
 | `SKYCRYPT_PREFORK` | Explicitly enable or disable Fiber prefork. Defaults to `false` when `DEV=true`, otherwise `true` | `false` in development, `true` otherwise | No |
 | `ENABLE_ARMOR_HEX` | Enable hexadecimal armor color support | `false` | No |
 | `VERBOSE_LOGGING` | Enable extra debug logging from utility helpers | `false` | No |
-| `FORENSICS_ENABLED` | Enable forensic request/performance logging and `/forensics` endpoints | `false` | No |
+| `FORENSICS_ENABLED` | Enable forensic request/performance logging and `/api/forensics` endpoints | `false` | No |
 | `LOG_STDOUT` | Also write forensic JSON logs to stdout when set to `1` | `0` | No |
 | `DOMAIN` | Public backend origin used for generated image/resource URLs | `https://sky.shiiyu.moe` | No |
-| `SOURCE_COMMIT` | Git commit hash exposed by `/source`; normally injected by Docker builds | - | No |
+| `SOURCE_COMMIT` | Git commit hash exposed by `/api/source`; normally injected by Docker builds | - | No |
 | `DATABASE_URL` | PostgreSQL connection URL for the fallback cache | - | No |
 | `REDIS_HOST` | Redis server hostname | `localhost` | No |
 | `REDIS_PORT` | Redis server port | `6379` | No |
@@ -233,7 +233,7 @@ SkyCrypt Backend uses a split license model:
 | Minecraft/Mojang-derived assets and rendering helper assets | Upstream Mojang/Microsoft terms | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
 | Asset files pending provenance review | Their respective rights holders | These assets are not relicensed under GNU AGPLv3 by default. |
 
-The public API exposes source and license metadata at `/source`.
+The public API exposes source and license metadata at `/api/source`.
 
 ## Common Issues
 

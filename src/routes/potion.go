@@ -19,7 +19,7 @@ import (
 //	@Success		200		{file}		binary					"PNG image bytes returned successfully."
 //	@Failure		400		{object}	models.ProcessingError	"Potion type or color is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Potion image could not be rendered."
-//	@Router			/potion/{type}/{color} [get]
+//	@Router			/api/potion/{type}/{color} [get]
 func PotionHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	potionType := c.Params("type")

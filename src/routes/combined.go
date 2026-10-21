@@ -33,7 +33,7 @@ import (
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or combined data could not be loaded."
-//	@Router			/combined/{uuid}/{profileId} [get]
+//	@Router			/api/combined/{uuid}/{profileId} [get]
 func CombinedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Combined")()

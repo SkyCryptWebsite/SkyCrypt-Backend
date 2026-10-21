@@ -14,7 +14,7 @@ import (
 //	@Tags			Constants
 //	@Produce		json
 //	@Success		200	{array}		string	"Max-level enchantments returned successfully."
-//	@Router			/constants/enchantments [get]
+//	@Router			/api/constants/enchantments [get]
 func EnchantmentsConstantsHandler(c *fiber.Ctx) error {
 	return c.JSON(constants.MAX_ENCHANTS)
 }

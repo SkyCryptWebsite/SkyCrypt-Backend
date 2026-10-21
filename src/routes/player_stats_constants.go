@@ -14,7 +14,7 @@ import (
 //	@Tags			Stats
 //	@Produce		json
 //	@Success		200	{array}		models.StatData	"Player stats constants returned successfully."
-//	@Router			/constants/stats [get]
+//	@Router			/api/constants/stats [get]
 func StatsConstantsHandler(c *fiber.Ctx) error {
 	return c.JSON(constants.STATS_DATA)
 }

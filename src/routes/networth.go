@@ -33,7 +33,7 @@ import (
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Networth calculation failed."
-//	@Router			/networth/{uuid}/{profileId} [get]
+//	@Router			/api/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Networth")()

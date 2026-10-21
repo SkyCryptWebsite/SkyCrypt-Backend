@@ -32,7 +32,7 @@ import (
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Cached inventory data is missing or could not be parsed."
-//	@Router			/inventory/search/{uuid}/{profileId}/{searchParam} [get]
+//	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
 func InventorySearchHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Inventory")()

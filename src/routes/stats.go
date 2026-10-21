@@ -31,7 +31,7 @@ import (
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
-//	@Router			/stats/{uuid}/{profileId} [get]
+//	@Router			/api/stats/{uuid}/{profileId} [get]
 func StatsHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Stats")()
@@ -77,7 +77,7 @@ func StatsHandler(c *fiber.Ctx) error {
 //	@Failure		429		{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503		{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500		{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
-//	@Router			/stats/{uuid} [get]
+//	@Router			/api/stats/{uuid} [get]
 func SelectedProfileStatsHandler(c *fiber.Ctx) error {
 	return StatsHandler(c)
 }

@@ -23,7 +23,7 @@ import (
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Router			/uuid/{username} [get]
+//	@Router			/api/uuid/{username} [get]
 func UUIDHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 	username := c.Params("username")

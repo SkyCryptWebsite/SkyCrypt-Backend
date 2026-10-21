@@ -145,12 +145,11 @@ func SetupRoutes(app *fiber.App) {
 		*/
 	}
 
-	// Routes live at the root on api.shiiyu.moe; /api keeps the old sky.shiiyu.moe/api paths and rendered URLs working.
-	registerRoutes(app.Group("/api"), "/api")
-	registerRoutes(app, "")
-}
+	// api.shiiyu.moe serves the API reference at its root and the endpoints under /api.
+	app.Get("/", apiReferenceHandler)
 
-func registerRoutes(api fiber.Router, prefix string) {
+	api := app.Group("/api")
+
 	api.Get("/source", routes.SourceHandler)
 
 	// Forensic dashboard (live in-memory report)
@@ -161,23 +160,7 @@ func registerRoutes(api fiber.Router, prefix string) {
 
 	// Documentation - serve openapi files directly
 	api.Static("/openapi/doc.json", "./docs/swagger.json")
-
-	api.Get("/openapi/", func(c *fiber.Ctx) error {
-		html := `<!DOCTYPE html>
-					<html>
-					<head>
-						<title>SkyCrypt API Reference</title>
-						<meta charset="utf-8" />
-						<meta name="viewport" content="width=device-width, initial-scale=1" />
-					</head>
-					<body>
-						<script id="api-reference" data-url="` + prefix + `/openapi/doc.json"></script>
-						<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1"></script>
-					</body>
-					</html>`
-		c.Set("Content-Type", "text/html")
-		return c.SendString(html)
-	})
+	api.Get("/openapi/", apiReferenceHandler)
 
 	// USERNAME AND UUID RESOLVING
 	api.Get("/uuid/:username", routes.APIKeyMiddleware, routes.UUIDHandler)
@@ -210,4 +193,20 @@ func registerRoutes(api fiber.Router, prefix string) {
 	api.Get("/constants/stats", routes.StatsConstantsHandler)
 	api.Get("/constants/packs", routes.ResourcePacksConstantsHandler)
 	api.Get("/constants/enchantments", routes.EnchantmentsConstantsHandler)
+}
+
+func apiReferenceHandler(c *fiber.Ctx) error {
+	c.Set("Content-Type", "text/html")
+	return c.SendString(`<!DOCTYPE html>
+<html>
+<head>
+	<title>SkyCrypt API Reference</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+	<script id="api-reference" data-url="/api/openapi/doc.json"></script>
+	<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1"></script>
+</body>
+</html>`)
 }
