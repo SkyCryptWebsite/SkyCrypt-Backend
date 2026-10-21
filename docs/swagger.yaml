@@ -1297,37 +1297,9 @@ components:
     models.Networth:
       properties:
         nonCosmetic:
-          $ref: '#/components/schemas/models.NetworthResult'
+          $ref: '#/components/schemas/skycrypt_src_models.NetworthResult'
         normal:
-          $ref: '#/components/schemas/models.NetworthResult'
-      type: object
-    models.NetworthResult:
-      properties:
-        bank:
-          type: number
-        isNonCosmetic:
-          type: boolean
-        networth:
-          type: number
-        noInventory:
-          type: boolean
-        personalBank:
-          type: number
-        purse:
-          type: number
-        types:
-          additionalProperties:
-            $ref: '#/components/schemas/models.NetworthType'
-          type: object
-        unsoulboundNetworth:
-          type: number
-      type: object
-    models.NetworthType:
-      properties:
-        total:
-          type: number
-        unsoulboundTotal:
-          type: number
+          $ref: '#/components/schemas/skycrypt_src_models.NetworthResult'
       type: object
     models.OutputPets:
       properties:
@@ -2105,6 +2077,34 @@ components:
           type: string
         texture_pack:
           type: string
+      type: object
+    skycrypt_src_models.NetworthResult:
+      properties:
+        bank:
+          type: number
+        isNonCosmetic:
+          type: boolean
+        networth:
+          type: number
+        noInventory:
+          type: boolean
+        personalBank:
+          type: number
+        purse:
+          type: number
+        types:
+          additionalProperties:
+            $ref: '#/components/schemas/skycrypt_src_models.NetworthType'
+          type: object
+        unsoulboundNetworth:
+          type: number
+      type: object
+    skycrypt_src_models.NetworthType:
+      properties:
+        total:
+          type: number
+        unsoulboundTotal:
+          type: number
       type: object
     skycrypttypes.Display:
       properties:
