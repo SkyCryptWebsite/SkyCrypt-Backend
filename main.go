@@ -82,7 +82,7 @@ func main() {
 		DisableDefaultDate:        true,             // Disable date header
 		DisableDefaultContentType: false,
 		BodyLimit:                 10 << 20, // 10MB
-		ReadBufferSize:            4096,
+		ReadBufferSize:            32 << 10, // Caps request header size; the frontend forwards browser cookies, so match Cloudflare's 32KB
 		WriteBufferSize:           4096,
 		ReadTimeout:               15 * time.Second,
 		WriteTimeout:              30 * time.Second,
