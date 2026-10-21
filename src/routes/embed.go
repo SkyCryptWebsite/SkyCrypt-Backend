@@ -4,6 +4,7 @@ import (
 	"context"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
+	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"time"
@@ -52,9 +53,14 @@ func EmbedHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
-	if err != nil {
-		return sendLoadError(c, "Failed to resolve player", err)
+	// A UUID is all the cache key and the profile fetch need, so its Mojang lookup runs alongside the fetch instead.
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		resolved, err := api.ResolvePlayerContext(reqCtx, uuid)
+		if err != nil {
+			return sendLoadError(c, "Failed to resolve player", err)
+		}
+		mowojang = resolved
 	}
 
 	cacheKey := responseCacheKey("embed", mowojang.UUID, profileId)
@@ -64,8 +70,8 @@ func EmbedHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
-		data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
+	body, err := sharedResponse(reqCtx, cacheKey, rawCacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
+		data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true, name: true})
 		if err != nil {
 			return nil, failedTo("Failed to fetch data", err)
 		}
@@ -79,18 +85,13 @@ func EmbedHandler(c *fiber.Ctx) error {
 			"nonCosmetic": totals.NonCosmetic,
 		}
 
-		return marshalBody(stats.GetEmbedData(mowojang, data.Player, data.Member(), data.Profile, formattedNetworth))
+		return marshalBody(stats.GetEmbedData(data.Mowojang, data.Player, data.Member(), data.Profile, formattedNetworth))
 	})
 	if err != nil {
 		return sendBuildError(c, err)
 	}
 
 	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
-
-	// The shared build cached it under the resolved key; keep a copy under the request as given too.
-	if cacheKey.key != rawCacheKey.key {
-		cacheBody(reqCtx, rawCacheKey, body, 60*60)
-	}
 	return sendBody(c, reqCtx, cacheKey, body)
 }
 

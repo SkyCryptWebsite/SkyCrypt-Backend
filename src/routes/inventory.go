@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
@@ -56,7 +57,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+	body, err := sharedResponse(reqCtx, cacheKey, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
 		return buildInventory(ctx, uuid, profileId, enabledPacks, cacheKey)
 	})
 	if err != nil {
@@ -96,6 +97,7 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 		defer func() {
 			if r := recover(); r != nil {
 				fmt.Printf("[INVENTORY] museum tab failed: %v\n", r)
+				api.SkipCaching(ctx)
 			}
 			museumCh <- museumItems
 		}()

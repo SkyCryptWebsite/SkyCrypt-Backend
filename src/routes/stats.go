@@ -53,9 +53,14 @@ func StatsHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
-	if err != nil {
-		return sendLoadError(c, "failed to resolve player", err)
+	// A UUID is all the cache key and the profile fetch need, so its Mojang lookup runs alongside the fetch instead.
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		resolved, err := api.ResolvePlayerContext(reqCtx, uuid)
+		if err != nil {
+			return sendLoadError(c, "failed to resolve player", err)
+		}
+		mowojang = resolved
 	}
 
 	cacheKey := responseCacheKey("stats", mowojang.UUID, profileId)
@@ -65,7 +70,7 @@ func StatsHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+	body, err := sharedResponse(reqCtx, cacheKey, rawCacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
 		output, err := computeStatsContext(ctx, mowojang, profileId)
 		if err != nil {
 			return nil, failedTo("failed to load data", err)
@@ -77,10 +82,6 @@ func StatsHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
-	// The shared build cached it under the resolved key; keep a copy under the request as given too.
-	if cacheKey.key != rawCacheKey.key {
-		cacheBody(reqCtx, rawCacheKey, body, 5*60)
-	}
 	return sendBody(c, reqCtx, cacheKey, body)
 }
 
@@ -108,7 +109,7 @@ func SelectedProfileStatsHandler(c *fiber.Ctx) error {
 }
 
 func computeStatsContext(ctx context.Context, mowojang *models.MowojangResponse, profileId string) (*models.StatsOutput, error) {
-	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
+	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true, name: true})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load profile: %w", err)
 	}
@@ -118,5 +119,5 @@ func computeStatsContext(ctx context.Context, mowojang *models.MowojangResponse,
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
 
-	return stats.GetStats(mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members)
+	return stats.GetStats(data.Mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members)
 }

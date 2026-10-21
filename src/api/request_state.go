@@ -37,6 +37,13 @@ func ServedStale(ctx context.Context) bool {
 	return state != nil && state.stale.Load()
 }
 
+// SkipCaching keeps a response that was built with a part missing out of the caches, like stale fallback data.
+func SkipCaching(ctx context.Context) {
+	if state := requestState(ctx); state != nil {
+		state.stale.Store(true)
+	}
+}
+
 // MissedCache reports whether a cache-only request needed data that wasn't cached.
 func MissedCache(ctx context.Context) bool {
 	state := requestState(ctx)

@@ -50,12 +50,15 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	resolvedPlayer, err := api.ResolvePlayerContext(reqCtx, uuid)
-	if err != nil {
-		return sendLoadError(c, "Failed to resolve player", err)
+	// Player stats only need the UUID, so skip the Mojang lookup when that is what was given.
+	resolvedUUID := uuid
+	if !utility.IsUUID(uuid) {
+		resolvedPlayer, err := api.ResolvePlayerContext(reqCtx, uuid)
+		if err != nil {
+			return sendLoadError(c, "Failed to resolve player", err)
+		}
+		resolvedUUID = resolvedPlayer.UUID
 	}
-
-	resolvedUUID := resolvedPlayer.UUID
 	cacheKey := responseCacheKey("playerStats", resolvedUUID, profileId)
 	if cacheKey.key != rawCacheKey.key {
 		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
@@ -63,7 +66,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+	body, err := sharedResponse(reqCtx, cacheKey, rawCacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
 		profile, err := api.GetProfileContext(ctx, resolvedUUID, profileId)
 		if err != nil {
 			return nil, failedTo("Failed to get profile", err)
@@ -78,10 +81,5 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/playerStats/%s in %s", profileId, time.Since(timeNow))
-
-	// The shared build cached it under the resolved key; keep a copy under the request as given too.
-	if cacheKey.key != rawCacheKey.key {
-		cacheBody(reqCtx, rawCacheKey, body, 5*60)
-	}
 	return sendBody(c, reqCtx, cacheKey, body)
 }

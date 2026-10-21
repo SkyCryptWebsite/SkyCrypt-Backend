@@ -75,7 +75,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	payload, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+	payload, err := sharedResponse(reqCtx, cacheKey, rawCacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
 		data, err := loadProfileData(ctx, mowojang, profileId, profileParts{museum: true})
 		if err != nil {
 			return nil, failedTo("Failed to fetch data", err)
@@ -91,11 +91,6 @@ func NetworthHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
-
-	// The shared build cached it under the resolved key; keep a copy under the request as given too.
-	if cacheKey.key != rawCacheKey.key {
-		cacheBody(reqCtx, rawCacheKey, payload, 5*60)
-	}
 	return sendBody(c, reqCtx, cacheKey, payload)
 }
 

@@ -48,7 +48,7 @@ func GardenHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
+	body, err := sharedResponse(reqCtx, cacheKey, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
 		return buildGarden(ctx, uuid, profileId)
 	})
 	if err != nil {

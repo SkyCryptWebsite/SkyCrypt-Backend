@@ -25,6 +25,8 @@ type profileData struct {
 type profileParts struct {
 	player bool
 	museum bool
+	// name looks up the display name of a player given as a bare UUID (Name unset) alongside the fetch.
+	name bool
 }
 
 // Member returns a copy of the requested player's member data, so callers may fill in defaults on it.
@@ -46,6 +48,22 @@ func loadProfileData(ctx context.Context, mowojang *models.MowojangResponse, pro
 	uuid := mowojang.UUID
 	isProfileUUID := utility.IsUUID(profileId)
 	g, groupCtx := errgroup.WithContext(ctx)
+
+	var resolveErr error
+	resolved := make(chan struct{})
+	if parts.name && mowojang.Name == "" {
+		go func() {
+			defer close(resolved)
+			player, err := api.ResolvePlayerContext(ctx, uuid)
+			if err != nil {
+				resolveErr = failedTo("Failed to resolve player", err)
+				return
+			}
+			data.Mowojang = player
+		}()
+	} else {
+		close(resolved)
+	}
 
 	type museumResult struct {
 		profileID string
@@ -110,7 +128,13 @@ func loadProfileData(ctx context.Context, mowojang *models.MowojangResponse, pro
 		return err
 	})
 
-	if err := g.Wait(); err != nil {
+	err := g.Wait()
+	<-resolved
+	// A failed lookup wins, as it did when the lookup ran before the fetch.
+	if resolveErr != nil {
+		return nil, resolveErr
+	}
+	if err != nil {
 		return nil, err
 	}
 	return data, nil
