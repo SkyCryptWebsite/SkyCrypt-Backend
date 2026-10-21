@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
@@ -47,6 +48,19 @@ func GardenHandler(c *fiber.Ctx) error {
 		return err
 	}
 
+	body, err := sharedResponse(reqCtx, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
+		return buildGarden(ctx, uuid, profileId)
+	})
+	if err != nil {
+		return sendBuildError(c, err)
+	}
+
+	utility.LogVerbose("Returning /api/garden/%s in %s", profileId, time.Since(timeNow))
+
+	return sendBody(c, reqCtx, cacheKey, body)
+}
+
+func buildGarden(ctx context.Context, uuid string, profileId string) ([]byte, error) {
 	var (
 		profiles *models.HypixelProfilesResponse
 		profile  *skycrypttypes.Profile
@@ -54,7 +68,7 @@ func GardenHandler(c *fiber.Ctx) error {
 	)
 
 	isProfileUUID := utility.IsUUID(profileId)
-	g, groupCtx := errgroup.WithContext(reqCtx)
+	g, groupCtx := errgroup.WithContext(ctx)
 	type gardenResult struct {
 		profileID string
 		garden    *skycrypttypes.Garden
@@ -71,7 +85,7 @@ func GardenHandler(c *fiber.Ctx) error {
 	}
 
 	if profileId == "" {
-		if cachedProfileID := getCachedSelectedProfileID(reqCtx, uuid); cachedProfileID != "" {
+		if cachedProfileID := getCachedSelectedProfileID(ctx, uuid); cachedProfileID != "" {
 			selectedGardenCh = make(chan gardenResult, 1)
 			g.Go(func() error {
 				fetchedGarden, err := api.GetGardenContext(groupCtx, cachedProfileID)
@@ -112,15 +126,12 @@ func GardenHandler(c *fiber.Ctx) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		return sendLoadError(c, "Failed to fetch data", err)
+		return nil, failedTo("Failed to fetch data", err)
 	}
 
 	userProfileValue := profile.Members[uuid]
 	userProfile := &userProfileValue
 
 	output := stats.GetGarden(userProfile, garden)
-
-	utility.LogVerbose("Returning /api/garden/%s in %s", profileId, time.Since(timeNow))
-
-	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 60*60)
+	return marshalBody(output)
 }

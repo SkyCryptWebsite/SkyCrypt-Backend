@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
-	"time"
 )
 
 var MUSEUM_CATEGORIES = []string{"combat", "farming", "mining", "fishing", "foraging", "dungeoneering", "hunting"}
@@ -77,7 +76,8 @@ func sortMuseumItems(items []string, skyblockItems map[string]models.ProcessedHy
 
 }
 
-func getMuseumItems() {
+// rebuildMuseum recomputes the museum constants from the current items. SetItems calls it.
+func rebuildMuseum() {
 	skyblockItems := ItemsSnapshot()
 	output := MuseumConstants{
 		Children:     make(map[string]string),
@@ -113,19 +113,24 @@ func getMuseumItems() {
 		}
 
 		if item.MuseumData.ArmorSetExperience != nil {
-			var armorSetId string
+			// A piece can belong to several sets (the Prismarine Necklace is in Fisherman and Sponge). It used to land
+			// in whichever set map order yielded last, so set contents changed with every restart and process.
+			setIds := make([]string, 0, len(item.MuseumData.ArmorSetExperience))
 			for setId := range item.MuseumData.ArmorSetExperience {
-				armorSetId = setId
+				setIds = append(setIds, setId)
 			}
+			sort.Strings(setIds)
 
-			output.ArmorSets[armorSetId] = append(output.ArmorSets[armorSetId], item.SkyblockID)
+			for _, armorSetId := range setIds {
+				output.ArmorSets[armorSetId] = append(output.ArmorSets[armorSetId], item.SkyblockID)
 
-			sortMuseumItems(output.ArmorSets[armorSetId], skyblockItems)
+				sortMuseumItems(output.ArmorSets[armorSetId], skyblockItems)
 
-			output.ArmorSetToId[armorSetId] = output.ArmorSets[armorSetId][0]
+				output.ArmorSetToId[armorSetId] = output.ArmorSets[armorSetId][0]
 
-			if !slices.Contains(output.Categories[category], armorSetId) {
-				output.Categories[category] = append(output.Categories[category], armorSetId)
+				if !slices.Contains(output.Categories[category], armorSetId) {
+					output.Categories[category] = append(output.Categories[category], armorSetId)
+				}
 			}
 		} else {
 			output.Categories[category] = append(output.Categories[category], item.SkyblockID)
@@ -133,22 +138,6 @@ func getMuseumItems() {
 	}
 
 	museumConstants.Store(&output)
-}
-
-func init() {
-	go func() {
-		getMuseumItems()
-		for len(Museum().Categories["combat"]) == 0 {
-			time.Sleep(1 * time.Second)
-			getMuseumItems()
-		}
-
-		ticker := time.NewTicker(60 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			getMuseumItems()
-		}
-	}()
 }
 
 var MUSEUM_INVENTORY = []models.MuseumInventoryItem{

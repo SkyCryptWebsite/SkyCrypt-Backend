@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/klauspost/compress/zstd"
@@ -125,7 +126,8 @@ func GetBytesContext(ctx context.Context, key string) ([]byte, error) {
 		return nil, err
 	}
 	if strings.HasPrefix(val, zstdMagic) {
-		return zstdDecoder.DecodeAll([]byte(val), nil)
+		// DecodeAll only reads its input and keeps no reference, so it can read the string's bytes in place.
+		return zstdDecoder.DecodeAll(unsafe.Slice(unsafe.StringData(val), len(val)), nil)
 	}
 	return []byte(val), nil
 }

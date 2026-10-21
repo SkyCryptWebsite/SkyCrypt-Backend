@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"net/http"
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
@@ -73,7 +74,10 @@ func ItemHandlers(c *fiber.Ctx) error {
 		return c.JSON(constants.InvalidItemProvidedError)
 	}
 
-	c.Type("png")
+	// Depends on the pack cookie, so browsers may keep it but shared caches may not (Vary: Cookie is set).
+	c.Set(fiber.HeaderCacheControl, "private, max-age=3600")
+	// Rendered textures are mostly WebP; send the type the bytes actually have.
+	c.Set(fiber.HeaderContentType, http.DetectContentType(textureBytes))
 	// fmt.Printf("Returning /api/item/%s in %s\n", textureId, time.Since(timeNow))
 	return c.Send(textureBytes)
 }

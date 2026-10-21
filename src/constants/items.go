@@ -369,6 +369,10 @@ func SetItems(items map[string]models.ProcessedHypixelItem) {
 	itemsMu.Lock()
 	ITEMS = cloneItems(items)
 	itemsMu.Unlock()
+
+	// Everything derived from the item list is rebuilt here, once per load, rather than on a timer.
+	rebuildAccessories()
+	rebuildMuseum()
 }
 
 func GetItem(id string) (models.ProcessedHypixelItem, bool) {

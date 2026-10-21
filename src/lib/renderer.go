@@ -9,6 +9,7 @@ package lib
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -20,9 +21,12 @@ import (
 	"os"
 	"path/filepath"
 	"skycrypt/src/api"
+	"skycrypt/src/localcache"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/singleflight"
 )
@@ -31,9 +35,41 @@ var textureDir = "assets/static"
 
 var headGroup singleflight.Group
 
+// renderGroup merges concurrent potion and leather renders of the same file.
+var renderGroup singleflight.Group
+
+// writeFileAtomic writes through a temporary file and a rename, so readers see the old file or the whole new one,
+// never a half-written PNG.
+func writeFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0644); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return nil
+}
+
 // ========== ITEM RENDERING (Potions & Armor) ==========
 
 func RenderPotion(potionType, hexColor string) ([]byte, error) {
+	// Hex parsing ignores case; one cache file and render per colour, not per spelling.
+	hexColor = strings.ToLower(hexColor)
 	cachePath := filepath.Join(CACHE_DIR, "potions", fmt.Sprintf("potion_%s_%s.png", potionType, hexColor))
 	if _, err := os.Stat(cachePath); err == nil {
 		data, err := os.ReadFile(cachePath)
@@ -43,6 +79,18 @@ func RenderPotion(potionType, hexColor string) ([]byte, error) {
 
 		log.Println("Error reading cached potion texture:", err)
 	}
+
+	// Concurrent first requests for one potion render it once.
+	result, err, _ := renderGroup.Do(cachePath, func() (any, error) {
+		return renderPotionUncached(potionType, hexColor, cachePath)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.([]byte), nil
+}
+
+func renderPotionUncached(potionType, hexColor string, cachePath string) ([]byte, error) {
 
 	liquidPath := filepath.Join(textureDir, "potions", "potion_overlay.png")
 
@@ -84,7 +132,7 @@ func RenderPotion(potionType, hexColor string) ([]byte, error) {
 	if err := os.MkdirAll(filepath.Join(CACHE_DIR, "potions"), 0755); err != nil {
 		log.Println("Error creating cache directory for potions:", err)
 	} else {
-		if err := os.WriteFile(cachePath, output, 0644); err != nil {
+		if err := writeFileAtomic(cachePath, output); err != nil {
 			log.Println("Error saving potion texture to cache:", err)
 		}
 	}
@@ -93,6 +141,8 @@ func RenderPotion(potionType, hexColor string) ([]byte, error) {
 }
 
 func RenderArmor(armorType, hexColor string) ([]byte, error) {
+	// Hex parsing ignores case; one cache file and render per colour, not per spelling.
+	hexColor = strings.ToLower(hexColor)
 	cachePath := filepath.Join(CACHE_DIR, "leather", fmt.Sprintf("leather_%s_%s.png", armorType, hexColor))
 	if _, err := os.Stat(cachePath); err == nil {
 		data, err := os.ReadFile(cachePath)
@@ -102,6 +152,18 @@ func RenderArmor(armorType, hexColor string) ([]byte, error) {
 
 		log.Println("Error reading cached armor texture:", err)
 	}
+
+	// Concurrent first requests for one leather piece render it once.
+	result, err, _ := renderGroup.Do(cachePath, func() (any, error) {
+		return renderArmorUncached(armorType, hexColor, cachePath)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.([]byte), nil
+}
+
+func renderArmorUncached(armorType, hexColor string, cachePath string) ([]byte, error) {
 
 	basePath := filepath.Join(textureDir, "armor", fmt.Sprintf("leather_%s.png", armorType))
 	overlayPath := filepath.Join(textureDir, "armor", fmt.Sprintf("leather_%s_overlay.png", armorType))
@@ -137,7 +199,7 @@ func RenderArmor(armorType, hexColor string) ([]byte, error) {
 	if err := os.MkdirAll(filepath.Join(CACHE_DIR, "leather"), 0755); err != nil {
 		log.Println("Error creating cache directory for leather armor:", err)
 	} else {
-		if err := os.WriteFile(cachePath, output, 0644); err != nil {
+		if err := writeFileAtomic(cachePath, output); err != nil {
 			log.Println("Error saving leather armor to cache:", err)
 		}
 	}
@@ -145,10 +207,21 @@ func RenderArmor(armorType, hexColor string) ([]byte, error) {
 	return output, nil
 }
 
+// failedHeads remembers textures Mojang says don't exist, so repeated requests for a bad ID don't each make a new
+// call to textures.minecraft.net. Other failures aren't remembered: they may be a passing outage.
+var failedHeads = localcache.NewLocalCache[struct{}](4096)
+
+const failedHeadTTL = 10 * time.Minute
+
+var errHeadNotFound = errors.New("texture not found")
+
 func RenderHead(textureId string) []byte {
 	cachePath := filepath.Join(CACHE_DIR, "heads", textureId+".png")
 	if data, err := os.ReadFile(cachePath); err == nil {
 		return data
+	}
+	if _, failed, _ := failedHeads.Get(textureId); failed {
+		return nil
 	}
 
 	result, err, _ := headGroup.Do(textureId, func() (interface{}, error) {
@@ -165,6 +238,9 @@ func RenderHead(textureId string) []byte {
 			_ = response.Body.Close()
 		}()
 
+		if response.StatusCode == http.StatusNotFound {
+			return nil, errHeadNotFound
+		}
 		if response.StatusCode != http.StatusOK {
 			log.Println("Error fetching texture, status code:", response.StatusCode)
 			return nil, fmt.Errorf("texture fetch failed: status %d", response.StatusCode)
@@ -196,7 +272,7 @@ func RenderHead(textureId string) []byte {
 		data := buf.Bytes()
 
 		if err := os.MkdirAll(filepath.Join(CACHE_DIR, "heads"), 0755); err == nil {
-			if err := os.WriteFile(cachePath, data, 0644); err != nil {
+			if err := writeFileAtomic(cachePath, data); err != nil {
 				log.Println("Error saving head to cache:", err)
 			}
 		} else {
@@ -208,6 +284,9 @@ func RenderHead(textureId string) []byte {
 
 	if err != nil {
 		log.Printf("Error rendering head for texture %s: %v", textureId, err)
+		if errors.Is(err, errHeadNotFound) {
+			failedHeads.Set(strings.Clone(textureId), struct{}{}, failedHeadTTL, 0)
+		}
 		return nil
 	}
 
@@ -247,7 +326,7 @@ func RenderLocalHead(cacheID string, texturePath string) []byte {
 		data := buf.Bytes()
 
 		if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err == nil {
-			if err := os.WriteFile(cachePath, data, 0644); err != nil {
+			if err := writeFileAtomic(cachePath, data); err != nil {
 				log.Println("Error saving local head to cache:", err)
 			}
 		}

@@ -30,12 +30,9 @@ func NormalizeEnabledPacks(enabledPacks []string) []string {
 	return normalized
 }
 
+// canonicalResourcePackIDs returns a shared, read-only map.
 func canonicalResourcePackIDs() map[string]string {
-	canonicalIDs := map[string]string{}
-	for _, packID := range defaultResourcePackIDs() {
-		canonicalIDs[canonicalPackAlias(packID)] = packID
-	}
-	return canonicalIDs
+	return resourcePackIndex().canonical
 }
 
 func enabledPackSet(enabledPackIDs []string) map[string]struct{} {
@@ -58,14 +55,9 @@ func packIDsForRenderer(enabledPackIDs []string) []string {
 	return packIDs
 }
 
+// knownResourcePackAliases returns a shared, read-only set.
 func knownResourcePackAliases() map[string]struct{} {
-	known := map[string]struct{}{}
-	for _, packID := range defaultResourcePackIDs() {
-		if canonicalPack := canonicalPackAlias(packID); canonicalPack != "" {
-			known[canonicalPack] = struct{}{}
-		}
-	}
-	return known
+	return resourcePackIndex().known
 }
 
 func canonicalPackAlias(packID string) string {

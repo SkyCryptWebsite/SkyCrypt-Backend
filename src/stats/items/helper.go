@@ -106,7 +106,15 @@ func ParseItemGems(gems map[string]any, rarity string) []gemstone {
 
 	var parsed []gemstone
 
-	for key, value := range gems {
+	// Sorted keys: map order would shuffle the gemstone lines in the item's lore on every request.
+	keys := make([]string, 0, len(gems))
+	for key := range gems {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	for _, key := range keys {
+		value := gems[key]
 		slotTypeParts := strings.Split(key, "_")
 		if len(slotTypeParts) == 0 {
 			continue

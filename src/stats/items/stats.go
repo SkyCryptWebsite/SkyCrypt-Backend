@@ -11,6 +11,17 @@ import (
 
 var regex = regexp.MustCompile(`^([A-Za-z ]+): ([+-]([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{0,2})?))`)
 
+// statIDByLoreName maps a stat's lore name to its ID, keeping the first match as the old linear scan did.
+var statIDByLoreName = func() map[string]string {
+	output := make(map[string]string, len(constants.STATS_DATA))
+	for _, statInfo := range constants.STATS_DATA {
+		if _, exists := output[statInfo.NameLore]; !exists {
+			output[statInfo.NameLore] = statInfo.ID
+		}
+	}
+	return output
+}()
+
 func GetStatsFromItem(item models.ProcessedItem) ItemStats {
 	stats := make(ItemStats)
 
@@ -24,21 +35,17 @@ func GetStatsFromItem(item models.ProcessedItem) ItemStats {
 	}
 
 	for _, line := range lore {
+		// Every stat line has ": "; most lore lines don't, so skip the regex for them.
+		if !strings.Contains(line, ": ") {
+			continue
+		}
 		matches := regex.FindStringSubmatch(line)
 
 		if matches == nil {
 			continue
 		}
 
-		var statName string
-
-		for _, statInfo := range constants.STATS_DATA {
-			if statInfo.NameLore == matches[1] {
-				statName = statInfo.ID
-				break
-			}
-		}
-
+		statName := statIDByLoreName[matches[1]]
 		if statName == "" {
 			continue
 		}

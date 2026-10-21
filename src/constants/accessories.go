@@ -5,8 +5,8 @@ import (
 	"os"
 	"skycrypt/src/models"
 	"slices"
+	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -58,25 +58,79 @@ type ExtraAccessory struct {
 	Rarity  string `json:"rarity"`
 }
 
-// accessories is rebuilt hourly and swapped in whole, so readers need no lock.
-var accessories atomic.Pointer[[]models.ProcessedHypixelItem]
-
-func loadAccessories() []models.ProcessedHypixelItem {
-	if current := accessories.Load(); current != nil {
-		return *current
-	}
-	return nil
+// accessoryCatalog is everything derived from the item list that requests need. It is rebuilt when items load
+// and swapped in whole, so readers need no lock and never rebuild it themselves.
+type accessoryCatalog struct {
+	all        []Accessory
+	max        []Accessory
+	unique     int
+	recombable int
 }
 
-func getAccessories() {
-	var output []models.ProcessedHypixelItem
-	for _, item := range ItemsSnapshot() {
-		if item.Category == "accessory" {
-			output = append(output, item)
+var accessories atomic.Pointer[accessoryCatalog]
+
+func loadCatalog() *accessoryCatalog {
+	if current := accessories.Load(); current != nil {
+		return current
+	}
+	return &accessoryCatalog{}
+}
+
+// aliasToBase and upgradeChainOf index the static alias and upgrade tables, which lookups used to scan.
+var (
+	aliasToBase    = buildAliasToBase()
+	upgradeChainOf = buildUpgradeChains()
+)
+
+func buildAliasToBase() map[string]string {
+	bases := make([]string, 0, len(ACCESSORY_ALIASES))
+	for base := range ACCESSORY_ALIASES {
+		bases = append(bases, base)
+	}
+	slices.Sort(bases)
+
+	output := map[string]string{}
+	for _, base := range bases {
+		for _, alias := range ACCESSORY_ALIASES[base] {
+			if _, exists := output[alias]; !exists {
+				output[alias] = base
+			}
 		}
 	}
+	return output
+}
 
-	accessories.Store(&output)
+func buildUpgradeChains() map[string][]string {
+	output := map[string][]string{}
+	for _, chain := range AccessoryUpgrades {
+		for _, id := range chain {
+			if _, exists := output[id]; !exists {
+				output[id] = chain
+			}
+		}
+	}
+	return output
+}
+
+// rebuildAccessories recomputes the accessory catalog from the current items. SetItems calls it.
+func rebuildAccessories() {
+	var items []models.ProcessedHypixelItem
+	for _, item := range ItemsSnapshot() {
+		if item.Category == "accessory" {
+			items = append(items, item)
+		}
+	}
+	// Map order is random; sort so every process lists accessories (and missing ones) in the same order.
+	slices.SortFunc(items, func(a, b models.ProcessedHypixelItem) int { return strings.Compare(a.SkyblockID, b.SkyblockID) })
+
+	all := buildAllAccessories(items)
+	maxAccessories := buildMaxAccessories(all)
+	accessories.Store(&accessoryCatalog{
+		all:        all,
+		max:        maxAccessories,
+		unique:     countUniqueAccessories(maxAccessories),
+		recombable: countRecombableAccessories(maxAccessories),
+	})
 }
 
 var AccessoryUpgrades = [][]string{
@@ -280,18 +334,20 @@ var ENRICHMENT_TO_STAT = map[string]string{
 }
 
 func findInAliases(id string) bool {
-	for _, aliases := range ACCESSORY_ALIASES {
-		if slices.Contains(aliases, id) {
-			return true
-		}
-	}
-	return false
+	_, isAlias := aliasToBase[id]
+	return isAlias
 }
 
+// GetAllAccessories returns the shared accessory list. Treat it as read-only.
 func GetAllAccessories() []Accessory {
-	var output []Accessory
+	return loadCatalog().all
+}
 
-	for _, item := range loadAccessories() {
+func buildAllAccessories(items []models.ProcessedHypixelItem) []Accessory {
+	var output []Accessory
+	domain := getDomain()
+
+	for _, item := range items {
 		if slices.Contains(ignoredAccessories, item.SkyblockID) {
 			continue
 		}
@@ -306,9 +362,9 @@ func GetAllAccessories() []Accessory {
 
 		texturePath := ""
 		if item.Texture != "" {
-			texturePath = fmt.Sprintf("%s/api/head/%s", getDomain(), item.Texture)
+			texturePath = fmt.Sprintf("%s/api/head/%s", domain, item.Texture)
 		} else {
-			texturePath = fmt.Sprintf("%s/api/item/%s:%d", getDomain(), item.Material, item.Damage)
+			texturePath = fmt.Sprintf("%s/api/item/%s:%d", domain, item.Material, item.Damage)
 		}
 
 		accessory := Accessory{
@@ -346,8 +402,12 @@ func GetAllAccessories() []Accessory {
 	return output
 }
 
+// GetMaxAccessories returns the shared list of accessories at the top of their upgrade chain. Treat it as read-only.
 func GetMaxAccessories() []Accessory {
-	allAccessories := GetAllAccessories()
+	return loadCatalog().max
+}
+
+func buildMaxAccessories(allAccessories []Accessory) []Accessory {
 	var maxAccessories []Accessory
 
 	for _, item := range allAccessories {
@@ -362,7 +422,10 @@ func GetMaxAccessories() []Accessory {
 }
 
 func GetUniqueAccessoriesCount() int {
-	maxAccessories := GetMaxAccessories()
+	return loadCatalog().unique
+}
+
+func countUniqueAccessories(maxAccessories []Accessory) int {
 	uniqueIDs := make(map[string]bool)
 
 	for _, accessory := range maxAccessories {
@@ -373,7 +436,10 @@ func GetUniqueAccessoriesCount() int {
 }
 
 func GetRecombableAccessoriesCount() int {
-	maxAccessories := GetMaxAccessories()
+	return loadCatalog().recombable
+}
+
+func countRecombableAccessories(maxAccessories []Accessory) int {
 	uniqueIDs := make(map[string]bool)
 
 	for _, accessory := range maxAccessories {
@@ -388,37 +454,17 @@ func GetRecombableAccessoriesCount() int {
 	return len(uniqueIDs)
 }
 
+// GetUpgradeList returns the shared upgrade chain containing id, or an empty list. Treat it as read-only.
 func GetUpgradeList(id string) []string {
-	for _, upgradeChain := range AccessoryUpgrades {
-		if slices.Contains(upgradeChain, id) {
-			return upgradeChain
-		}
+	if chain, ok := upgradeChainOf[id]; ok {
+		return chain
 	}
-
 	return []string{}
 }
 
 func GetBaseIdFromAlias(id string) string {
-	for base, aliases := range ACCESSORY_ALIASES {
-		if slices.Contains(aliases, id) {
-			return base
-		}
+	if base, ok := aliasToBase[id]; ok {
+		return base
 	}
 	return id
-}
-
-func init() {
-	go func() {
-		getAccessories()
-		for len(loadAccessories()) == 0 {
-			time.Sleep(1 * time.Second)
-			getAccessories()
-		}
-
-		ticker := time.NewTicker(60 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			getAccessories()
-		}
-	}()
 }

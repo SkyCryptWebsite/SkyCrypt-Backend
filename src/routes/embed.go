@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/stats"
@@ -44,35 +45,53 @@ func EmbedHandler(c *fiber.Ctx) error {
 	}
 	reqCtx := c.UserContext()
 
+	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
+	// so a cached response still loads when Mojang is down.
+	rawCacheKey := responseCacheKey("embed", uuid, profileId)
+	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
+		return err
+	}
+
 	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return sendLoadError(c, "Failed to resolve player", err)
 	}
 
 	cacheKey := responseCacheKey("embed", mowojang.UUID, profileId)
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
+	if cacheKey.key != rawCacheKey.key {
+		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+			return err
+		}
 	}
 
-	data, err := loadProfileData(reqCtx, mowojang, profileId, profileParts{player: true, museum: true})
+	body, err := sharedResponse(reqCtx, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
+		data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
+		if err != nil {
+			return nil, failedTo("Failed to fetch data", err)
+		}
+
+		_, totals, err := profileNetworth(ctx, data)
+		if err != nil {
+			return nil, failedTo("Failed to create networth calculator", err)
+		}
+		formattedNetworth := map[string]float64{
+			"normal":      totals.Normal,
+			"nonCosmetic": totals.NonCosmetic,
+		}
+
+		return marshalBody(stats.GetEmbedData(mowojang, data.Player, data.Member(), data.Profile, formattedNetworth))
+	})
 	if err != nil {
-		return sendLoadError(c, "Failed to fetch data", err)
+		return sendBuildError(c, err)
 	}
-
-	_, totals, err := profileNetworth(reqCtx, data)
-	if err != nil {
-		return sendLoadError(c, "Failed to create networth calculator", err)
-	}
-	formattedNetworth := map[string]float64{
-		"normal":      totals.Normal,
-		"nonCosmetic": totals.NonCosmetic,
-	}
-
-	output := stats.GetEmbedData(mowojang, data.Player, data.Member(), data.Profile, formattedNetworth)
 
 	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
 
-	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 60*60)
+	// The shared build cached it under the resolved key; keep a copy under the request as given too.
+	if cacheKey.key != rawCacheKey.key {
+		cacheBody(reqCtx, rawCacheKey, body, 60*60)
+	}
+	return sendBody(c, reqCtx, cacheKey, body)
 }
 
 // SelectedProfileEmbedHandler godoc

@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
 	statsLeveling "skycrypt/src/stats/leveling"
+	"skycrypt/src/utility"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -24,17 +25,11 @@ func GetPlayerStats(
 		maps.Copy(stats[statName], statInfo)
 	}
 
-	items := getItems(userProfile, profileId, memberUUID)
+	items := getItems(userProfile)
 	processedItems := processItems(items)
 
-	accessoriesStats := GetAccessories(userProfile, processedItems)
-	for statName, statValue := range accessoriesStats.Stats {
-		if _, exists := stats[statName]; !exists {
-			continue
-		}
-
-		stats[statName]["accessories"] += int(statValue)
-	}
+	// Accessories add nothing here: the talisman bag isn't read, so GetAccessories would only build (and price)
+	// the full missing-accessory list and then return empty stats. The "accessories" entry stays at zero.
 
 	armorStats := statsItems.GetStatsFromItems(processedItems["armor"])
 	for statName, statValue := range armorStats {
@@ -196,17 +191,25 @@ func GetPlayerStats(
 	return output
 }
 
-func getItems(
-	userProfile *skycrypttypes.Member,
-	profileId string,
-	memberUUID string,
-) map[string][]*skycrypttypes.Item {
-	items, err := GetItems(userProfile, profileId, memberUUID)
-	if err != nil {
-		return map[string][]*skycrypttypes.Item{}
+// getItems decodes the only inventories player stats read: armor and equipment.
+func getItems(userProfile *skycrypttypes.Member) map[string][]*skycrypttypes.Item {
+	output := map[string][]*skycrypttypes.Item{}
+	if userProfile.Inventory == nil {
+		return output
 	}
 
-	return items
+	for inventoryID, data := range map[string]*string{
+		"armor":     &userProfile.Inventory.Armor.Data,
+		"equipment": &userProfile.Inventory.Equipment.Data,
+	} {
+		decoded, err := utility.DecodeInventory(data)
+		if err != nil {
+			fmt.Printf("Error decoding inventory %s: %v\n", inventoryID, err)
+			continue
+		}
+		output[inventoryID] = decoded.Items
+	}
+	return output
 }
 
 func processItems(

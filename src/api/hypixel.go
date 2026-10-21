@@ -32,12 +32,20 @@ var hypixelRequestTimeout = 30 * time.Second
 // and must be treated as read-only; singleflight already shares them between concurrent callers.
 const parsedCacheTTL = 30 * time.Second
 
+// Parsed profiles can be several MB, and every prefork process has its own caches, so they stay small and expired
+// entries are swept rather than held until the key is read again.
 var (
-	parsedPlayers  = localcache.NewLocalCache[*skycrypttypes.Player](256)
-	parsedProfiles = localcache.NewLocalCache[*models.HypixelProfilesResponse](64)
-	parsedMuseums  = localcache.NewLocalCache[map[string]*skycrypttypes.Museum](64)
-	parsedGardens  = localcache.NewLocalCache[*skycrypttypes.Garden](64)
+	parsedPlayers  = newParsedCache[*skycrypttypes.Player](128)
+	parsedProfiles = newParsedCache[*models.HypixelProfilesResponse](16)
+	parsedMuseums  = newParsedCache[map[string]*skycrypttypes.Museum](16)
+	parsedGardens  = newParsedCache[*skycrypttypes.Garden](16)
 )
+
+func newParsedCache[T any](maxEntries int) *localcache.LocalCache[T] {
+	cache := localcache.NewLocalCache[T](maxEntries)
+	cache.SweepExpiredEvery(parsedCacheTTL)
+	return cache
+}
 
 // readParsed returns the parsed value for a Redis key, from process memory when it was parsed recently.
 func readParsed[T any](ctx context.Context, local *localcache.LocalCache[T], key string, parse func([]byte) (T, error)) (T, bool) {
@@ -433,10 +441,8 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error))
 	return stale, false, nil
 }
 
-func detachedFetchContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(ctx), hypixelRequestTimeout)
-}
-
+// getHypixelBody retries once on a transport error. The transport drops a connection that failed, so the retry
+// gets a working one without closing the idle connections every other upstream call shares.
 func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]byte, error) {
 	for attempt := 0; attempt < hypixelRequestAttempts; attempt++ {
 		req, err := buildHypixelRequest(ctx, endpoint, query)
@@ -447,7 +453,6 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 		resp, err := HTTPClient.Do(req)
 		if err != nil {
 			if shouldRetryHypixelRequest(ctx, err, attempt) {
-				HTTPClient.CloseIdleConnections()
 				continue
 			}
 			return nil, upstreamError("Hypixel", err)
@@ -466,7 +471,6 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 		}()
 		if readErr != nil {
 			if resp.StatusCode == http.StatusOK && shouldRetryHypixelRequest(ctx, readErr, attempt) {
-				HTTPClient.CloseIdleConnections()
 				continue
 			}
 			if resp.StatusCode == http.StatusOK {

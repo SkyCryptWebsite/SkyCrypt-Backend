@@ -17,14 +17,12 @@ const (
 	childReloadInterval   = 10 * time.Minute
 )
 
-// reloadParsedRepository re-parses the constants and drops the item caches, which were read from the old files.
+// reloadParsedRepository drops the item caches, which were read from the old files, then re-parses the constants.
+// The caches go first because parsing reads items through them (attribute shards do).
 func reloadParsedRepository() error {
-	if err := ParseNEURepository(); err != nil {
-		return err
-	}
 	CACHED_NEU_ITEMS.Clear()
 	CACHED_NEU_ITEM_WIKIS.Clear()
-	return nil
+	return ParseNEURepository()
 }
 
 func repoHead() string {
@@ -35,6 +33,35 @@ func repoHead() string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// StartInitialUpdate pulls the repository in the background once the first parse is done, then parses again.
+// Updating while that first parse read the same files could hand it a half-written file.
+func StartInitialUpdate() {
+	go func() {
+		if err := UpdateNEURepository(); err != nil {
+			fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to update repository: %v\n", err)
+			return
+		}
+		if err := reloadParsedRepository(); err != nil {
+			fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to parse updated repository: %v\n", err)
+			return
+		}
+		PublishRepositoryVersion()
+	}()
+}
+
+// ParseWithRetry parses the repository, retrying a few times. Prefork children parse while the main process may be
+// updating the files, so a parse can catch one mid-write.
+func ParseWithRetry() error {
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		if err = ParseNEURepository(); err == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return err
 }
 
 // PublishRepositoryVersion records the parsed commit for prefork children.
@@ -48,11 +75,18 @@ func PublishRepositoryVersion() {
 	_ = db.SetContext(ctx, repoVersionKey, head, repoVersionTTLSeconds)
 }
 
+// PublishedRepositoryVersion returns the commit the updating process last published, or "".
+func PublishedRepositoryVersion() string {
+	version, _ := db.Get(repoVersionKey)
+	return version
+}
+
 // StartChildReloadLoop re-parses the repository in a prefork child whenever the updating process publishes a
-// new commit. The child parsed the files on disk at startup, so the version published then is its baseline.
-func StartChildReloadLoop() {
+// new commit. baseline must be read before the child's first parse: read after, a version published in between
+// would be taken as already loaded while the child holds the older data.
+func StartChildReloadLoop(baseline string) {
 	go func() {
-		loaded, _ := db.Get(repoVersionKey)
+		loaded := baseline
 		for range time.Tick(childReloadInterval) {
 			published, err := db.Get(repoVersionKey)
 			if err != nil || published == "" || published == loaded {

@@ -20,6 +20,17 @@ func ProcessItems(items []*skycrypttypes.Item, source string, enabledPacks ...[]
 	return ProcessItemsWithNEUCacheAndStats(items, source, map[string]models.NEUItem{}, nil, enabledPacks...)
 }
 
+// newItemBatchProcessor processes several item lists, such as one per museum entry, with one NEU cache and texture
+// context that ProcessItems would otherwise build again for every list. Use the result from one goroutine.
+func newItemBatchProcessor(source string, enabledPacks ...[]string) func([]*skycrypttypes.Item) []models.ProcessedItem {
+	neuItemCache := map[string]models.NEUItem{}
+	textureCtx := lib.NewTextureApplyContext(enabledPacks...)
+	textureCtx.DisableRuntimeRender = true
+	return func(items []*skycrypttypes.Item) []models.ProcessedItem {
+		return processItemsWithStats(items, source, neuItemCache, nil, textureCtx, 0)
+	}
+}
+
 func ProcessItemsWithNEUCache(items []*skycrypttypes.Item, source string, neuItemCache map[string]models.NEUItem, enabledPacks ...[]string) []models.ProcessedItem {
 	return ProcessItemsWithNEUCacheAndStats(items, source, neuItemCache, nil, enabledPacks...)
 }
@@ -89,15 +100,15 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 	}
 	processedItem.Rarity = itemType.Rarity
 	processedItem.Categories = itemType.Categories
-	if processedItem.Recombobulated {
-		processedItem.Lore = append(processedItem.Lore, "§8(Recombobulated)")
-	}
 
 	if item.Tag.ExtraAttributes != nil {
 		if recordStats {
 			stageStart = time.Now()
 		}
 		processedItem.Recombobulated = item.Tag.ExtraAttributes.Recombobulated == 1
+		if processedItem.Recombobulated {
+			processedItem.Lore = append(slices.Clip(processedItem.Lore), "§8(Recombobulated)")
+		}
 		if item.Tag.SkullOwner == nil {
 			// Do not apply shiny effecet to skulls
 			processedItem.Shiny = len(item.Tag.ExtraAttributes.Enchantments) > 0

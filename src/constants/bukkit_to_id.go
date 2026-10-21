@@ -2,6 +2,7 @@ package constants
 
 import (
 	"fmt"
+	"strconv"
 )
 
 var BUKKIT_TO_ID = map[string]int{
@@ -1948,8 +1949,8 @@ func GetVanillaItemId(item ItemModel) string {
 	}
 
 	if item.ItemId != "" {
-		if _, exists := MINECRAFT_BLOCK_MAPPINGS[fmt.Sprintf("%s:%d", item.ItemId, item.ItemDamage)]; exists {
-			return MINECRAFT_BLOCK_MAPPINGS[fmt.Sprintf("%s:%d", item.ItemId, item.ItemDamage)]
+		if mapped, exists := MINECRAFT_BLOCK_MAPPINGS[item.ItemId+":"+strconv.Itoa(item.ItemDamage)]; exists {
+			return mapped
 		}
 	}
 

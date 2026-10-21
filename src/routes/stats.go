@@ -46,23 +46,42 @@ func StatsHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 	reqCtx := c.UserContext()
+	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
+	// so a cached response still loads when Mojang is down.
+	rawCacheKey := responseCacheKey("stats", uuid, profileId)
+	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
+		return err
+	}
+
 	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return sendLoadError(c, "failed to resolve player", err)
 	}
 
 	cacheKey := responseCacheKey("stats", mowojang.UUID, profileId)
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
+	if cacheKey.key != rawCacheKey.key {
+		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+			return err
+		}
 	}
 
-	output, err := computeStatsContext(reqCtx, mowojang, profileId)
+	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+		output, err := computeStatsContext(ctx, mowojang, profileId)
+		if err != nil {
+			return nil, failedTo("failed to load data", err)
+		}
+		return marshalBody(output)
+	})
 	if err != nil {
-		return sendLoadError(c, "failed to load data", err)
+		return sendBuildError(c, err)
 	}
 
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
-	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
+	// The shared build cached it under the resolved key; keep a copy under the request as given too.
+	if cacheKey.key != rawCacheKey.key {
+		cacheBody(reqCtx, rawCacheKey, body, 5*60)
+	}
+	return sendBody(c, reqCtx, cacheKey, body)
 }
 
 // SelectedProfileStatsHandler godoc

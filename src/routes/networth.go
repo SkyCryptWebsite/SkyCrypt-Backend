@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
+	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"time"
 
@@ -50,29 +51,52 @@ func NetworthHandler(c *fiber.Ctx) error {
 	}
 	reqCtx := c.UserContext()
 
-	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
-	if err != nil {
-		return sendLoadError(c, "Failed to resolve player", err)
-	}
-
-	cacheKey := responseCacheKey("networth", mowojang.UUID, profileId)
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
+	// so a cached response still loads when Mojang is down.
+	rawCacheKey := responseCacheKey("networth", uuid, profileId)
+	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
 		return err
 	}
 
-	data, err := loadProfileData(reqCtx, mowojang, profileId, profileParts{museum: true})
-	if err != nil {
-		return sendLoadError(c, "Failed to fetch data", err)
+	// Networth only needs the UUID, so skip the Mojang lookup when that is what was given.
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		resolved, err := api.ResolvePlayerContext(reqCtx, uuid)
+		if err != nil {
+			return sendLoadError(c, "Failed to resolve player", err)
+		}
+		mowojang = resolved
 	}
 
-	payload, _, err := profileNetworth(reqCtx, data)
+	cacheKey := responseCacheKey("networth", mowojang.UUID, profileId)
+	if cacheKey.key != rawCacheKey.key {
+		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+			return err
+		}
+	}
+
+	payload, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+		data, err := loadProfileData(ctx, mowojang, profileId, profileParts{museum: true})
+		if err != nil {
+			return nil, failedTo("Failed to fetch data", err)
+		}
+		payload, _, err := profileNetworth(ctx, data)
+		if err != nil {
+			return nil, failedTo("Failed to create networth calculator", err)
+		}
+		return payload, nil
+	})
 	if err != nil {
-		return sendLoadError(c, "Failed to create networth calculator", err)
+		return sendBuildError(c, err)
 	}
 
 	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
 
-	return sendAndCacheBody(c, reqCtx, cacheKey, string(payload), 5*60)
+	// The shared build cached it under the resolved key; keep a copy under the request as given too.
+	if cacheKey.key != rawCacheKey.key {
+		cacheBody(reqCtx, rawCacheKey, payload, 5*60)
+	}
+	return sendBody(c, reqCtx, cacheKey, payload)
 }
 
 const networthCacheTTLSeconds = 5 * 60
@@ -107,8 +131,7 @@ func profileNetworth(ctx context.Context, data *profileData) ([]byte, networthTo
 		return nil, networthTotals{}, err
 	}
 
-	networth := calculator.GetNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
-	nonCosmeticNetworth := calculator.GetNonCosmeticNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
+	networth, nonCosmeticNetworth := calculator.GetNetworthAndNonCosmetic(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
 
 	if utility.IsForensicsEnabled() {
 		// Enough to explain a wrong number later: which prices, which data, and where the total came from.

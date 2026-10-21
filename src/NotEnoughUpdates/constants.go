@@ -22,6 +22,35 @@ func Constants() *models.NEUConstant {
 	return &models.NEUConstant{}
 }
 
+// knownItemIDs lists the items the repository has, so lookups for anything else (vanilla IDs, pet rarity fallbacks)
+// return without a failing disk read. Nil until the first parse, when every lookup still goes to disk.
+var knownItemIDs atomic.Pointer[map[string]struct{}]
+
+func isKnownItem(name string) bool {
+	known := knownItemIDs.Load()
+	if known == nil {
+		return true
+	}
+	_, ok := (*known)[name]
+	return ok
+}
+
+// indexItems records which item files the repository has.
+func indexItems() error {
+	entries, err := os.ReadDir("NotEnoughUpdates-REPO/items")
+	if err != nil {
+		return fmt.Errorf("failed to list NEU items: %w", err)
+	}
+	known := make(map[string]struct{}, len(entries))
+	for _, entry := range entries {
+		if name, ok := strings.CutSuffix(entry.Name(), ".json"); ok && !entry.IsDir() {
+			known[name] = struct{}{}
+		}
+	}
+	knownItemIDs.Store(&known)
+	return nil
+}
+
 var CACHED_NEU_ITEMS sync.Map
 var CACHED_NEU_ITEM_WIKIS sync.Map
 
@@ -30,9 +59,11 @@ type rawNEUItemWiki struct {
 }
 
 func GetItem(name string) (models.NEUItem, error) {
-	name = strings.Clone(name)
 	if item, ok := CACHED_NEU_ITEMS.Load(name); ok {
 		return item.(models.NEUItem), nil
+	}
+	if !isKnownItem(name) {
+		return models.NEUItem{}, fmt.Errorf("NEU has no item %s", name)
 	}
 
 	itemsPath := "NotEnoughUpdates-REPO/items"
@@ -66,18 +97,21 @@ func GetItem(name string) (models.NEUItem, error) {
 		Wiki:        item.Wiki,
 	}
 
-	CACHED_NEU_ITEMS.Store(name, NEUItem)
+	// Clone only what is kept: fasthttp may reuse the caller's buffer.
+	CACHED_NEU_ITEMS.Store(strings.Clone(name), NEUItem)
 
 	return NEUItem, nil
 }
 
 func GetItemWiki(name string) ([]string, bool) {
-	name = strings.Clone(name)
 	if item, ok := CACHED_NEU_ITEMS.Load(name); ok {
 		return cloneWiki(item.(models.NEUItem).Wiki), true
 	}
 	if wiki, ok := CACHED_NEU_ITEM_WIKIS.Load(name); ok {
 		return cloneWiki(wiki.([]string)), true
+	}
+	if !isKnownItem(name) {
+		return nil, false
 	}
 
 	itemPath := fmt.Sprintf("NotEnoughUpdates-REPO/items/%s.json", name)
@@ -93,7 +127,7 @@ func GetItemWiki(name string) ([]string, bool) {
 	}
 
 	wiki := cloneWiki(item.Wiki)
-	CACHED_NEU_ITEM_WIKIS.Store(name, wiki)
+	CACHED_NEU_ITEM_WIKIS.Store(strings.Clone(name), wiki)
 	return cloneWiki(wiki), true
 }
 

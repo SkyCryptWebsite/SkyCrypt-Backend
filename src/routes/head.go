@@ -34,6 +34,7 @@ func HeadHandlers(c *fiber.Ctx) error {
 	}
 
 	c.Type("png")
+	c.Set(fiber.HeaderCacheControl, renderedImageCacheControl)
 	// fmt.Printf("Returning /api/head/%s in %s\n", textureId, time.Since(timeNow))
 	return c.Send(textureBytes)
 }

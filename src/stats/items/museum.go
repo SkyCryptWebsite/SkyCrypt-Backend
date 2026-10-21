@@ -15,6 +15,7 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 		Special: []models.ProcessedMuseumItem{},
 		Value:   0,
 	}
+	processItems := newItemBatchProcessor("museum", enabledPacks...)
 
 	for itemId, itemData := range *museumData.Items {
 		decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
@@ -22,7 +23,7 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 			continue
 		}
 
-		processedItems := ProcessItems(decodedItem.Items, "museum", enabledPacks...)
+		processedItems := processItems(decodedItem.Items)
 		data := models.ProcessedMuseumItem{
 			Items:           processedItems,
 			SkyblockID:      itemId,
@@ -39,7 +40,7 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 			continue
 		}
 
-		processedItem := ProcessItems(decodedItem.Items, "museum", enabledPacks...)
+		processedItem := processItems(decodedItem.Items)
 		data := models.ProcessedMuseumItem{
 			Items:           processedItem,
 			Missing:         false,
@@ -58,6 +59,7 @@ func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]str
 	}
 
 	output := []models.ProcessedItem{}
+	processItems := newItemBatchProcessor("museum", enabledPacks...)
 	if museumData.Items != nil {
 		for _, itemData := range *museumData.Items {
 			if itemData.Borrowing {
@@ -68,7 +70,7 @@ func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]str
 			if err != nil {
 				continue
 			}
-			output = append(output, ProcessItems(decodedItem.Items, "museum", enabledPacks...)...)
+			output = append(output, processItems(decodedItem.Items)...)
 		}
 	}
 
@@ -82,7 +84,7 @@ func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]str
 			if err != nil {
 				continue
 			}
-			output = append(output, ProcessItems(decodedItem.Items, "museum", enabledPacks...)...)
+			output = append(output, processItems(decodedItem.Items)...)
 		}
 	}
 

@@ -38,6 +38,7 @@ func LeatherHandlers(c *fiber.Ctx) error {
 	}
 
 	c.Type("png")
+	c.Set(fiber.HeaderCacheControl, renderedImageCacheControl)
 	// fmt.Printf("Returning /api/leather/%s/%s in %s\n", armorType, armorColor, time.Since(timeNow))
 	return c.Send(imageBytes)
 }

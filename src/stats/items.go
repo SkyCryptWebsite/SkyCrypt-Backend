@@ -132,40 +132,7 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 			decodedInventory[res.inventoryId] = res.items
 		}
 
-		maxIndex := -1
-		for inventoryId := range decodedInventory {
-			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
-				backpackIndex := strings.Split(inventoryId, "_")[1]
-				index := 0
-				if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
-					continue
-				}
-				if index > maxIndex {
-					maxIndex = index
-				}
-			}
-		}
-
-		output := make([]*skycrypttypes.Item, maxIndex+1)
-		for inventoryId, items := range decodedInventory {
-			if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
-				backpackIndex := strings.Split(inventoryId, "_")[1]
-				index := 0
-				if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
-					continue
-				}
-
-				backpackIcon, iconExists := decodedInventory[fmt.Sprintf("backpack_icon_%s", backpackIndex)]
-				if iconExists && len(backpackIcon) > 0 {
-					backpackIcon[0].ContainsItems = items
-					output[index] = backpackIcon[0]
-				} else {
-					fmt.Printf("No icon found for backpack %s\n", backpackIndex)
-				}
-			}
-		}
-
-		return output
+		return assembleBackpacks(decodedInventory)
 	}
 
 	rawInventory := GetRawInventory(useProfile, inventoryId)
@@ -200,6 +167,117 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 	}
 
 	return items
+}
+
+// assembleBackpacks puts each decoded backpack inside its icon item, indexed by backpack slot. decoded maps
+// "backpack_<n>" and "backpack_icon_<n>" to their items.
+func assembleBackpacks(decoded map[string][]*skycrypttypes.Item) []*skycrypttypes.Item {
+	maxIndex := -1
+	for inventoryId := range decoded {
+		if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
+			backpackIndex := strings.Split(inventoryId, "_")[1]
+			index := 0
+			if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
+				continue
+			}
+			if index > maxIndex {
+				maxIndex = index
+			}
+		}
+	}
+
+	output := make([]*skycrypttypes.Item, maxIndex+1)
+	for inventoryId, items := range decoded {
+		if strings.HasPrefix(inventoryId, "backpack_") && !strings.Contains(inventoryId, "icon") {
+			backpackIndex := strings.Split(inventoryId, "_")[1]
+			index := 0
+			if _, err := fmt.Sscanf(backpackIndex, "%d", &index); err != nil {
+				continue
+			}
+
+			backpackIcon, iconExists := decoded[fmt.Sprintf("backpack_icon_%s", backpackIndex)]
+			if iconExists && len(backpackIcon) > 0 {
+				backpackIcon[0].ContainsItems = items
+				output[index] = backpackIcon[0]
+			} else {
+				fmt.Printf("No icon found for backpack %s\n", backpackIndex)
+			}
+		}
+	}
+
+	return output
+}
+
+// GetInventories is GetInventory for several inventories at once. It decodes and prices them in one batched call,
+// which runs them in parallel, instead of one call per inventory.
+func GetInventories(useProfile *skycrypttypes.Member, inventoryIds []string) map[string][]*skycrypttypes.Item {
+	output := make(map[string][]*skycrypttypes.Item, len(inventoryIds))
+	if useProfile.Inventory == nil {
+		for _, inventoryId := range inventoryIds {
+			output[inventoryId] = []*skycrypttypes.Item{}
+		}
+		return output
+	}
+
+	specified := skyhelpernetworthgo.SpecifiedInventory{}
+	for _, inventoryId := range inventoryIds {
+		if inventoryId == "backpack" {
+			for backpackId, backpackData := range useProfile.Inventory.Backpack {
+				specified["backpack_"+backpackId] = skycrypttypes.EncodedItems{Data: backpackData.Data}
+			}
+			for backpackIconId, backpackIconData := range useProfile.Inventory.BackpackIcons {
+				specified["backpack_icon_"+backpackIconId] = skycrypttypes.EncodedItems{Data: backpackIconData.Data}
+			}
+			continue
+		}
+		if raw := GetRawInventory(useProfile, inventoryId); raw != "" {
+			specified[inventoryId] = skycrypttypes.EncodedItems{Data: raw}
+		}
+	}
+
+	decoded, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(specified, skyhelpernetworthgo.NetworthOptions{
+		IncludeItemData:  true,
+		KeepInvalidItems: true,
+	}.ToInternal())
+	if err != nil {
+		// One unreadable inventory fails the whole batch; decode each on its own so only that one comes back empty.
+		fmt.Printf("Error decoding inventories together, falling back to one by one: %v\n", err)
+		for _, inventoryId := range inventoryIds {
+			output[inventoryId] = GetInventory(useProfile, inventoryId)
+		}
+		return output
+	}
+
+	itemsOf := func(key string) []*skycrypttypes.Item {
+		items := []*skycrypttypes.Item{}
+		inventory := decoded.Types[key]
+		if inventory == nil {
+			return items
+		}
+		for _, item := range inventory.Items {
+			itemData := item.ItemData
+			if itemData != nil {
+				itemData.Price = item.Price
+			}
+			items = append(items, itemData)
+		}
+		return items
+	}
+
+	for _, inventoryId := range inventoryIds {
+		if inventoryId != "backpack" {
+			output[inventoryId] = itemsOf(inventoryId)
+			continue
+		}
+		backpacks := map[string][]*skycrypttypes.Item{}
+		for key := range specified {
+			if strings.HasPrefix(key, "backpack_") {
+				backpacks[key] = itemsOf(key)
+			}
+		}
+		output[inventoryId] = assembleBackpacks(backpacks)
+	}
+	return output
 }
 
 func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID string) (map[string][]*skycrypttypes.Item, error) {

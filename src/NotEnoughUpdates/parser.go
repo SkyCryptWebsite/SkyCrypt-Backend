@@ -160,7 +160,7 @@ func ParseNEURepository() error {
 	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s on %v\n", time.Since(timeNow), os.Getpid())
 
 	neuConstants.Store(&parsed)
-	return nil
+	return indexItems()
 }
 
 func StartUpdateLoop() {

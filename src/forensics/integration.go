@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"skycrypt/src/security"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -97,13 +98,13 @@ func (ir *InstrumentedRedisDB) Set(key string, value interface{}, expirationSeco
 
 func RecordCacheHit() {
 	if globalCacheStats != nil {
-		globalCacheStats.hits++
+		atomic.AddUint64(&globalCacheStats.hits, 1)
 	}
 }
 
 func RecordCacheMiss() {
 	if globalCacheStats != nil {
-		globalCacheStats.misses++
+		atomic.AddUint64(&globalCacheStats.misses, 1)
 	}
 }
 

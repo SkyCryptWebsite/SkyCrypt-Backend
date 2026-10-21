@@ -62,6 +62,7 @@ func SetupApplication() error {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
 		notenoughupdates.PublishRepositoryVersion()
+		notenoughupdates.StartInitialUpdate()
 
 		notenoughupdates.StartUpdateLoop()
 		apikeys.StartUsageSync()
@@ -107,10 +108,11 @@ func SetupApplication() error {
 		}
 		startItemsRefresh(true)
 
-		if err := notenoughupdates.ParseNEURepository(); err != nil {
+		neuBaseline := notenoughupdates.PublishedRepositoryVersion()
+		if err := notenoughupdates.ParseWithRetry(); err != nil {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
-		notenoughupdates.StartChildReloadLoop()
+		notenoughupdates.StartChildReloadLoop(neuBaseline)
 
 		if err := lib.PrepareCustomResourceCache(); err != nil {
 			log.Printf("failed to load custom resource index: %v", err)
@@ -141,8 +143,10 @@ func SetupRoutes(app *fiber.App) {
 	}))
 
 	// Assets folder
-	app.Static("/assets", "assets")
-	app.Static("/cache", "cache")
+	// Without MaxAge Fiber sends no Cache-Control, and every icon on a page went back to the origin. Rendered files
+	// are content-hashed or named after what they show, and are written atomically.
+	app.Static("/assets", "assets", fiber.Static{MaxAge: 24 * 60 * 60})
+	app.Static("/cache", "cache", fiber.Static{MaxAge: 7 * 24 * 60 * 60})
 
 	if os.Getenv("DEV") != "true" {
 		if os.Getenv("FIBER_PREFORK_CHILD") == "" {

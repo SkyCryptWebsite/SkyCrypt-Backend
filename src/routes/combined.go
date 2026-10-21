@@ -50,23 +50,42 @@ func CombinedHandler(c *fiber.Ctx) error {
 	enabledPacks := enabledPacksFromRequest(c)
 
 	reqCtx := c.UserContext()
+	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
+	// so a cached response still loads when Mojang is down.
+	rawCacheKey := responseCacheKey("combined", uuid, profileId, enabledPacksCachePart(enabledPacks))
+	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
+		return err
+	}
+
 	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return sendLoadError(c, "failed to resolve player", err)
 	}
 
 	cacheKey := responseCacheKey("combined", mowojang.UUID, profileId, enabledPacksCachePart(enabledPacks))
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
+	if cacheKey.key != rawCacheKey.key {
+		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+			return err
+		}
 	}
 
-	result, err := computeCombinedContext(reqCtx, mowojang, profileId, enabledPacks)
+	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+		result, err := computeCombinedContext(ctx, mowojang, profileId, enabledPacks)
+		if err != nil {
+			return nil, failedTo("failed to load data", err)
+		}
+		return marshalBody(result)
+	})
 	if err != nil {
-		return sendLoadError(c, "failed to load data", err)
+		return sendBuildError(c, err)
 	}
 
 	utility.LogVerbose("Returning /api/combined/%s in %s pid=%d", uuid, time.Since(timeNow), os.Getpid())
-	return sendAndCacheJSON(c, reqCtx, cacheKey, result, 5*60)
+	// The shared build cached it under the resolved key; keep a copy under the request as given too.
+	if cacheKey.key != rawCacheKey.key {
+		cacheBody(reqCtx, rawCacheKey, body, 5*60)
+	}
+	return sendBody(c, reqCtx, cacheKey, body)
 }
 
 func computeCombinedContext(ctx context.Context, mowojang *models.MowojangResponse, profileId string, enabledPacks []string) (*models.CombinedOutput, error) {

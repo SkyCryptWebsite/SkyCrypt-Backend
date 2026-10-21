@@ -9,12 +9,14 @@ import (
 	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
+	"sync"
 
 	"net/http"
 	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -24,6 +26,8 @@ const identityCacheTTL = 24 * time.Hour
 
 var (
 	usernameLocalCache = localcache.NewLocalCache[string](8192)
+	uuidLocalCache     = localcache.NewLocalCache[string](8192)
+	uuidLookupGroup    singleflight.Group
 )
 
 func GetUUID(username string, throwAnError ...bool) (string, error) {
@@ -40,13 +44,24 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 		shouldThrowError = throwAnError[0]
 	}
 
-	var post models.MowojangResponse
-
 	key := fmt.Sprintf("uuid:%s", strings.ToLower(username))
-	cachedUUID, err := redis.GetContext(ctx, key)
-	if err == nil && cachedUUID != "" {
+	if cachedUUID, ok, _ := uuidLocalCache.Get(key); ok {
 		return cachedUUID, nil
 	}
+	cachedUUID, err := redis.GetContext(ctx, key)
+	if err == nil && cachedUUID != "" {
+		uuidLocalCache.Set(key, cachedUUID, identityCacheTTL, identityCacheTTL)
+		return cachedUUID, nil
+	}
+
+	// Concurrent lookups of one name share a single Mojang call.
+	return Share(ctx, &uuidLookupGroup, fmt.Sprintf("%s:%t", key, shouldThrowError), 15*time.Second, func(ctx context.Context) (string, error) {
+		return fetchUUID(ctx, username, shouldThrowError)
+	})
+}
+
+func fetchUUID(ctx context.Context, username string, shouldThrowError bool) (string, error) {
+	var post models.MowojangResponse
 
 	resp, err := getContext(ctx, fmt.Sprintf("https://mowojang.matdoes.dev/%s", username))
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -248,15 +263,24 @@ func ResolvePlayersContext(ctx context.Context, uuids []string) map[string]*mode
 		}
 	}
 
+	// Cache misses each need a Mojang call; make them side by side rather than one after another.
+	var mu sync.Mutex
+	var g errgroup.Group
+	g.SetLimit(8)
+	// uniqueUnresolvedUUIDs already drops empty, resolved and repeated IDs, so the loop never reads resolved while
+	// the goroutines write to it.
 	for _, uuid := range uniqueUnresolvedUUIDs(uuids, resolved) {
-		if uuid == "" || resolved[uuid] != nil {
-			continue
-		}
-		mowojang, err := ResolvePlayerContext(ctx, uuid, false)
-		if err == nil && mowojang.UUID != "" {
-			resolved[uuid] = mowojang
-		}
+		g.Go(func() error {
+			mowojang, err := ResolvePlayerContext(ctx, uuid, false)
+			if err == nil && mowojang.UUID != "" {
+				mu.Lock()
+				resolved[uuid] = mowojang
+				mu.Unlock()
+			}
+			return nil
+		})
 	}
+	_ = g.Wait()
 
 	return resolved
 }
@@ -597,6 +621,7 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 		fmt.Sprintf("username:%s", uuid):              name,
 	}
 	usernameLocalCache.Set(fmt.Sprintf("username:%s", uuid), name, identityCacheTTL, identityCacheTTL)
+	uuidLocalCache.Set(fmt.Sprintf("uuid:%s", strings.ToLower(name)), uuid, identityCacheTTL, identityCacheTTL)
 	if body != "" {
 		values[fmt.Sprintf("mowojang:%s", uuid)] = body
 		if includeFullResponse {

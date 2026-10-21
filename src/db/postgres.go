@@ -20,6 +20,8 @@ const (
 	fallbackWriteInterval = time.Hour
 	fallbackRetention     = 30 * 24 * time.Hour
 	fallbackWriteTimeout  = 5 * time.Second
+
+	fallbackWriteGatePrefix = "fallback:written:"
 )
 
 var pgPool *pgxpool.Pool
@@ -109,6 +111,15 @@ func SaveFallback(key string, body []byte) {
 		ctx, cancel := context.WithTimeout(context.Background(), fallbackWriteTimeout)
 		defer cancel()
 
+		// The upsert below ignores rows written in the last hour, so check that first and skip compressing and
+		// sending a multi-MB body the database would throw away. The gate is shared by every prefork process.
+		gate := fallbackWriteGatePrefix + key
+		if client, err := getRedisClient(); err == nil {
+			if acquired, err := client.SetNX(ctx, gate, 1, fallbackWriteInterval).Result(); err == nil && !acquired {
+				return
+			}
+		}
+
 		start := time.Now()
 		_, err := pool.Exec(ctx, `
 			INSERT INTO fallback_cache (key, body, hash) VALUES ($1, $2, $3)
@@ -119,6 +130,12 @@ func SaveFallback(key string, body []byte) {
 			WHERE fallback_cache.fetched_at < now() - make_interval(secs => $4)`,
 			key, zstdEncoder.EncodeAll(body, nil), int64(xxhash.Sum64(body)), fallbackWriteInterval.Seconds())
 		recordPostgresDependency(ctx, "fallback_cache", "upsert", time.Since(start), err)
+		if err != nil {
+			// Let the next fetch try again instead of waiting out the gate.
+			if client, clientErr := getRedisClient(); clientErr == nil {
+				_ = client.Del(context.Background(), gate).Err()
+			}
+		}
 	}()
 }
 

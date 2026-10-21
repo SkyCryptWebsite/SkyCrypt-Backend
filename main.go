@@ -117,7 +117,10 @@ func main() {
 				)
 			}
 
-			utility.SendWebhook(redactedURL, panicDetail, []byte(redactedStack))
+			// Reported in the background so the 500 doesn't wait on Discord.
+			go func() {
+				utility.SendWebhook(redactedURL, panicDetail, []byte(redactedStack))
+			}()
 
 			// The panic detail goes to logs and the webhook only, never to clients.
 			_ = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

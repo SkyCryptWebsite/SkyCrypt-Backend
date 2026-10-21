@@ -20,7 +20,12 @@ type LocalCache[T any] struct {
 	order      []string
 	refreshing map[string]struct{}
 	maxEntries int
+	// lastPressurePrune spaces out halving the cache under memory pressure.
+	lastPressurePrune time.Time
 }
+
+// pressurePruneInterval keeps memory pressure from halving the cache on every insert.
+const pressurePruneInterval = 5 * time.Second
 
 func NewLocalCache[T any](maxEntries ...int) *LocalCache[T] {
 	max := 1024
@@ -66,7 +71,9 @@ func (c *LocalCache[T]) Set(key string, value T, ttl time.Duration, refreshAfter
 
 	c.mu.Lock()
 	_, exists := c.values[key]
-	if memoryPressure() {
+	if !exists && now.Sub(c.lastPressurePrune) > pressurePruneInterval && memoryPressure() {
+		c.lastPressurePrune = now
+		c.dropExpiredLocked(now)
 		c.pruneToLocked(c.maxEntries / 2)
 	}
 	if !exists && c.maxEntries > 0 && len(c.values) >= c.maxEntries {
@@ -100,12 +107,29 @@ func (c *LocalCache[T]) FinishRefresh(key string) {
 }
 
 func (c *LocalCache[T]) pruneLocked(now time.Time) {
+	c.dropExpiredLocked(now)
+	c.pruneToLocked(c.maxEntries - 1)
+}
+
+func (c *LocalCache[T]) dropExpiredLocked(now time.Time) {
 	for key, item := range c.values {
 		if now.After(item.expiresAt) {
 			delete(c.values, key)
 		}
 	}
-	c.pruneToLocked(c.maxEntries - 1)
+}
+
+// SweepExpiredEvery drops expired entries on a timer. Without it an expired entry stays in memory until its key
+// is read again or the cache fills up, which for large values (parsed profiles) holds memory for good.
+func (c *LocalCache[T]) SweepExpiredEvery(interval time.Duration) {
+	go func() {
+		for range time.Tick(interval) {
+			c.mu.Lock()
+			c.dropExpiredLocked(time.Now())
+			c.compactOrderLocked()
+			c.mu.Unlock()
+		}
+	}()
 }
 
 func (c *LocalCache[T]) pruneToLocked(target int) {

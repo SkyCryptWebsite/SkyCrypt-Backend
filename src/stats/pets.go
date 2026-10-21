@@ -2,8 +2,10 @@ package stats
 
 import (
 	"fmt"
+	"reflect"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	stats "skycrypt/src/stats/items"
+	"sync/atomic"
 
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
@@ -350,6 +352,11 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 		output = append(output, outputPet)
 	}
 
+	sortProcessedPets(output)
+	return output
+}
+
+func sortProcessedPets(output []models.ProcessedPet) {
 	sort.Slice(output, func(i, j int) bool {
 		if output[i].Rarity != output[j].Rarity {
 			return slices.Index(constants.RARITIES, strings.ToLower(output[i].Rarity)) > slices.Index(constants.RARITIES, strings.ToLower(output[j].Rarity))
@@ -359,8 +366,70 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 
 		return output[i].Name < output[j].Name
 	})
+}
 
-	return output
+// montezumaSoul shows the profile's found soul pieces in its lore, so it is the one missing pet processed per request.
+const montezumaSoul = "FRACTURED_MONTEZUMA_SOUL"
+
+// missingPetCatalog is every pet a profile can be missing, already processed. Nothing in it depends on the profile,
+// only on NEU data, prices and whether the profile is bingo, so it is built once per combination of those.
+type missingPetCatalog struct {
+	neu    *models.NEUConstant
+	prices uintptr
+	domain string
+	pets   map[string]models.ProcessedPet
+}
+
+// missingPetCatalogs holds one catalog for normal profiles and one for bingo.
+var missingPetCatalogs [2]atomic.Pointer[missingPetCatalog]
+
+func missingPetCandidate(petType string, bingo bool, petCtx *petProcessingContext) (skycrypttypes.Pet, bool) {
+	if petType == "BINGO" && !bingo {
+		return skycrypttypes.Pet{}, false
+	}
+	rarityIndex := petCtx.maxPetIds[petType]
+	if rarityIndex == 0 {
+		return skycrypttypes.Pet{}, false
+	}
+
+	pet := skycrypttypes.Pet{
+		Type:       petType,
+		Active:     false,
+		Experience: 0,
+		Rarity:     strings.ToUpper(constants.RARITIES[rarityIndex]),
+		CandyUsed:  0,
+	}
+	pet.Experience = float64(getPetLevel(pet).ExperienceForMaxLevel)
+	return pet, true
+}
+
+func missingPetsFor(bingo bool, petCtx *petProcessingContext) map[string]models.ProcessedPet {
+	neu := notenoughupdates.Constants()
+	prices := reflect.ValueOf(petCtx.prices).Pointer()
+	slot := &missingPetCatalogs[0]
+	if bingo {
+		slot = &missingPetCatalogs[1]
+	}
+	if catalog := slot.Load(); catalog != nil && catalog.neu == neu && catalog.prices == prices && catalog.domain == petCtx.domain {
+		return catalog.pets
+	}
+
+	candidates := make([]skycrypttypes.Pet, 0, len(neu.PetNums))
+	for petType := range neu.PetNums {
+		if petType == montezumaSoul {
+			continue
+		}
+		if pet, ok := missingPetCandidate(petType, bingo, petCtx); ok {
+			candidates = append(candidates, pet)
+		}
+	}
+
+	pets := make(map[string]models.ProcessedPet, len(candidates))
+	for _, pet := range getProfilePets(&skycrypttypes.Member{}, &candidates, petCtx) {
+		pets[pet.Type] = pet
+	}
+	slot.Store(&missingPetCatalog{neu: neu, prices: prices, domain: petCtx.domain, pets: pets})
+	return pets
 }
 
 func getMissingPets(userProfile *skycrypttypes.Member, pets []models.ProcessedPet, gameMode string, petCtx *petProcessingContext) []models.ProcessedPet {
@@ -373,30 +442,25 @@ func getMissingPets(userProfile *skycrypttypes.Member, pets []models.ProcessedPe
 		ownedPetTypes[pet.Type] = struct{}{}
 	}
 
-	missingPets := make([]skycrypttypes.Pet, 0, len(petCtx.maxPetIds))
-	for pet := range notenoughupdates.Constants().PetNums {
-		if _, ok := ownedPetTypes[pet]; ok || (pet == "BINGO" && gameMode != "bingo") {
-			continue
+	bingo := gameMode == "bingo"
+	catalog := missingPetsFor(bingo, petCtx)
+	output := make([]models.ProcessedPet, 0, len(catalog)+1)
+	for petType, pet := range catalog {
+		if _, owned := ownedPetTypes[petType]; !owned {
+			output = append(output, pet)
 		}
-
-		rarityIndex := petCtx.maxPetIds[pet]
-		if rarityIndex == 0 {
-			continue
-		}
-
-		missingPets = append(missingPets, skycrypttypes.Pet{
-			Type:       pet,
-			Active:     false,
-			Experience: 0,
-			Rarity:     strings.ToUpper(constants.RARITIES[rarityIndex]),
-			CandyUsed:  0,
-		})
-
-		level := getPetLevel(missingPets[len(missingPets)-1])
-		missingPets[len(missingPets)-1].Experience = float64(level.ExperienceForMaxLevel)
 	}
 
-	return getProfilePets(userProfile, &missingPets, petCtx)
+	if _, owned := ownedPetTypes[montezumaSoul]; !owned {
+		if _, known := notenoughupdates.Constants().PetNums[montezumaSoul]; known {
+			if pet, ok := missingPetCandidate(montezumaSoul, bingo, petCtx); ok {
+				output = append(output, getProfilePets(userProfile, &[]skycrypttypes.Pet{pet}, petCtx)...)
+			}
+		}
+	}
+
+	sortProcessedPets(output)
+	return output
 }
 
 func GetPetScore(pets []models.ProcessedPet) models.PetScore {

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -91,22 +93,47 @@ func cloneResourcePackConfigs(configs []models.ResourcePackConfig) []models.Reso
 	return cloned
 }
 
-func defaultResourcePackIDs() []string {
-	configs, err := ResourcePackConfigs()
-	if err == nil && len(configs) > 0 {
-		ids := make([]string, 0, len(configs))
-		for _, config := range configs {
-			id := strings.TrimSpace(config.Id)
-			if id != "" {
-				ids = append(ids, id)
+// packIndex is derived from the resource pack configs, which load once and never change, so it is built once too
+// instead of on every texture lookup.
+type packIndex struct {
+	defaultIDs []string
+	known      map[string]struct{}
+	canonical  map[string]string
+}
+
+var (
+	packIndexOnce  sync.Once
+	packIndexValue packIndex
+)
+
+func resourcePackIndex() *packIndex {
+	packIndexOnce.Do(func() {
+		ids := []string{}
+		if configs, err := ResourcePackConfigs(); err == nil {
+			for _, config := range configs {
+				if id := strings.TrimSpace(config.Id); id != "" {
+					ids = append(ids, id)
+				}
 			}
 		}
-		if len(ids) > 0 {
-			return ids
-		}
-	}
 
-	return []string{}
+		known := map[string]struct{}{}
+		canonical := map[string]string{}
+		for _, packID := range ids {
+			canonicalPack := canonicalPackAlias(packID)
+			canonical[canonicalPack] = packID
+			if canonicalPack != "" {
+				known[canonicalPack] = struct{}{}
+			}
+		}
+		packIndexValue = packIndex{defaultIDs: ids, known: known, canonical: canonical}
+	})
+	return &packIndexValue
+}
+
+// defaultResourcePackIDs returns a copy: callers may change the slice.
+func defaultResourcePackIDs() []string {
+	return slices.Clone(resourcePackIndex().defaultIDs)
 }
 
 const orderedPackSignaturePrefix = "enabled-v7:"

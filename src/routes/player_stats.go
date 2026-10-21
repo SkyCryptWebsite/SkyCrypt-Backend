@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
@@ -42,6 +43,13 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
 
+	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
+	// so a cached response still loads when Mojang is down.
+	rawCacheKey := responseCacheKey("playerStats", uuid, profileId)
+	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
+		return err
+	}
+
 	resolvedPlayer, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
 		return sendLoadError(c, "Failed to resolve player", err)
@@ -49,44 +57,31 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 
 	resolvedUUID := resolvedPlayer.UUID
 	cacheKey := responseCacheKey("playerStats", resolvedUUID, profileId)
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
+	if cacheKey.key != rawCacheKey.key {
+		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+			return err
+		}
 	}
 
-	profile, err := api.GetProfileContext(
-		reqCtx,
-		resolvedUUID,
-		profileId,
-	)
+	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+		profile, err := api.GetProfileContext(ctx, resolvedUUID, profileId)
+		if err != nil {
+			return nil, failedTo("Failed to get profile", err)
+		}
+
+		userProfileValue := profile.Members[resolvedUUID]
+		output := stats.GetPlayerStats(&userProfileValue, profile, profile.ProfileID, resolvedUUID)
+		return marshalBody(models.Stats{Stats: output})
+	})
 	if err != nil {
-		return sendLoadError(c, "Failed to get profile", err)
+		return sendBuildError(c, err)
 	}
 
-	userProfileValue := profile.Members[resolvedUUID]
-	userProfile := &userProfileValue
+	utility.LogVerbose("Returning /api/playerStats/%s in %s", profileId, time.Since(timeNow))
 
-	output := stats.GetPlayerStats(
-		userProfile,
-		profile,
-		profile.ProfileID,
-		resolvedUUID,
-	)
-
-	utility.LogVerbose(
-		"Returning /api/playerStats/%s in %s",
-		profileId,
-		time.Since(timeNow),
-	)
-
-	formattedStats := models.Stats{
-		Stats: output,
+	// The shared build cached it under the resolved key; keep a copy under the request as given too.
+	if cacheKey.key != rawCacheKey.key {
+		cacheBody(reqCtx, rawCacheKey, body, 5*60)
 	}
-
-	return sendAndCacheJSON(
-		c,
-		reqCtx,
-		cacheKey,
-		formattedStats,
-		5*60,
-	)
+	return sendBody(c, reqCtx, cacheKey, body)
 }

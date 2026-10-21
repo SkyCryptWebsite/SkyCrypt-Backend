@@ -35,6 +35,32 @@ func hasAccessory(accessories *[]models.InsertAccessory, id string, rarity strin
 	return false
 }
 
+// accessoryOwnership answers hasAccessory from a map. It holds the highest effective rarity owned per ID, which
+// is all hasAccessory compares against.
+type accessoryOwnership map[string]int
+
+func ownedAccessories(accessories []models.InsertAccessory) accessoryOwnership {
+	owned := make(accessoryOwnership, len(accessories))
+	for _, accessory := range accessories {
+		itemRarity := slices.Index(constants.RARITIES, accessory.Rarity)
+		if accessory.Recombobulated {
+			itemRarity--
+		}
+		if current, exists := owned[accessory.Id]; !exists || itemRarity > current {
+			owned[accessory.Id] = itemRarity
+		}
+	}
+	return owned
+}
+
+func (owned accessoryOwnership) has(id string, rarity string, ignoreRarity bool) bool {
+	best, exists := owned[id]
+	if !exists {
+		return false
+	}
+	return ignoreRarity || best >= slices.Index(constants.RARITIES, rarity)
+}
+
 func getAccessory(accessories *[]models.InsertAccessory, id string) (*models.InsertAccessory, bool) {
 	for i := range *accessories {
 		if (*accessories)[i].Id == id {
@@ -171,9 +197,13 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 		}
 	}
 
+	// The alias pass above is done renaming, so index what the player owns once instead of scanning the list
+	// for each of the ~700 known accessories.
+	owned := ownedAccessories(*accessories)
+
 	missing := make([]models.InsertAccessory, 0)
 	for _, accessory := range unique {
-		if !hasAccessory(accessories, accessory.Id, accessory.Rarity, true) {
+		if !owned.has(accessory.Id, accessory.Rarity, true) {
 			missing = append(missing, accessory)
 		}
 	}
@@ -188,7 +218,7 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 
 		shouldKeep := true
 		for _, upgrade := range upgrades {
-			if hasAccessory(accessories, upgrade, missingAccessory.Rarity, false) {
+			if owned.has(upgrade, missingAccessory.Rarity, false) {
 				shouldKeep = false
 				break
 			}

@@ -2,7 +2,6 @@ package routes
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"skycrypt/src/constants"
@@ -57,10 +56,22 @@ func InventoryHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	// The route takes a UUID, so the loader gets it as is rather than through a Mojang lookup.
-	data, err := loadProfileData(reqCtx, &models.MowojangResponse{UUID: uuid}, profileId, profileParts{museum: true})
+	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+		return buildInventory(ctx, uuid, profileId, enabledPacks, cacheKey)
+	})
 	if err != nil {
-		return sendLoadError(c, "Failed to fetch data", err)
+		return sendBuildError(c, err)
+	}
+
+	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
+	return sendBody(c, reqCtx, cacheKey, body)
+}
+
+func buildInventory(ctx context.Context, uuid string, profileId string, enabledPacks []string, cacheKey responseCacheHandle) ([]byte, error) {
+	// The route takes a UUID, so the loader gets it as is rather than through a Mojang lookup.
+	data, err := loadProfileData(ctx, &models.MowojangResponse{UUID: uuid}, profileId, profileParts{museum: true})
+	if err != nil {
+		return nil, failedTo("Failed to fetch data", err)
 	}
 	profile := data.Profile
 	profileMuseum := data.Museums
@@ -76,10 +87,26 @@ func InventoryHandler(c *fiber.Ctx) error {
 		itemProcessingStats = statsItems.NewItemProcessingStats("inventory", uuid, profile.ProfileID, enabledPacks)
 	}
 	neuItemCache := map[string]models.NEUItem{}
+
+	// The museum tab is built separately; run it alongside decoding the other inventories, which happens in one
+	// batched call.
+	museumCh := make(chan []models.ProcessedItem, 1)
+	go func() {
+		var museumItems []models.ProcessedItem
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("[INVENTORY] museum tab failed: %v\n", r)
+			}
+			museumCh <- museumItems
+		}()
+		museumItems = statsItems.GetMuseum(profileMuseum[uuid], enabledPacks)
+	}()
+	decodedInventories := stats.GetInventories(&userProfile, constants.INVENTORY_ORDER)
+
 	for _, inventoryId := range constants.INVENTORY_ORDER {
 		inventoryData := constants.INVENTORY[inventoryId]
 		if inventoryId == "museum" {
-			museumItems := statsItems.GetMuseum(profileMuseum[uuid], enabledPacks)
+			museumItems := <-museumCh
 			stripStart := time.Now()
 			strippedItems := statsItems.StripItems(&museumItems)
 			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
@@ -92,7 +119,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			})
 			continue
 		} else if inventoryId == "sacks" {
-			itemSlice := stats.GetInventory(&userProfile, "sacks")
+			itemSlice := decodedInventories["sacks"]
 			sackItems := userProfile.Inventory.Sacks
 
 			parsedSacks := statsItems.ProcessItemsWithNEUCacheAndStats(itemSlice, "sacks", neuItemCache, itemProcessingStats, enabledPacks)
@@ -117,7 +144,7 @@ func InventoryHandler(c *fiber.Ctx) error {
 			texture = fmt.Sprintf(`https://nmsr.nickac.dev/headiso/%s?noshading&no=shadow`, uuid)
 		}
 
-		inventoryItems := stats.GetInventory(&userProfile, inventoryId)
+		inventoryItems := decodedInventories[inventoryId]
 		processedItems := statsItems.ProcessItemsWithNEUCacheAndStats(inventoryItems, inventoryId, neuItemCache, itemProcessingStats, enabledPacks)
 		stripStart := time.Now()
 		strippedItems := statsItems.StripItems(&processedItems)
@@ -139,19 +166,18 @@ func InventoryHandler(c *fiber.Ctx) error {
 	if itemProcessingStats != nil {
 		itemProcessingStats.LogIfEnabled(time.Since(itemProcessingStats.Started))
 	}
-	utility.LogVerbose("Returning /api/inventory/%s/%s in %s pid=%d", uuid, profileId, time.Since(timeNow), os.Getpid())
-
-	if !processedResponseCacheEnabled() {
-		jsonData, err := json.Marshal(output)
-		if err != nil {
-			return fmt.Errorf("failed to marshal inventory cache: %v", err)
-		}
-		cacheCtx, cancel := context.WithTimeout(reqCtx, 2*time.Second)
-		defer cancel()
-		if err := db.SetContext(cacheCtx, cacheKey.key, string(jsonData), 5*60); err != nil {
-			return fmt.Errorf("failed to cache inventory for search: %v", err)
-		}
+	body, err := marshalBody(output)
+	if err != nil {
+		return nil, err
 	}
 
-	return sendAndCacheJSON(c, reqCtx, cacheKey, output, 5*60)
+	// Inventory search reads this key, so write it even when the response cache is off.
+	if !processedResponseCacheEnabled() {
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		if err := db.SetContext(cacheCtx, cacheKey.key, body, 5*60); err != nil {
+			return nil, fmt.Errorf("failed to cache inventory for search: %v", err)
+		}
+	}
+	return body, nil
 }

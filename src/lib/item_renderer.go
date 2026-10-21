@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
+	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 	"strings"
+	"time"
 )
 
 type RedirectError struct {
@@ -35,9 +37,37 @@ func ResolveItemTexture(itemID string, enabledPacks []string, returnBarrierIfNon
 		return AppliedItemTexture{}, fmt.Errorf("couldn't find the texture")
 	}
 	cacheKey := itemTextureResolutionCacheKey(itemID, damage, enabledPacks, returnBarrierIfNone)
-	return resolveItemTextureSingleflight(cacheKey, func() (AppliedItemTexture, error) {
+	if texture, ok, _ := resolvedItemTextures.Get(cacheKey); ok {
+		return texture, nil
+	}
+	texture, err := resolveItemTextureSingleflight(cacheKey, func() (AppliedItemTexture, error) {
 		return resolveItemTextureUncached(itemID, damage, enabledPacks, returnBarrierIfNone)
 	})
+	if err == nil {
+		resolvedItemTextures.Set(cacheKey, texture, renderedItemCacheTTL, 0)
+	}
+	return texture, err
+}
+
+// /api/item used to redo NEU lookups, texture matching and a file read on every hit. Rendered files are
+// content-hashed, so a path keeps its bytes; the TTL only bounds how long a pack change takes to show.
+const renderedItemCacheTTL = 10 * time.Minute
+
+var (
+	resolvedItemTextures = localcache.NewLocalCache[AppliedItemTexture](8192)
+	textureFileBytes     = localcache.NewLocalCache[[]byte](4096)
+)
+
+func readTextureFile(texturePath string) ([]byte, error) {
+	if data, ok, _ := textureFileBytes.Get(texturePath); ok {
+		return data, nil
+	}
+	data, err := os.ReadFile(texturePath)
+	if err != nil {
+		return nil, err
+	}
+	textureFileBytes.Set(texturePath, data, renderedItemCacheTTL, 0)
+	return data, nil
 }
 
 func itemTextureResolutionCacheKey(itemID string, damage int, enabledPacks []string, returnBarrierIfNone bool) string {
@@ -271,7 +301,7 @@ func resolveRenderedItemTexture(appliedTexture AppliedItemTexture, returnBarrier
 			return nil, RedirectError{URL: appliedTexture.Texture}
 		}
 
-		textureBytes, err := os.ReadFile(texturePath)
+		textureBytes, err := readTextureFile(texturePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read texture %s: %w", texturePath, err)
 		}

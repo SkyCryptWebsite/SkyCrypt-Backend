@@ -49,3 +49,25 @@ func sendLoadError(c *fiber.Ctx, message string, err error) error {
 		Code:  code,
 	})
 }
+
+// buildError is a failure inside a shared response build, with the message its handler answers with.
+type buildError struct {
+	message string
+	err     error
+}
+
+func (e buildError) Error() string { return e.message + ": " + e.err.Error() }
+func (e buildError) Unwrap() error { return e.err }
+
+func failedTo(message string, err error) error {
+	return buildError{message: message, err: err}
+}
+
+// sendBuildError answers a failed shared build like sendLoadError, with the message from failedTo.
+func sendBuildError(c *fiber.Ctx, err error) error {
+	var built buildError
+	if errors.As(err, &built) {
+		return sendLoadError(c, built.message, built.err)
+	}
+	return sendLoadError(c, "Failed to build response", err)
+}

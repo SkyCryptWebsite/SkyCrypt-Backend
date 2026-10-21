@@ -36,6 +36,7 @@ func PotionHandlers(c *fiber.Ctx) error {
 	}
 
 	c.Type("png")
+	c.Set(fiber.HeaderCacheControl, renderedImageCacheControl)
 	// fmt.Printf("Returning /api/potion/%s/%s in %s\n", potionType, potionColor, time.Since(timeNow))
 	return c.Send(imageBytes)
 }

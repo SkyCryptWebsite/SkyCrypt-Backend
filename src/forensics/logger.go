@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/metrics"
 	"time"
 
 	"go.uber.org/zap"
@@ -160,8 +161,13 @@ func TrackFunc(name string) func() {
 	return NewPerfLogger().TrackOperation(name)
 }
 
+// GetAllocBytes returns the live heap size (MemStats.Alloc). It runs twice per traced request, so it reads
+// runtime/metrics, which doesn't stop the world like runtime.ReadMemStats.
 func GetAllocBytes() uint64 {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	return m.Alloc
+	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	metrics.Read(sample)
+	if sample[0].Value.Kind() != metrics.KindUint64 {
+		return 0
+	}
+	return sample[0].Value.Uint64()
 }

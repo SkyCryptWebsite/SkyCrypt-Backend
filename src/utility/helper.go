@@ -88,8 +88,28 @@ func LogVerbose(format string, args ...interface{}) {
 	}
 }
 
+// GetRawLore removes colour codes (§ followed by 0-9, a-f or k-o, r). It runs for every lore line of every item,
+// so it scans bytes instead of running colorCodeRegex; TestGetRawLoreMatchesRegex keeps the two in step.
 func GetRawLore(text string) string {
-	return colorCodeRegex.ReplaceAllString(text, "")
+	if !strings.Contains(text, "§") {
+		return text
+	}
+
+	var output strings.Builder
+	output.Grow(len(text))
+	for i := 0; i < len(text); {
+		if strings.HasPrefix(text[i:], "§") && i+len("§") < len(text) && isColorCodeChar(text[i+len("§")]) {
+			i += len("§") + 1
+			continue
+		}
+		output.WriteByte(text[i])
+		i++
+	}
+	return output.String()
+}
+
+func isColorCodeChar(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'k' && c <= 'o') || c == 'r'
 }
 
 var nonAsciiRegex = regexp.MustCompile(`[^\x00-\x7F]`)
@@ -122,18 +142,27 @@ func Max(a, b int) int {
 	return b
 }
 
+// titleCasers reuses Casers, which are costly to build and unsafe to share between goroutines.
+var titleCasers = sync.Pool{New: func() any {
+	caser := cases.Title(language.English)
+	return &caser
+}}
+
 func TitleCase(s string) string {
+	caser := titleCasers.Get().(*cases.Caser)
+	defer titleCasers.Put(caser)
+
 	if strings.Contains(s, "_") || strings.Contains(s, "-") {
 		parts := strings.FieldsFunc(s, func(r rune) bool {
 			return r == '_' || r == '-'
 		})
 		for i, part := range parts {
-			parts[i] = cases.Title(language.English).String(part)
+			parts[i] = caser.String(part)
 		}
 		return strings.Join(parts, " ")
 	}
 
-	return cases.Title(language.English).String(s)
+	return caser.String(s)
 }
 
 func ParseInt(n string) (int, error) {
@@ -318,6 +347,9 @@ func Round(value float64, precision int) float64 {
 var replaceVarRegex = regexp.MustCompile(`\{(\w+)\}`)
 
 func ReplaceVariables(template string, variables map[string]float64) string {
+	if !strings.Contains(template, "{") {
+		return template
+	}
 	return replaceVarRegex.ReplaceAllStringFunc(template, func(match string) string {
 		name := strings.Trim(match, "{}")
 
@@ -407,6 +439,9 @@ func SumInt(slice []int) int {
 func SortSlice[T any](slice []T, less func(i, j int) bool) {
 	sort.Slice(slice, less)
 }
+
+// webhookClient bounds error reports, so a hanging Discord can't hold up whoever reports an error.
+var webhookClient = &http.Client{Timeout: 5 * time.Second}
 
 func SendWebhook(endpoint string, err interface{}, stack []byte) {
 	webhookURL := os.Getenv("DISCORD_WEBHOOK")
@@ -500,7 +535,7 @@ func SendWebhook(endpoint string, err interface{}, stack []byte) {
 		return
 	}
 
-	resp, httpErr := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
+	resp, httpErr := webhookClient.Post(webhookURL, "application/json", bytes.NewBuffer(jsonData))
 	if httpErr != nil {
 		fmt.Printf("Failed to send webhook: %v\n", security.RedactError(httpErr))
 		return

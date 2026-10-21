@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"skycrypt/src/utility"
 )
@@ -32,15 +33,13 @@ func currentVanillaAssetIndex() *vanillaAssetIndex {
 		return index
 	}
 
-	built := buildVanillaAssetIndex(vanillaRoot)
+	// Build under the lock so concurrent first requests walk the vanilla pack once, not once each.
 	vanillaAssetsMu.Lock()
+	defer vanillaAssetsMu.Unlock()
 	if vanillaAssets == nil || vanillaAssets.root != vanillaRoot {
-		vanillaAssets = built
-	} else {
-		built = vanillaAssets
+		vanillaAssets = buildVanillaAssetIndex(vanillaRoot)
 	}
-	vanillaAssetsMu.Unlock()
-	return built
+	return vanillaAssets
 }
 
 func buildVanillaAssetIndex(root string) *vanillaAssetIndex {
@@ -249,6 +248,10 @@ func vanillaBlockTextureURL(id string) AppliedItemTexture {
 	return AppliedItemTexture{}
 }
 
+// vanillaModelTextures memoizes vanillaModelTextureURL for IDs the vanilla pack knows. The pack doesn't change at
+// runtime, and each call read and parsed up to three model files. Unknown IDs aren't stored, so input can't grow it.
+var vanillaModelTextures sync.Map
+
 func vanillaModelTextureURL(id string) AppliedItemTexture {
 	id = normalizedVanillaID(id)
 	if id == "" {
@@ -258,6 +261,19 @@ func vanillaModelTextureURL(id string) AppliedItemTexture {
 	if index == nil {
 		return AppliedItemTexture{}
 	}
+	memoKey := index.root + "|" + id
+	if cached, ok := vanillaModelTextures.Load(memoKey); ok {
+		return cached.(AppliedItemTexture)
+	}
+
+	texture := resolveVanillaModelTexture(id, index)
+	if index.items[id] != "" || index.models["item/"+id] != "" || index.models["block/"+id] != "" {
+		vanillaModelTextures.Store(memoKey, texture)
+	}
+	return texture
+}
+
+func resolveVanillaModelTexture(id string, index *vanillaAssetIndex) AppliedItemTexture {
 
 	modelRefs := []string{}
 	if itemPath := index.items[id]; itemPath != "" {
