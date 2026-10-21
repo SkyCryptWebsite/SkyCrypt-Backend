@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.8
 	github.com/DuckySoLucky/SkyCrypt-Types v0.1.26
-	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.21
+	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.22
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/gofiber/fiber/v2 v2.52.13
 	github.com/jackc/pgx/v5 v5.11.0
@@ -18,6 +18,7 @@ require (
 
 // replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
 replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
+
 // replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
 
 require (
