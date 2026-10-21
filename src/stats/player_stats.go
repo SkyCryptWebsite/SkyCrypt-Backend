@@ -64,20 +64,8 @@ func GetPlayerStats(
 		stats[statName]["slayers"] += int(statValue)
 	}
 
-	pets := GetPets(userProfile, &skycrypttypes.Profile{})
-	if len(pets.Pets) > 0 {
-		activePet := pets.Pets[0]
-
-		if !activePet.Active {
-			for i := range pets.Pets {
-				if pets.Pets[i].Active {
-					activePet = pets.Pets[i]
-					break
-				}
-			}
-		}
-
-		for statName, statValue := range activePet.Stats {
+	if activePetStats, petScore, hasPets := getActivePetStats(userProfile); hasPets {
+		for statName, statValue := range activePetStats {
 			if _, exists := stats[statName]; !exists {
 				continue
 			}
@@ -85,7 +73,7 @@ func GetPlayerStats(
 			stats[statName]["active_pet"] += int(statValue)
 		}
 
-		for statName, statValue := range pets.PetScore.Stats {
+		for statName, statValue := range petScore.Stats {
 			if _, exists := stats[statName]; !exists {
 				continue
 			}

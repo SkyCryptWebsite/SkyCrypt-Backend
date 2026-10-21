@@ -57,24 +57,25 @@ func parseSkillTreeItemLore(LispParser *notenoughupdates.LispParser, perk neu.Sk
 		stats[key] = lispValueToString(result)
 	}
 
+	// The last line whose OnlyIf holds. It doesn't depend on the line being output, so it is found once.
+	var matchedLine *neu.SkillTreeLoreEntry
+	for i := range perk.Lore {
+		l := &perk.Lore[i]
+		if l.OnlyIf == "" {
+			continue
+		}
+		condition := strings.NewReplacer("level", fmt.Sprintf("%d", perkLevel)).Replace(l.OnlyIf)
+		result, err := LispParser.Parse(condition)
+		if err != nil {
+			continue
+		}
+		if b, ok := result.(bool); ok && b {
+			matchedLine = l
+		}
+	}
+
 	for _, line := range perk.Lore {
 		if line.OnlyIf != "" {
-			var matchedLine *neu.SkillTreeLoreEntry
-			for i := range perk.Lore {
-				l := &perk.Lore[i]
-				if l.OnlyIf == "" {
-					continue
-				}
-				condition := strings.NewReplacer("level", fmt.Sprintf("%d", perkLevel)).Replace(l.OnlyIf)
-				result, err := LispParser.Parse(condition)
-				if err != nil {
-					continue
-				}
-				if b, ok := result.(bool); ok && b {
-					matchedLine = l
-				}
-			}
-
 			if matchedLine == nil {
 				continue
 			}
@@ -137,6 +138,11 @@ func getSkillTree(userProfile *skycrypttypes.Member, SKILL_TREE_CONSTANTS map[st
 		LispParser.SetEnv("potm", float64(potmLevel))
 	}
 
+	perkAt := make(map[[2]int]string, len(SKILL_TREE_CONSTANTS))
+	for pId, perk := range SKILL_TREE_CONSTANTS {
+		perkAt[[2]int{perk.X, perk.Y}] = pId
+	}
+
 	skillTreePerks := userProfile.SkillTree.Nodes[skillName].Levels
 	for y := range skillLevel.MaxLevel {
 		for x := range 9 {
@@ -145,14 +151,7 @@ func getSkillTree(userProfile *skycrypttypes.Member, SKILL_TREE_CONSTANTS map[st
 				continue
 			}
 
-			perkId := ""
-			for pId, perk := range SKILL_TREE_CONSTANTS {
-				if perk.X == x-1 && perk.Y == y {
-					perkId = pId
-					break
-				}
-			}
-
+			perkId := perkAt[[2]int{x - 1, y}]
 			if perkId == "" {
 				output = append(output, models.ProcessedItem{})
 				continue

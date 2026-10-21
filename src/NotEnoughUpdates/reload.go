@@ -38,17 +38,25 @@ func repoHead() string {
 // StartInitialUpdate pulls the repository in the background once the first parse is done, then parses again.
 // Updating while that first parse read the same files could hand it a half-written file.
 func StartInitialUpdate() {
-	go func() {
-		if err := UpdateNEURepository(); err != nil {
-			fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to update repository: %v\n", err)
-			return
-		}
-		if err := reloadParsedRepository(); err != nil {
-			fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to parse updated repository: %v\n", err)
-			return
-		}
-		PublishRepositoryVersion()
-	}()
+	go updateAndReload()
+}
+
+// updateAndReload pulls the repository and, only if HEAD moved, re-parses it and publishes the new commit.
+// An unchanged HEAD needs no publish: the commit already published (or loaded by children) is still current.
+func updateAndReload() {
+	before := repoHead()
+	if err := UpdateNEURepository(); err != nil {
+		fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to update repository: %v\n", err)
+		return
+	}
+	if before != "" && repoHead() == before {
+		return
+	}
+	if err := reloadParsedRepository(); err != nil {
+		fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to parse updated repository: %v\n", err)
+		return
+	}
+	PublishRepositoryVersion()
 }
 
 // ParseWithRetry parses the repository, retrying a few times. Prefork children parse while the main process may be
