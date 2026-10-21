@@ -59,15 +59,3 @@ func (pm *PoolMonitor) MonitorRedisPool(client *redis.Client) {
 		}
 	}
 }
-
-func (pm *PoolMonitor) MongoPoolCheck() {
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		pm.logger.Info("mongo_connection_pool_check",
-			zap.String("status", "monitoring"),
-			zap.String("note", "MongoDB Go driver does not expose pool stats. Check mongod logs or use db.serverStatus().connections"),
-		)
-	}
-}

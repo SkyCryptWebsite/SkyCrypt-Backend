@@ -746,9 +746,6 @@ const docTemplate = `{
                     "bank": {
                         "type": "number"
                     },
-                    "displayName": {
-                        "type": "string"
-                    },
                     "dungeons": {
                         "$ref": "#/components/schemas/models.EmbedDataDungeons"
                     },
@@ -843,22 +840,6 @@ const docTemplate = `{
                     },
                     "normal": {
                         "type": "number"
-                    }
-                },
-                "type": "object"
-            },
-            "models.EmojisResponse": {
-                "properties": {
-                    "emojis": {
-                        "items": {
-                            "additionalProperties": {},
-                            "type": "object"
-                        },
-                        "type": "array",
-                        "uniqueItems": false
-                    },
-                    "fetched_at": {
-                        "type": "integer"
                     }
                 },
                 "type": "object"
@@ -2075,9 +2056,6 @@ const docTemplate = `{
             },
             "models.PlayerResolve": {
                 "properties": {
-                    "displayName": {
-                        "type": "string"
-                    },
                     "username": {
                         "type": "string"
                     },
@@ -2844,9 +2822,6 @@ const docTemplate = `{
                     },
                     "bank": {
                         "type": "number"
-                    },
-                    "displayName": {
-                        "type": "string"
                     },
                     "fairySouls": {
                         "$ref": "#/components/schemas/models.FairySouls"
@@ -3865,38 +3840,6 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/emojis": {
-            "get": {
-                "description": "Returns emoji documents stored by SkyCrypt along with a Unix timestamp indicating when the response was generated.",
-                "operationId": "listEmojis",
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.EmojisResponse"
-                                }
-                            }
-                        },
-                        "description": "Emojis returned successfully."
-                    },
-                    "500": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Emoji data could not be fetched or parsed."
-                    }
-                },
-                "summary": "List emojis",
-                "tags": [
-                    "Emojis"
-                ]
-            }
-        },
         "/api/garden/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns Garden progression, visitors, crop milestones, composter data, plots, upgrades, and related Garden state for a specific SkyBlock profile.",
@@ -4844,7 +4787,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "3.0",
 	Title:            "SkyCrypt API",
-	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, emoji data, and source/license information used by SkyCrypt clients.",
+	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

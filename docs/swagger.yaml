@@ -486,8 +486,6 @@ components:
       properties:
         bank:
           type: number
-        displayName:
-          type: string
         dungeons:
           $ref: '#/components/schemas/models.EmbedDataDungeons'
         game_mode:
@@ -550,17 +548,6 @@ components:
           type: number
         normal:
           type: number
-      type: object
-    models.EmojisResponse:
-      properties:
-        emojis:
-          items:
-            additionalProperties: {}
-            type: object
-          type: array
-          uniqueItems: false
-        fetched_at:
-          type: integer
       type: object
     models.EnchantingGame:
       properties:
@@ -1362,8 +1349,6 @@ components:
       type: object
     models.PlayerResolve:
       properties:
-        displayName:
-          type: string
         username:
           type: string
         uuid:
@@ -1871,8 +1856,6 @@ components:
           type: object
         bank:
           type: number
-        displayName:
-          type: string
         fairySouls:
           $ref: '#/components/schemas/models.FairySouls'
         game_mode:
@@ -2349,7 +2332,7 @@ externalDocs:
 info:
   description: SkyCrypt API provides Hypixel SkyBlock profile data, player statistics,
     networth calculations, inventory views, rendered Minecraft item assets, resource
-    pack metadata, emoji data, and source/license information used by SkyCrypt clients.
+    pack metadata, and source/license information used by SkyCrypt clients.
   title: SkyCrypt API
   version: "3.0"
 openapi: 3.1.0
@@ -2552,27 +2535,6 @@ paths:
       summary: Get profile embed data
       tags:
       - Discord Embed
-  /api/emojis:
-    get:
-      description: Returns emoji documents stored by SkyCrypt along with a Unix timestamp
-        indicating when the response was generated.
-      operationId: listEmojis
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.EmojisResponse'
-          description: Emojis returned successfully.
-        "500":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Emoji data could not be fetched or parsed.
-      summary: List emojis
-      tags:
-      - Emojis
   /api/garden/{uuid}/{profileId}:
     get:
       description: Returns Garden progression, visitors, crop milestones, composter

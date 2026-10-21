@@ -7,10 +7,12 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +22,37 @@ var redisAddr string
 var redisPassword string
 var redisDB int
 var clientMutex sync.RWMutex
+
+// Values at least this big are stored zstd-compressed; small identity keys aren't worth the frame overhead.
+const compressMinBytes = 1024
+
+var zstdEncoder, _ = zstd.NewWriter(nil)
+var zstdDecoder, _ = zstd.NewReader(nil)
+
+const zstdMagic = "\x28\xb5\x2f\xfd"
+
+func compressValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case string:
+		if len(v) >= compressMinBytes {
+			return zstdEncoder.EncodeAll([]byte(v), nil)
+		}
+	case []byte:
+		if len(v) >= compressMinBytes {
+			return zstdEncoder.EncodeAll(v, nil)
+		}
+	}
+	return value
+}
+
+// decompressValue passes plain values through, so keys written before compression still read fine.
+func decompressValue(value string) (string, error) {
+	if !strings.HasPrefix(value, zstdMagic) {
+		return value, nil
+	}
+	out, err := zstdDecoder.DecodeAll([]byte(value), nil)
+	return string(out), err
+}
 
 type RedisClient struct {
 	client *redis.Client
@@ -147,7 +180,7 @@ func GetContext(ctx context.Context, key string) (string, error) {
 		}
 	}
 
-	return val, nil
+	return decompressValue(val)
 }
 
 func GetManyContext(ctx context.Context, keys []string) (map[string]string, error) {
@@ -188,6 +221,11 @@ func GetManyContext(ctx context.Context, keys []string) (map[string]string, erro
 		}
 		str, ok := value.(string)
 		if !ok || str == "" {
+			misses++
+			continue
+		}
+		str, err := decompressValue(str)
+		if err != nil {
 			misses++
 			continue
 		}
@@ -321,7 +359,7 @@ func SetManyContext(ctx context.Context, values map[string]interface{}, expirati
 	expiration := time.Duration(expirationSeconds) * time.Second
 	pipe := client.Pipeline()
 	for key, value := range values {
-		pipe.Set(ctx, key, value, expiration)
+		pipe.Set(ctx, key, compressValue(value), expiration)
 	}
 	_, err = pipe.Exec(ctx)
 	duration := time.Since(start)
@@ -366,7 +404,7 @@ func SetContext(ctx context.Context, key string, value interface{}, expirationSe
 	}
 
 	expiration := time.Duration(expirationSeconds) * time.Second
-	err = client.Set(ctx, key, value, expiration).Err()
+	err = client.Set(ctx, key, compressValue(value), expiration).Err()
 	duration := time.Since(start)
 
 	if err != nil {

@@ -53,8 +53,8 @@ type RequestSummary struct {
 	HTTPMs                float64              `json:"http_ms"`
 	HTTPErrors            int                  `json:"http_errors"`
 	HTTPRateLimits        int                  `json:"http_rate_limits"`
-	MongoCalls            int                  `json:"mongo_calls"`
-	MongoMs               float64              `json:"mongo_ms"`
+	PostgresCalls         int                  `json:"postgres_calls"`
+	PostgresMs            float64              `json:"postgres_ms"`
 	Dependencies          []DependencySummary  `json:"dependencies"`
 	RepeatedDependencies  []RepeatedDependency `json:"repeated_dependencies"`
 }
@@ -82,8 +82,8 @@ type RequestMetrics struct {
 	httpErrors     int
 	httpRateLimits int
 
-	mongoCalls int
-	mongoMs    float64
+	postgresCalls int
+	postgresMs    float64
 
 	dependencies map[string]*DependencySummary
 }
@@ -220,7 +220,7 @@ func RecordHTTPDependency(ctx context.Context, method, rawURL string, statusCode
 	metrics.addDependencyLocked("http", method, name, duration)
 }
 
-func RecordMongoDependency(ctx context.Context, collection, operation string, duration time.Duration, err error) {
+func RecordPostgresDependency(ctx context.Context, table, operation string, duration time.Duration, err error) {
 	metrics := MetricsFromContext(ctx)
 	if metrics == nil {
 		return
@@ -229,9 +229,9 @@ func RecordMongoDependency(ctx context.Context, collection, operation string, du
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
 
-	metrics.mongoCalls++
-	metrics.mongoMs += durationToMs(duration)
-	metrics.addDependencyLocked("mongo", operation, collection, duration)
+	metrics.postgresCalls++
+	metrics.postgresMs += durationToMs(duration)
+	metrics.addDependencyLocked("postgres", operation, table, duration)
 }
 
 func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.Duration, responseSize int, allocDelta int64) RequestSummary {
@@ -292,8 +292,8 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 		HTTPMs:                metrics.httpMs,
 		HTTPErrors:            metrics.httpErrors,
 		HTTPRateLimits:        metrics.httpRateLimits,
-		MongoCalls:            metrics.mongoCalls,
-		MongoMs:               metrics.mongoMs,
+		PostgresCalls:         metrics.postgresCalls,
+		PostgresMs:            metrics.postgresMs,
 		Dependencies:          deps,
 		RepeatedDependencies:  repeated,
 	}
@@ -320,8 +320,8 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 			zap.Float64("http_ms", summary.HTTPMs),
 			zap.Int("http_errors", summary.HTTPErrors),
 			zap.Int("http_rate_limits", summary.HTTPRateLimits),
-			zap.Int("mongo_calls", summary.MongoCalls),
-			zap.Float64("mongo_ms", summary.MongoMs),
+			zap.Int("postgres_calls", summary.PostgresCalls),
+			zap.Float64("postgres_ms", summary.PostgresMs),
 			zap.Any("dependencies", summary.Dependencies),
 			zap.Any("repeated_dependencies", summary.RepeatedDependencies),
 		)
@@ -407,7 +407,7 @@ func isRepeatedDependency(dep *DependencySummary) bool {
 	switch dep.Kind {
 	case "redis":
 		return (dep.Operation == "GET" || dep.Operation == "MGET") && dep.Count >= 3
-	case "http", "mongo":
+	case "http", "postgres":
 		return dep.Count >= 2
 	default:
 		return false
@@ -423,8 +423,8 @@ func dependencySuggestion(kind, name string) string {
 		return "Repeated Redis access. Consider request-local memoization or coalescing related reads."
 	case "http":
 		return "Repeated upstream calls. Consider singleflight, prefetching, or a broader cache key."
-	case "mongo":
-		return "Repeated Mongo operation. Consider batching, aggregation, or index review."
+	case "postgres":
+		return "Repeated Postgres operation. Consider batching, aggregation, or index review."
 	default:
 		return "Repeated dependency calls detected."
 	}

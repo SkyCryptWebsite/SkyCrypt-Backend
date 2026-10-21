@@ -96,7 +96,10 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	var rawReponse models.HypixelPlayerResponse
 	var response skycrypttypes.Player
 
-	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/player", url.Values{"uuid": {uuid}})
+	key := fmt.Sprintf(`player:%s`, uuid)
+	body, err := withFallback(ctx, key, func() ([]byte, error) {
+		return getHypixelBody(ctx, "https://api.hypixel.net/v2/player", url.Values{"uuid": {uuid}})
+	})
 	if err != nil {
 		return &response, err
 	}
@@ -106,7 +109,6 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 		return &rawReponse.Player, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	key := fmt.Sprintf(`player:%s`, uuid)
 	_ = redis.SetContext(ctx, key, string(body), int(playerCacheTTL.Seconds()))
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -178,7 +180,10 @@ func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProf
 func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, error) {
 	var response models.HypixelProfilesResponse
 
-	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/profiles", url.Values{"uuid": {uuid}})
+	key := fmt.Sprintf(`profiles:%s`, uuid)
+	body, err := withFallback(ctx, key, func() ([]byte, error) {
+		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/profiles", url.Values{"uuid": {uuid}})
+	})
 	if err != nil {
 		return &response, err
 	}
@@ -192,7 +197,6 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 		return &response, fmt.Errorf("error fetching profiles: %s", response.Cause)
 	}
 
-	key := fmt.Sprintf(`profiles:%s`, uuid)
 	_ = redis.SetContext(ctx, key, string(body), int(profilesCacheTTL.Seconds()))
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -294,7 +298,10 @@ func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skyc
 func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, error) {
 	var rawReponse models.HypixelMuseumResponse
 
-	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/museum", url.Values{"profile": {profileId}})
+	key := fmt.Sprintf(`museum:%s`, profileId)
+	body, err := withFallback(ctx, key, func() ([]byte, error) {
+		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/museum", url.Values{"profile": {profileId}})
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +311,6 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	key := fmt.Sprintf(`museum:%s`, profileId)
 	_ = redis.SetContext(ctx, key, string(body), int(museumCacheTTL.Seconds()))
 	return rawReponse.Members, nil
 }
@@ -359,7 +365,10 @@ func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.G
 func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
 	var rawReponse models.HypixelGardenResponse
 
-	body, err := getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
+	key := fmt.Sprintf(`garden:%s`, profileId)
+	body, err := withFallback(ctx, key, func() ([]byte, error) {
+		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -369,9 +378,29 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
 	}
 
-	key := fmt.Sprintf(`garden:%s`, profileId)
 	_ = redis.SetContext(ctx, key, string(body), int(gardenCacheTTL.Seconds()))
 	return &rawReponse.Garden, nil
+}
+
+// withFallback stores every good upstream body and serves the last one stored when the upstream fails.
+func withFallback(ctx context.Context, key string, fetch func() ([]byte, error)) ([]byte, error) {
+	body, err := fetch()
+	if err == nil {
+		redis.SaveFallback(key, body)
+		return body, nil
+	}
+
+	stale, ok := redis.GetFallback(ctx, key)
+	if !ok {
+		return nil, err
+	}
+	if utility.IsForensicsEnabled() {
+		forensics.Logger.Warn("upstream_fallback_served",
+			zap.String("key", key),
+			zap.Error(security.RedactError(err)),
+		)
+	}
+	return stale, nil
 }
 
 func detachedFetchContext(ctx context.Context) (context.Context, context.CancelFunc) {

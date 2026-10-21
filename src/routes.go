@@ -45,18 +45,12 @@ func SetupApplication() error {
 		return fmt.Errorf("failed to connect to Redis: %v", err)
 	}
 
-	mongoURI := os.Getenv("MONGO_URI")
-	if mongoURI != "" {
-		mongoDBName := os.Getenv("MONGO_DB_NAME")
-		if mongoDBName == "" {
-			mongoDBName = "SkyCrypt"
-		}
-
-		if err := db.InitMongo(mongoURI, mongoDBName); err != nil {
-			log.Printf("MongoDB unavailable, emoji caching disabled: %v", err)
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
+		if err := db.InitPostgres(databaseURL); err != nil {
+			log.Printf("Postgres unavailable, fallback cache disabled: %v", err)
 		}
 	} else {
-		log.Println("MONGO_URI not set, emoji caching disabled")
+		log.Println("DATABASE_URL not set, fallback cache disabled")
 	}
 
 	// Main process: fetch all remote data, init/update repos, then parse
@@ -212,5 +206,4 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/constants/enchantments", routes.EnchantmentsConstantsHandler)
 
 	// OTHER
-	api.Get("/emojis", routes.EmojisHandler)
 }

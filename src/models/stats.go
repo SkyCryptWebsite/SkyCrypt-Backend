@@ -21,7 +21,6 @@ type MemberStats struct {
 
 type StatsOutput struct {
 	Username        string                         `json:"username"`
-	DisplayName     string                         `json:"displayName"`
 	UUID            string                         `json:"uuid"`
 	ProfileID       string                         `json:"profile_id"`
 	ProfileCuteName string                         `json:"profile_cute_name"`

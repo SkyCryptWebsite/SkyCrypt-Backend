@@ -23,7 +23,7 @@ import (
 
 // @title			SkyCrypt API
 // @version		3.0
-// @description	SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, emoji data, and source/license information used by SkyCrypt clients.
+// @description	SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.
 // @servers.url		https://sky.shiiyu.moe/
 // @servers.description	SkyCrypt production API
 

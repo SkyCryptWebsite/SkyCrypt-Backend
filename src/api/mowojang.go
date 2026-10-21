@@ -394,7 +394,16 @@ func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.
 
 func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowError bool) (string, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://api.mojang.com/users/profiles/minecraft/%s", username))
-	if err != nil {
+	if err != nil || resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusTooManyRequests {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if uuid, ok := staleIdentity(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(username))); ok {
+			return uuid, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("status code %d", resp.StatusCode)
+		}
 		if shouldThrowError {
 			return "", fmt.Errorf("error making request to Mojang API: %v", err)
 		}
@@ -451,7 +460,16 @@ func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowE
 
 func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
-	if err != nil {
+	if err != nil || resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusTooManyRequests {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if name, ok := staleIdentity(ctx, fmt.Sprintf("username:%s", uuid)); ok {
+			return name, nil
+		}
+		if err == nil {
+			err = fmt.Errorf("status code %d", resp.StatusCode)
+		}
 		if shouldThrowError {
 			return "", fmt.Errorf("error making request to Mojang API: %v", err)
 		}
@@ -501,7 +519,20 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 
 func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
-	if err != nil {
+	if err != nil || resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusTooManyRequests {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		if body, ok := staleIdentity(ctx, fmt.Sprintf("mowojangUUID:%s", uuid)); ok {
+			var post models.MowojangResponse
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			if json.Unmarshal([]byte(body), &post) == nil && post.UUID != "" {
+				return &post, nil
+			}
+		}
+		if err == nil {
+			err = fmt.Errorf("status code %d", resp.StatusCode)
+		}
 		return &models.MowojangResponse{}, fmt.Errorf("error making request to Mojang API: %v", err)
 	}
 	defer func() {
@@ -576,4 +607,16 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 		}
 	}
 	_ = redis.SetManyContext(ctx, values, 24*60*60)
+
+	redis.SaveFallback(fmt.Sprintf("uuid:%s", strings.ToLower(name)), []byte(uuid))
+	redis.SaveFallback(fmt.Sprintf("username:%s", uuid), []byte(name))
+	if body != "" && includeFullResponse {
+		redis.SaveFallback(fmt.Sprintf("mowojangUUID:%s", uuid), []byte(body))
+	}
+}
+
+// staleIdentity returns the last known identity value once both mowojang and Mojang have failed.
+func staleIdentity(ctx context.Context, key string) (string, bool) {
+	value, ok := redis.GetFallback(ctx, key)
+	return string(value), ok && len(value) > 0
 }

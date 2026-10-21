@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,7 +26,27 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get("https://api.hypixel.net/v2/resources/skyblock/items")
+	body, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
+		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/items")
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var data models.HypixelItemsResponse
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	_ = redis.Set("skyblock_items", string(body), 12*60*60) // Cache for 12 hours
+
+	return data.Items, nil
+}
+
+func getResourceBody(url string) ([]byte, error) {
+	resp, err := HTTPClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %v", err)
 	}
@@ -46,16 +67,7 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 		return nil, fmt.Errorf("received empty response from API")
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	var data models.HypixelItemsResponse
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing JSON: %v", err)
-	}
-
-	_ = redis.Set("skyblock_items", string(body), 12*60*60) // Cache for 12 hours
-
-	return data.Items, nil
+	return body, nil
 }
 
 func getSkyBlockItemsFromCache(cachedData string) ([]models.HypixelItem, error) {
@@ -92,25 +104,11 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 		}
 	}
 
-	resp, err := HTTPClient.Get("https://api.hypixel.net/v2/resources/skyblock/collections")
+	body, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
+		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/collections")
+	})
 	if err != nil {
-		return nil, fmt.Errorf("error making request: %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %v", err)
-	}
-
-	if len(body) == 0 {
-		return nil, fmt.Errorf("received empty response from API")
+		return nil, err
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
