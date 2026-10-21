@@ -64,7 +64,11 @@ func ItemHandlers(c *fiber.Ctx) error {
 
 	enabledPacks := enabledPacksFromRequest(c)
 
-	textureBytes, err := lib.RenderItem(textureId, enabledPacks, false)
+	texture, err := lib.ResolveItemTexture(textureId, enabledPacks, false)
+	var textureBytes []byte
+	if err == nil {
+		textureBytes, err = lib.RenderResolvedItemTexture(texture, false)
+	}
 	if err != nil {
 		if redirectErr, ok := err.(lib.RedirectError); ok {
 			return c.Redirect(redirectErr.URL, 302)
@@ -75,7 +79,12 @@ func ItemHandlers(c *fiber.Ctx) error {
 	}
 
 	// Depends on the pack cookie, so browsers may keep it but shared caches may not (Vary: Cookie is set).
-	c.Set(fiber.HeaderCacheControl, "private, max-age=3600")
+	// A fallback is kept briefly so the real render replaces it once it exists.
+	if lib.IsRenderedItemTexture(texture) {
+		c.Set(fiber.HeaderCacheControl, "private, max-age=3600")
+	} else {
+		c.Set(fiber.HeaderCacheControl, "private, max-age=60")
+	}
 	// Rendered textures are mostly WebP; send the type the bytes actually have.
 	c.Set(fiber.HeaderContentType, http.DetectContentType(textureBytes))
 	// fmt.Printf("Returning /api/item/%s in %s\n", textureId, time.Since(timeNow))

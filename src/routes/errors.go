@@ -60,6 +60,11 @@ func (e buildError) Error() string { return e.message + ": " + e.err.Error() }
 func (e buildError) Unwrap() error { return e.err }
 
 func failedTo(message string, err error) error {
+	// A step that already chose its message (a player lookup inside the build) keeps it.
+	var inner buildError
+	if errors.As(err, &inner) {
+		return inner
+	}
 	return buildError{message: message, err: err}
 }
 

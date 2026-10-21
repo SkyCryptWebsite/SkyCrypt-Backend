@@ -20,8 +20,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"skycrypt/src/api"
+	"skycrypt/src/constants"
 	"skycrypt/src/localcache"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,9 +70,18 @@ func writeFileAtomic(path string, data []byte) error {
 
 // ========== ITEM RENDERING (Potions & Armor) ==========
 
+// ErrTextureNotFound means the request names nothing we can render; routes answer it with a 404.
+var ErrTextureNotFound = errors.New("texture not found")
+
+var hexColorPattern = regexp.MustCompile(`^[0-9a-f]{6}$`)
+
 func RenderPotion(potionType, hexColor string) ([]byte, error) {
 	// Hex parsing ignores case; one cache file and render per colour, not per spelling.
 	hexColor = strings.ToLower(hexColor)
+	// Both values end up in a file name, so only known ones may create a file.
+	if (potionType != "normal" && potionType != "splash") || !hexColorPattern.MatchString(hexColor) {
+		return nil, ErrTextureNotFound
+	}
 	cachePath := filepath.Join(CACHE_DIR, "potions", fmt.Sprintf("potion_%s_%s.png", potionType, hexColor))
 	if _, err := os.Stat(cachePath); err == nil {
 		data, err := os.ReadFile(cachePath)
@@ -143,6 +155,9 @@ func renderPotionUncached(potionType, hexColor string, cachePath string) ([]byte
 func RenderArmor(armorType, hexColor string) ([]byte, error) {
 	// Hex parsing ignores case; one cache file and render per colour, not per spelling.
 	hexColor = strings.ToLower(hexColor)
+	if !slices.Contains(constants.ARMOR_TYPES, armorType) || !hexColorPattern.MatchString(hexColor) {
+		return nil, ErrTextureNotFound
+	}
 	cachePath := filepath.Join(CACHE_DIR, "leather", fmt.Sprintf("leather_%s_%s.png", armorType, hexColor))
 	if _, err := os.Stat(cachePath); err == nil {
 		data, err := os.ReadFile(cachePath)
@@ -213,15 +228,20 @@ var failedHeads = localcache.NewLocalCache[struct{}](4096)
 
 const failedHeadTTL = 10 * time.Minute
 
-var errHeadNotFound = errors.New("texture not found")
+// Skin texture IDs are the hex hash at the end of a textures.minecraft.net URL; some drop leading zeros.
+var headTextureIDPattern = regexp.MustCompile(`^[0-9a-f]{32,64}$`)
 
-func RenderHead(textureId string) []byte {
+// RenderHead returns ErrTextureNotFound for malformed IDs and for textures Mojang doesn't have.
+func RenderHead(textureId string) ([]byte, error) {
+	if !headTextureIDPattern.MatchString(textureId) {
+		return nil, ErrTextureNotFound
+	}
 	cachePath := filepath.Join(CACHE_DIR, "heads", textureId+".png")
 	if data, err := os.ReadFile(cachePath); err == nil {
-		return data
+		return data, nil
 	}
 	if _, failed, _ := failedHeads.Get(textureId); failed {
-		return nil
+		return nil, ErrTextureNotFound
 	}
 
 	result, err, _ := headGroup.Do(textureId, func() (interface{}, error) {
@@ -239,7 +259,7 @@ func RenderHead(textureId string) []byte {
 		}()
 
 		if response.StatusCode == http.StatusNotFound {
-			return nil, errHeadNotFound
+			return nil, ErrTextureNotFound
 		}
 		if response.StatusCode != http.StatusOK {
 			log.Println("Error fetching texture, status code:", response.StatusCode)
@@ -284,22 +304,17 @@ func RenderHead(textureId string) []byte {
 
 	if err != nil {
 		log.Printf("Error rendering head for texture %s: %v", textureId, err)
-		if errors.Is(err, errHeadNotFound) {
+		if errors.Is(err, ErrTextureNotFound) {
 			failedHeads.Set(strings.Clone(textureId), struct{}{}, failedHeadTTL, 0)
 		}
-		return nil
-	}
-
-	if result == nil {
-		return nil
+		return nil, err
 	}
 
 	b, ok := result.([]byte)
-	if !ok {
-		log.Printf("Error: unexpected type %T from head render for texture %s", result, textureId)
-		return nil
+	if !ok || b == nil {
+		return nil, fmt.Errorf("unexpected head render result %T for texture %s", result, textureId)
 	}
-	return b
+	return b, nil
 }
 
 func RenderLocalHead(cacheID string, texturePath string) []byte {
@@ -821,7 +836,9 @@ func warpImage(src *image.RGBA, matrix Matrix, outputSize uint32) *image.RGBA {
 
 			if srcX >= srcBounds.Min.X && srcX < srcBounds.Max.X &&
 				srcY >= srcBounds.Min.Y && srcY < srcBounds.Max.Y {
-				dst.Set(x, y, src.At(srcX, srcY))
+				// Same bytes as dst.Set(src.At()), without boxing a color per pixel.
+				si, di := src.PixOffset(srcX, srcY), dst.PixOffset(x, y)
+				copy(dst.Pix[di:di+4], src.Pix[si:si+4])
 			}
 		}
 	}

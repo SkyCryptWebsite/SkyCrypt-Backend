@@ -85,113 +85,7 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 		}
 	}
 
-	var activeAccessories []models.InsertAccessory
-	for _, a := range accessories {
-		if !a.IsInactive {
-			activeAccessories = append(activeAccessories, a)
-		}
-	}
-
-	// Process duplicates
-	for _, accessory := range activeAccessories {
-		id := accessory.Id
-		rarity := accessory.Rarity
-
-		var duplicates []models.InsertAccessory
-		for _, a := range accessories {
-			if constants.GetBaseIdFromAlias(a.Id) == constants.GetBaseIdFromAlias(id) {
-				duplicates = append(duplicates, a)
-			}
-		}
-
-		if len(duplicates) > 1 {
-			for i, duplicate := range duplicates {
-				duplicateRarity := duplicate.Rarity
-
-				if utility.RarityNameToInt(duplicateRarity) < utility.RarityNameToInt(rarity) {
-					duplicates[i].IsInactive = true
-
-					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cLower rarity duplicate of %s", accessory.DisplayName))
-				} else if duplicate.Rarity == rarity {
-					duplicates[i].IsInactive = true
-
-					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cDuplicate of %s", accessory.DisplayName))
-
-				}
-			}
-
-			// Update accessories slice with modified duplicates
-			for j, acc := range accessories {
-				for _, dup := range duplicates {
-					if acc.Id == dup.Id && acc.Rarity == dup.Rarity {
-						accessories[j].IsInactive = dup.IsInactive
-
-						// NOTE: This could be done better but it works for now (cba to refactor)
-						for _, lore := range dup.Lore {
-							if strings.HasPrefix(lore, "§7Obtained:") && !loreContains(accessories[j].Lore, "§7Obtained:") {
-								accessories[j].Lore = append(accessories[j].Lore, "")
-								accessories[j].Lore = append(accessories[j].Lore, lore)
-							} else if strings.HasPrefix(lore, "§7Item Value:") && !loreContains(accessories[j].Lore, "§7Item Value:") {
-								accessories[j].Lore = append(accessories[j].Lore, "")
-								accessories[j].Lore = append(accessories[j].Lore, lore)
-							} else if strings.HasPrefix(lore, "§7Inactive:") && !loreContains(accessories[j].Lore, "§7Inactive:") {
-								accessories[j].Lore = append(accessories[j].Lore, "")
-								accessories[j].Lore = append(accessories[j].Lore, lore)
-							}
-						}
-
-						break
-					}
-				}
-			}
-
-			// Check if all duplicates are inactive
-			allInactive := true
-			for _, dup := range duplicates {
-				if !dup.IsInactive {
-					allInactive = false
-					break
-				}
-			}
-
-			if allInactive {
-				// Find and reactivate the current accessory
-				for i, acc := range accessories {
-					if acc.Id == id && acc.Rarity == rarity {
-						accessories[i].IsInactive = false
-
-						// Remove the inactive lore line
-						for j := len(accessories[i].Lore) - 1; j >= 0; j-- {
-							if strings.HasPrefix(accessories[i].Lore[j], "§7Inactive:") {
-								accessories[i].Lore = append(accessories[i].Lore[:j], accessories[i].Lore[j+1:]...)
-								if j > 0 {
-									accessories[i].Lore = append(accessories[i].Lore[:j-1], accessories[i].Lore[j-1+1:]...)
-								}
-								break
-							}
-						}
-						break
-					}
-				}
-			}
-		}
-	}
-
-	// Process upgrade accessories
-	for _, accessory := range accessories {
-		id := accessory.Id
-		upgradeList := constants.GetUpgradeList(id)
-		for _, upgrade := range upgradeList {
-			if slices.Index(upgradeList, upgrade) < slices.Index(upgradeList, id) {
-				for j, acc := range accessories {
-					if acc.Id == upgrade {
-						accessories[j].IsInactive = true
-						appendInactiveLore(&accessories[j], fmt.Sprintf("§7Inactive: §cUpgraded to %s", accessory.DisplayName))
-					}
-				}
-			}
-		}
-	}
+	markInactiveAccessories(accessories)
 
 	if useProfile.Rift.Access.ConsumedPrism {
 		riftPrismItem, _ := notenoughupdates.GetItem("RIFT_PRISM")
@@ -229,6 +123,124 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 	}
 
 	return GetMissingAccessories(output, useProfile)
+}
+
+// markInactiveAccessories marks lower rarity duplicates and accessories that were upgraded as inactive.
+func markInactiveAccessories(accessories []models.InsertAccessory) {
+	// Ids never change below, so index each accessory once instead of rescanning the list per accessory.
+	byBaseId := map[string][]int{}
+	byId := map[string][]int{}
+	for i, a := range accessories {
+		baseId := constants.GetBaseIdFromAlias(a.Id)
+		byBaseId[baseId] = append(byBaseId[baseId], i)
+		byId[a.Id] = append(byId[a.Id], i)
+	}
+
+	var activeAccessories []models.InsertAccessory
+	for _, a := range accessories {
+		if !a.IsInactive {
+			activeAccessories = append(activeAccessories, a)
+		}
+	}
+
+	// Process duplicates
+	for _, accessory := range activeAccessories {
+		id := accessory.Id
+		rarity := accessory.Rarity
+		group := byBaseId[constants.GetBaseIdFromAlias(id)]
+
+		duplicates := make([]models.InsertAccessory, 0, len(group))
+		for _, i := range group {
+			duplicates = append(duplicates, accessories[i])
+		}
+
+		if len(duplicates) > 1 {
+			for i, duplicate := range duplicates {
+				duplicateRarity := duplicate.Rarity
+
+				if utility.RarityNameToInt(duplicateRarity) < utility.RarityNameToInt(rarity) {
+					duplicates[i].IsInactive = true
+
+					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cLower rarity duplicate of %s", accessory.DisplayName))
+				} else if duplicate.Rarity == rarity {
+					duplicates[i].IsInactive = true
+
+					appendInactiveLore(&duplicates[i], fmt.Sprintf("§7Inactive: §cDuplicate of %s", accessory.DisplayName))
+
+				}
+			}
+
+			// Update accessories slice with modified duplicates; only the group can match a duplicate's id
+			for _, j := range group {
+				acc := accessories[j]
+				for _, dup := range duplicates {
+					if acc.Id == dup.Id && acc.Rarity == dup.Rarity {
+						accessories[j].IsInactive = dup.IsInactive
+
+						// NOTE: This could be done better but it works for now (cba to refactor)
+						for _, lore := range dup.Lore {
+							if strings.HasPrefix(lore, "§7Obtained:") && !loreContains(accessories[j].Lore, "§7Obtained:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							} else if strings.HasPrefix(lore, "§7Item Value:") && !loreContains(accessories[j].Lore, "§7Item Value:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							} else if strings.HasPrefix(lore, "§7Inactive:") && !loreContains(accessories[j].Lore, "§7Inactive:") {
+								accessories[j].Lore = append(accessories[j].Lore, "")
+								accessories[j].Lore = append(accessories[j].Lore, lore)
+							}
+						}
+
+						break
+					}
+				}
+			}
+
+			// Check if all duplicates are inactive
+			allInactive := true
+			for _, dup := range duplicates {
+				if !dup.IsInactive {
+					allInactive = false
+					break
+				}
+			}
+
+			if allInactive {
+				// Find and reactivate the current accessory
+				for _, i := range group {
+					if acc := accessories[i]; acc.Id == id && acc.Rarity == rarity {
+						accessories[i].IsInactive = false
+
+						// Remove the inactive lore line
+						for j := len(accessories[i].Lore) - 1; j >= 0; j-- {
+							if strings.HasPrefix(accessories[i].Lore[j], "§7Inactive:") {
+								accessories[i].Lore = append(accessories[i].Lore[:j], accessories[i].Lore[j+1:]...)
+								if j > 0 {
+									accessories[i].Lore = append(accessories[i].Lore[:j-1], accessories[i].Lore[j-1+1:]...)
+								}
+								break
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// Process upgrade accessories
+	for _, accessory := range accessories {
+		id := accessory.Id
+		upgradeList := constants.GetUpgradeList(id)
+		for _, upgrade := range upgradeList {
+			if slices.Index(upgradeList, upgrade) < slices.Index(upgradeList, id) {
+				for _, j := range byId[upgrade] {
+					accessories[j].IsInactive = true
+					appendInactiveLore(&accessories[j], fmt.Sprintf("§7Inactive: §cUpgraded to %s", accessory.DisplayName))
+				}
+			}
+		}
+	}
 }
 
 type itemSorter []models.InsertAccessory

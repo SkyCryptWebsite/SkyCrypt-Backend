@@ -2,21 +2,6 @@ package lib
 
 import "strings"
 
-func rememberRenderedSkyBlockID(id string, packID string) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return
-	}
-	packID = strings.TrimSpace(packID)
-	if packID == "" {
-		packID = defaultPackSignature()
-	}
-
-	renderedSkyBlockIndexMu.Lock()
-	renderedSkyBlockIndex[renderedSkyBlockIndexKey(packID, id)] = struct{}{}
-	renderedSkyBlockIndexMu.Unlock()
-}
-
 func renderedSkyBlockIDKnown(id string, packID string) bool {
 	id = strings.TrimSpace(id)
 	packID = strings.TrimSpace(packID)

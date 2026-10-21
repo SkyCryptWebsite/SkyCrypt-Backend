@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"errors"
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
@@ -18,6 +19,7 @@ import (
 //	@Param			color	path		string	true	"Potion color value"		example(ff0000)
 //	@Success		200		{file}		binary					"PNG image bytes returned successfully."
 //	@Failure		400		{object}	models.ProcessingError	"Potion type or color is missing or invalid."
+//	@Failure		404		{object}	models.ProcessingError	"Potion type is not normal or splash, or color is not 6-digit hex."
 //	@Failure		500		{object}	models.ProcessingError	"Potion image could not be rendered."
 //	@Router			/api/potion/{type}/{color} [get]
 func PotionHandlers(c *fiber.Ctx) error {
@@ -30,6 +32,10 @@ func PotionHandlers(c *fiber.Ctx) error {
 	}
 
 	imageBytes, err := lib.RenderPotion(potionType, potionColor)
+	if errors.Is(err, lib.ErrTextureNotFound) {
+		c.Set(fiber.HeaderCacheControl, notFoundImageCacheControl)
+		return c.Status(fiber.StatusNotFound).JSON(constants.InvalidItemProvidedError)
+	}
 	if err != nil {
 		c.Status(500)
 		return c.JSON(constants.InvalidItemProvidedError)

@@ -52,7 +52,9 @@ func InitLogger() {
 	}
 
 	cores := []zapcore.Core{
-		zapcore.NewCore(jsonEncoder, zapcore.AddSync(appLogWriter), zapcore.DebugLevel),
+		// Buffered: every Redis op logs here at debug. Sync (deferred in main) flushes it; warnings also go to the
+		// unbuffered error log, and zap syncs before a fatal exit.
+		zapcore.NewCore(jsonEncoder, &zapcore.BufferedWriteSyncer{WS: zapcore.AddSync(appLogWriter)}, zapcore.DebugLevel),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(errorLogWriter), zapcore.WarnLevel),
 	}
 

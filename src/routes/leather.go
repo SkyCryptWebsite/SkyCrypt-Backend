@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"errors"
 	"fmt"
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
@@ -19,6 +20,7 @@ import (
 //	@Param			color	path		string	true	"Armor color value"				example(ff0000)
 //	@Success		200		{file}		binary					"PNG image bytes returned successfully."
 //	@Failure		400		{object}	models.ProcessingError	"Armor type or color is missing or invalid."
+//	@Failure		404		{object}	models.ProcessingError	"Armor piece is unknown or color is not 6-digit hex."
 //	@Failure		500		{object}	models.ProcessingError	"Leather armor image could not be rendered."
 //	@Router			/api/leather/{type}/{color} [get]
 func LeatherHandlers(c *fiber.Ctx) error {
@@ -31,6 +33,10 @@ func LeatherHandlers(c *fiber.Ctx) error {
 	}
 
 	imageBytes, err := lib.RenderArmor(armorType, armorColor)
+	if errors.Is(err, lib.ErrTextureNotFound) {
+		c.Set(fiber.HeaderCacheControl, notFoundImageCacheControl)
+		return c.Status(fiber.StatusNotFound).JSON(constants.InvalidItemProvidedError)
+	}
 	if err != nil {
 		fmt.Printf("Error rendering armor: %v\n", err)
 		c.Status(500)

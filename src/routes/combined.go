@@ -57,9 +57,14 @@ func CombinedHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
-	if err != nil {
-		return sendLoadError(c, "failed to resolve player", err)
+	// A UUID is all the cache key and the profile fetch need, so its Mojang lookup runs alongside the fetch instead.
+	mowojang := &models.MowojangResponse{UUID: uuid}
+	if !utility.IsUUID(uuid) {
+		resolved, err := api.ResolvePlayerContext(reqCtx, uuid)
+		if err != nil {
+			return sendLoadError(c, "failed to resolve player", err)
+		}
+		mowojang = resolved
 	}
 
 	cacheKey := responseCacheKey("combined", mowojang.UUID, profileId, enabledPacksCachePart(enabledPacks))
@@ -69,7 +74,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 		}
 	}
 
-	body, err := sharedResponse(reqCtx, cacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
+	body, err := sharedResponse(reqCtx, cacheKey, rawCacheKey, 5*60, func(ctx context.Context) ([]byte, error) {
 		result, err := computeCombinedContext(ctx, mowojang, profileId, enabledPacks)
 		if err != nil {
 			return nil, failedTo("failed to load data", err)
@@ -81,15 +86,11 @@ func CombinedHandler(c *fiber.Ctx) error {
 	}
 
 	utility.LogVerbose("Returning /api/combined/%s in %s pid=%d", uuid, time.Since(timeNow), os.Getpid())
-	// The shared build cached it under the resolved key; keep a copy under the request as given too.
-	if cacheKey.key != rawCacheKey.key {
-		cacheBody(reqCtx, rawCacheKey, body, 5*60)
-	}
 	return sendBody(c, reqCtx, cacheKey, body)
 }
 
 func computeCombinedContext(ctx context.Context, mowojang *models.MowojangResponse, profileId string, enabledPacks []string) (*models.CombinedOutput, error) {
-	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
+	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true, name: true})
 	if err != nil {
 		return nil, err
 	}
@@ -99,5 +100,5 @@ func computeCombinedContext(ctx context.Context, mowojang *models.MowojangRespon
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
 
-	return stats.GetCombinedContext(ctx, mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members, enabledPacks)
+	return stats.GetCombinedContext(ctx, data.Mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members, enabledPacks)
 }

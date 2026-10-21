@@ -2,12 +2,35 @@ package stats
 
 import (
 	"fmt"
+	"runtime"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	"golang.org/x/sync/errgroup"
 )
+
+// decodeMuseumEntries decodes the entries in parallel, in input order; nil marks an entry that failed to decode.
+// Only decoding runs in parallel: the item batch processor that follows shares caches and stays on one goroutine.
+func decodeMuseumEntries(entries []skycrypttypes.MuseumItem) []*models.DecodedInventory {
+	decoded := make([]*models.DecodedInventory, len(entries))
+	var group errgroup.Group
+	// GOMAXPROCS, not NumCPU: prefork children run with GOMAXPROCS(1), where more goroutines add nothing.
+	group.SetLimit(runtime.GOMAXPROCS(0))
+	for i := range entries {
+		group.Go(func() error {
+			// errgroup does not recover: a panic here would kill the process, not just this request.
+			defer func() { _ = recover() }()
+			if inventory, err := utility.DecodeInventory(&entries[i].Items.Data); err == nil {
+				decoded[i] = inventory
+			}
+			return nil
+		})
+	}
+	_ = group.Wait()
+	return decoded
+}
 
 func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) models.DecodedMuseumItems {
 	output := models.DecodedMuseumItems{
@@ -17,12 +40,19 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 	}
 	processItems := newItemBatchProcessor("museum", enabledPacks...)
 
+	itemIds := make([]string, 0, len(*museumData.Items))
+	itemEntries := make([]skycrypttypes.MuseumItem, 0, len(*museumData.Items))
 	for itemId, itemData := range *museumData.Items {
-		decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
-		if err != nil {
+		itemIds = append(itemIds, itemId)
+		itemEntries = append(itemEntries, itemData)
+	}
+
+	for i, decodedItem := range decodeMuseumEntries(itemEntries) {
+		if decodedItem == nil {
 			continue
 		}
 
+		itemId := itemIds[i]
 		processedItems := processItems(decodedItem.Items)
 		data := models.ProcessedMuseumItem{
 			Items:           processedItems,
@@ -34,9 +64,8 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 		output.Items[itemId] = data
 	}
 
-	for _, itemData := range *museumData.Special {
-		decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
-		if err != nil {
+	for _, decodedItem := range decodeMuseumEntries(*museumData.Special) {
+		if decodedItem == nil {
 			continue
 		}
 
@@ -58,32 +87,27 @@ func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]str
 		return []models.ProcessedItem{}
 	}
 
-	output := []models.ProcessedItem{}
-	processItems := newItemBatchProcessor("museum", enabledPacks...)
+	var entries []skycrypttypes.MuseumItem
 	if museumData.Items != nil {
 		for _, itemData := range *museumData.Items {
-			if itemData.Borrowing {
-				continue
+			if !itemData.Borrowing {
+				entries = append(entries, itemData)
 			}
-
-			decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
-			if err != nil {
-				continue
-			}
-			output = append(output, processItems(decodedItem.Items)...)
 		}
 	}
 
 	if museumData.Special != nil {
 		for _, itemData := range *museumData.Special {
-			if itemData.Borrowing {
-				continue
+			if !itemData.Borrowing {
+				entries = append(entries, itemData)
 			}
+		}
+	}
 
-			decodedItem, err := utility.DecodeInventory(&itemData.Items.Data)
-			if err != nil {
-				continue
-			}
+	output := []models.ProcessedItem{}
+	processItems := newItemBatchProcessor("museum", enabledPacks...)
+	for _, decodedItem := range decodeMuseumEntries(entries) {
+		if decodedItem != nil {
 			output = append(output, processItems(decodedItem.Items)...)
 		}
 	}

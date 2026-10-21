@@ -93,13 +93,12 @@ func (sr *StringRacer) TryConsume(s string) bool {
 	return false
 }
 
-func (sr *StringRacer) ConsumeWhile(conditionFn func(string) bool) string {
-	consumed := ""
-	for conditionFn(consumed + sr.Peek(1)) {
-		consumed += sr.Peek(1)
+func (sr *StringRacer) ConsumeWhile(conditionFn func(byte) bool) string {
+	start := sr.idx
+	for sr.idx < len(sr.backing) && conditionFn(sr.backing[sr.idx]) {
 		sr.idx++
 	}
-	return consumed
+	return sr.backing[start:sr.idx]
 }
 
 func (sr *StringRacer) Expect(s string, errorMessage string) {
@@ -124,7 +123,6 @@ var NBTPatterns = map[string]*regexp.Regexp{
 	"SHORT":          regexp.MustCompile(`^([-+]?[0-9]+)[sS]$`),
 	"INTEGER":        regexp.MustCompile(`^([-+]?[0-9]+)$`),
 	"DOUBLE_UNTYPED": regexp.MustCompile(`^([-+]?[0-9]*\.?[0-9]+)$`),
-	"ROUGH_PATTERN":  regexp.MustCompile(`^[-+]?[0-9]*\.?[0-9]*[dDbBfFlLsS]?$`),
 }
 
 type NBTTagParser struct {
@@ -149,12 +147,16 @@ func ParseNBT(s string) interface{} {
 }
 
 func (p *NBTTagParser) SkipWhitespace() {
-	p.racer.ConsumeWhile(func(s string) bool {
-		if len(s) == 0 {
-			return false
-		}
-		return unicode.IsSpace(rune(s[len(s)-1]))
-	})
+	p.racer.ConsumeWhile(isSpaceByte)
+}
+
+// isSpaceByte checks single bytes, not runes, as the parser always has.
+func isSpaceByte(b byte) bool {
+	return unicode.IsSpace(rune(b))
+}
+
+func isDigitRangeByte(b byte) bool {
+	return b == '-' || (b >= '0' && b <= '9')
 }
 
 func (p *NBTTagParser) ParseTag() map[string]interface{} {
@@ -214,14 +216,7 @@ func (p *NBTTagParser) ParseList() []interface{} {
 		p.SkipWhitespace()
 		p.racer.PushState()
 
-		maybeIndex := p.racer.ConsumeWhile(func(s string) bool {
-			for _, c := range s {
-				if !strings.Contains(p.DigitRange(), string(c)) {
-					return false
-				}
-			}
-			return true
-		})
+		maybeIndex := p.racer.ConsumeWhile(isDigitRangeByte)
 
 		p.SkipWhitespace()
 		if !p.racer.TryConsume(":") || len(maybeIndex) == 0 {
@@ -244,32 +239,37 @@ func (p *NBTTagParser) ParseQuotedString() string {
 	p.SkipWhitespace()
 	p.racer.Expect("\"", "Expected '\"' at string start")
 
-	result := ""
-
+	r := p.racer
+	var escaped strings.Builder
+	start := r.idx
 	for {
-		char := p.racer.ConsumeCountReq(1)
-		if char == nil {
-			p.racer.Error("Unfinished string")
+		if r.idx >= len(r.backing) {
+			r.Error("Unfinished string")
 		}
 
-		if *char == "\"" {
-			return result
-		}
-
-		if *char == "\\" {
-			escaped := p.racer.ConsumeCountReq(1)
-			if escaped == nil {
-				p.racer.Error("Unfinished backslash escape")
+		switch r.backing[r.idx] {
+		case '"':
+			tail := r.backing[start:r.idx]
+			r.idx++
+			if escaped.Len() == 0 {
+				return tail
 			}
-
-			if *escaped != "\"" && *escaped != "\\" {
-				p.racer.idx--
-				p.racer.Error(fmt.Sprintf("Invalid backslash escape '%s'", *escaped))
+			escaped.WriteString(tail)
+			return escaped.String()
+		case '\\':
+			escaped.WriteString(r.backing[start:r.idx])
+			r.idx++
+			if r.idx >= len(r.backing) {
+				r.Error("Unfinished backslash escape")
 			}
-
-			result += *escaped
-		} else {
-			result += *char
+			if c := r.backing[r.idx]; c != '"' && c != '\\' {
+				r.Error(fmt.Sprintf("Invalid backslash escape '%s'", r.backing[r.idx:r.idx+1]))
+			}
+			escaped.WriteByte(r.backing[r.idx])
+			r.idx++
+			start = r.idx
+		default:
+			r.idx++
 		}
 	}
 }
@@ -280,9 +280,8 @@ func (p *NBTTagParser) ParseStringTag() string {
 
 func (p *NBTTagParser) ParseNumericTag() interface{} {
 	p.SkipWhitespace()
-	text := p.racer.ConsumeWhile(func(s string) bool {
-		return NBTPatterns["ROUGH_PATTERN"].MatchString(s)
-	})
+	text := p.racer.backing[p.racer.idx : p.racer.idx+roughNumberLen(p.racer.backing[p.racer.idx:])]
+	p.racer.idx += len(text)
 
 	if len(text) == 0 {
 		p.racer.Error("Expected numeric tag (starting with either -, +, . or a digit)")
@@ -326,18 +325,35 @@ func (p *NBTTagParser) ParseNumericTag() interface{} {
 	panic(fmt.Sprintf("Could not properly parse numeric tag '%s', despite passing verification. BAD DEV", text))
 }
 
+// roughNumberLen is the length of the longest prefix of s matching ^[-+]?[0-9]*\.?[0-9]*[dDbBfFlLsS]?$.
+func roughNumberLen(s string) int {
+	i := 0
+	if i < len(s) && (s[i] == '-' || s[i] == '+') {
+		i++
+	}
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i < len(s) && s[i] == '.' {
+		i++
+	}
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i < len(s) && strings.IndexByte("dDbBfFlLsS", s[i]) >= 0 {
+		i++
+	}
+	return i
+}
+
 func (p *NBTTagParser) ParseIdentifier() string {
 	p.SkipWhitespace()
 	if p.racer.Peek(1) == "\"" {
 		return p.ParseQuotedString()
 	}
 
-	return p.racer.ConsumeWhile(func(s string) bool {
-		if len(s) == 0 {
-			return true
-		}
-		lastChar := s[len(s)-1]
-		return lastChar != ':' && !unicode.IsSpace(rune(lastChar))
+	return p.racer.ConsumeWhile(func(c byte) bool {
+		return c != ':' && !isSpaceByte(c)
 	})
 }
 

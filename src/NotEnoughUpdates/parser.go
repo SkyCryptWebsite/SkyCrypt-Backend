@@ -25,6 +25,11 @@ func ParseNEURepository() error {
 		return fmt.Errorf("failed to read constants directory: %w", err)
 	}
 
+	// Index first: attribute shards are resolved through GetItem, which treats unindexed items as missing.
+	if err := indexItems(); err != nil {
+		return err
+	}
+
 	// Fill a copy, then swap it in: readers never see a half-parsed value.
 	parsed := *Constants()
 
@@ -160,7 +165,7 @@ func ParseNEURepository() error {
 	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s on %v\n", time.Since(timeNow), os.Getpid())
 
 	neuConstants.Store(&parsed)
-	return indexItems()
+	return nil
 }
 
 func StartUpdateLoop() {
@@ -168,17 +173,7 @@ func StartUpdateLoop() {
 		for {
 			time.Sleep(12 * time.Hour)
 
-			err := UpdateNEURepository()
-			if err != nil {
-				fmt.Printf("Error updating NEU repository: %v\n", err)
-			} else {
-				err = reloadParsedRepository()
-				if err != nil {
-					fmt.Printf("Error parsing NEU repository: %v\n", err)
-				} else {
-					PublishRepositoryVersion()
-				}
-			}
+			updateAndReload()
 		}
 	}()
 }

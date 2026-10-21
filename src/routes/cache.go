@@ -26,12 +26,14 @@ type responseCacheHandle struct {
 	key      string
 }
 
+// responseCacheKey lowercases the parts: UUIDs and usernames ignore case, and a profile ID or cute name that differs
+// only in case names the same profile, so every spelling shares one entry.
 func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 	h := sha1.New()
 	_, _ = h.Write([]byte(endpoint))
 	_, _ = h.Write([]byte{0})
 	for _, part := range parts {
-		_, _ = h.Write([]byte(part))
+		_, _ = h.Write([]byte(strings.ToLower(part)))
 		_, _ = h.Write([]byte{0})
 	}
 	return responseCacheHandle{
@@ -43,7 +45,7 @@ func responseCacheKey(endpoint string, parts ...string) responseCacheHandle {
 func inventoryCacheKey(uuid string, profileID string, enabledPacks []string) responseCacheHandle {
 	return responseCacheHandle{
 		endpoint: "inventory",
-		key:      fmt.Sprintf("items:%s:%s:%s", profileID, uuid, enabledPacksCachePart(enabledPacks)),
+		key:      fmt.Sprintf("items:%s:%s:%s", strings.ToLower(profileID), strings.ToLower(uuid), enabledPacksCachePart(enabledPacks)),
 	}
 }
 
@@ -114,15 +116,19 @@ var responseGroup singleflight.Group
 const sharedResponseTimeout = 60 * time.Second
 
 // sharedResponse builds a response body once for concurrent requests with the same cache key, so a profile link
-// shared on Discord doesn't make every viewer repeat the same work. The body is cached once and returned to every
-// caller, who then sends it with sendBody.
-func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) ([]byte, error) {
+// shared on Discord doesn't make every viewer repeat the same work. The body is cached once, under cacheKey and
+// rawCacheKey (the request as given, before resolving the player), and returned to every caller, who then sends it
+// with sendBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
+func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) ([]byte, error) {
 	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) ([]byte, error) {
 		body, err := build(flightCtx)
 		if err != nil {
 			return nil, err
 		}
 		cacheBody(flightCtx, cacheKey, body, ttlSeconds)
+		if rawCacheKey.key != cacheKey.key {
+			cacheBody(flightCtx, rawCacheKey, body, ttlSeconds)
+		}
 		return body, nil
 	})
 }

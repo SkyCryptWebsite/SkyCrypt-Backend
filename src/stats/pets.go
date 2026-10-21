@@ -208,9 +208,7 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 			continue
 		}
 
-		if pet.HeldItem == "PET_ITEM_TIER_BOOST" {
-			pet.Rarity = constants.RARITIES[slices.Index(constants.RARITIES, strings.ToLower(pet.Rarity))+1]
-		}
+		applyTierBoost(&pet)
 
 		outputPet := models.ProcessedPet{
 			Type:      pet.Type,
@@ -356,6 +354,47 @@ func getProfilePets(userProfile *skycrypttypes.Member, pets *[]skycrypttypes.Pet
 	return output
 }
 
+func applyTierBoost(pet *skycrypttypes.Pet) {
+	if pet.HeldItem == "PET_ITEM_TIER_BOOST" {
+		pet.Rarity = constants.RARITIES[slices.Index(constants.RARITIES, strings.ToLower(pet.Rarity))+1]
+	}
+}
+
+// getActivePetStats returns the active pet's stats and the pet score, matching what GetPets reports, without
+// processing every owned pet: the score only needs each pet's type, rarity and level. ok is false with no pets.
+func getActivePetStats(userProfile *skycrypttypes.Member) (activeStats map[string]float64, score models.PetScore, ok bool) {
+	var allPets []skycrypttypes.Pet
+	if userProfile.Pets != nil {
+		allPets = append(allPets, userProfile.Pets.Pets...)
+	}
+	if montezuma := userProfile.Rift.DeadCats.Montezuma; montezuma.Rarity != "" {
+		montezuma.Active = false
+		allPets = append(allPets, montezuma)
+	}
+
+	scorePets := make([]models.ProcessedPet, 0, len(allPets))
+	var activePets []skycrypttypes.Pet
+	for _, pet := range allPets {
+		if pet.Rarity == "" {
+			continue
+		}
+		if pet.Active {
+			activePets = append(activePets, pet)
+		}
+		applyTierBoost(&pet)
+		scorePets = append(scorePets, models.ProcessedPet{Type: pet.Type, Rarity: pet.Rarity, Level: getPetLevel(pet)})
+	}
+	if len(scorePets) == 0 {
+		return nil, models.PetScore{}, false
+	}
+
+	if len(activePets) > 0 {
+		// getProfilePets sorts, so with several active pets this is the one GetPets lists first.
+		activeStats = getProfilePets(userProfile, &activePets, nil)[0].Stats
+	}
+	return activeStats, GetPetScore(scorePets), true
+}
+
 func sortProcessedPets(output []models.ProcessedPet) {
 	sort.Slice(output, func(i, j int) bool {
 		if output[i].Rarity != output[j].Rarity {
@@ -375,7 +414,7 @@ const montezumaSoul = "FRACTURED_MONTEZUMA_SOUL"
 // only on NEU data, prices and whether the profile is bingo, so it is built once per combination of those.
 type missingPetCatalog struct {
 	neu    *models.NEUConstant
-	prices uintptr
+	prices map[string]float64 // held, not just its address, so the map can't be freed and the address reused
 	domain string
 	pets   map[string]models.ProcessedPet
 }
@@ -405,12 +444,11 @@ func missingPetCandidate(petType string, bingo bool, petCtx *petProcessingContex
 
 func missingPetsFor(bingo bool, petCtx *petProcessingContext) map[string]models.ProcessedPet {
 	neu := notenoughupdates.Constants()
-	prices := reflect.ValueOf(petCtx.prices).Pointer()
 	slot := &missingPetCatalogs[0]
 	if bingo {
 		slot = &missingPetCatalogs[1]
 	}
-	if catalog := slot.Load(); catalog != nil && catalog.neu == neu && catalog.prices == prices && catalog.domain == petCtx.domain {
+	if catalog := slot.Load(); catalog != nil && catalog.neu == neu && reflect.ValueOf(catalog.prices).Pointer() == reflect.ValueOf(petCtx.prices).Pointer() && catalog.domain == petCtx.domain {
 		return catalog.pets
 	}
 
@@ -428,7 +466,7 @@ func missingPetsFor(bingo bool, petCtx *petProcessingContext) map[string]models.
 	for _, pet := range getProfilePets(&skycrypttypes.Member{}, &candidates, petCtx) {
 		pets[pet.Type] = pet
 	}
-	slot.Store(&missingPetCatalog{neu: neu, prices: prices, domain: petCtx.domain, pets: pets})
+	slot.Store(&missingPetCatalog{neu: neu, prices: petCtx.prices, domain: petCtx.domain, pets: pets})
 	return pets
 }
 

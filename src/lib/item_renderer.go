@@ -28,7 +28,13 @@ func RenderItem(itemID string, enabledPacks []string, returnBarrierIfNone bool) 
 	if err != nil {
 		return nil, err
 	}
-	return resolveRenderedItemTexture(appliedTexture, returnBarrierIfNone)
+	return RenderResolvedItemTexture(appliedTexture, returnBarrierIfNone)
+}
+
+// IsRenderedItemTexture reports a pack render under cache/rendered. Anything else is a fallback that a later render
+// may replace.
+func IsRenderedItemTexture(texture AppliedItemTexture) bool {
+	return texture.TexturePack != "" && strings.Contains(texture.Texture, "cache/rendered/")
 }
 
 func ResolveItemTexture(itemID string, enabledPacks []string, returnBarrierIfNone bool) (AppliedItemTexture, error) {
@@ -44,7 +50,11 @@ func ResolveItemTexture(itemID string, enabledPacks []string, returnBarrierIfNon
 		return resolveItemTextureUncached(itemID, damage, enabledPacks, returnBarrierIfNone)
 	})
 	if err == nil {
-		resolvedItemTextures.Set(cacheKey, texture, renderedItemCacheTTL, 0)
+		ttl := fallbackItemCacheTTL
+		if IsRenderedItemTexture(texture) {
+			ttl = renderedItemCacheTTL
+		}
+		resolvedItemTextures.Set(cacheKey, texture, ttl, 0)
 	}
 	return texture, err
 }
@@ -52,6 +62,9 @@ func ResolveItemTexture(itemID string, enabledPacks []string, returnBarrierIfNon
 // /api/item used to redo NEU lookups, texture matching and a file read on every hit. Rendered files are
 // content-hashed, so a path keeps its bytes; the TTL only bounds how long a pack change takes to show.
 const renderedItemCacheTTL = 10 * time.Minute
+
+// fallbackItemCacheTTL is short so a texture rendered after the miss shows up soon.
+const fallbackItemCacheTTL = time.Minute
 
 var (
 	resolvedItemTextures = localcache.NewLocalCache[AppliedItemTexture](8192)
@@ -283,7 +296,7 @@ func tagWithoutItemModel(tag any) any {
 	return tagMap
 }
 
-func resolveRenderedItemTexture(appliedTexture AppliedItemTexture, returnBarrierIfNone bool) ([]byte, error) {
+func RenderResolvedItemTexture(appliedTexture AppliedItemTexture, returnBarrierIfNone bool) ([]byte, error) {
 	if !usableItemTexture(appliedTexture, returnBarrierIfNone) {
 		return nil, fmt.Errorf("couldn't find the texture")
 	}

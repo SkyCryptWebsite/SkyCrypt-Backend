@@ -3,6 +3,7 @@ package lib
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,9 +97,11 @@ func cloneResourcePackConfigs(configs []models.ResourcePackConfig) []models.Reso
 // packIndex is derived from the resource pack configs, which load once and never change, so it is built once too
 // instead of on every texture lookup.
 type packIndex struct {
-	defaultIDs []string
-	known      map[string]struct{}
-	canonical  map[string]string
+	defaultIDs       []string
+	defaultSignature string
+	known            map[string]struct{}
+	canonical        map[string]string
+	aliases          map[string][]string
 }
 
 var (
@@ -119,14 +122,22 @@ func resourcePackIndex() *packIndex {
 
 		known := map[string]struct{}{}
 		canonical := map[string]string{}
+		aliases := map[string][]string{"vanilla": buildTexturePackAliases("vanilla")}
 		for _, packID := range ids {
 			canonicalPack := canonicalPackAlias(packID)
 			canonical[canonicalPack] = packID
 			if canonicalPack != "" {
 				known[canonicalPack] = struct{}{}
 			}
+			aliases[packID] = buildTexturePackAliases(packID)
 		}
-		packIndexValue = packIndex{defaultIDs: ids, known: known, canonical: canonical}
+		packIndexValue = packIndex{
+			defaultIDs:       ids,
+			defaultSignature: orderedPackSignature(ids),
+			known:            known,
+			canonical:        canonical,
+			aliases:          aliases,
+		}
 	})
 	return &packIndexValue
 }
@@ -143,7 +154,7 @@ func orderedPackSignature(packIDs []string) string {
 }
 
 func defaultPackSignature() string {
-	return orderedPackSignature(defaultResourcePackIDs())
+	return resourcePackIndex().defaultSignature
 }
 
 func NewTextureApplyContext(enabledPacksParam ...[]string) TextureApplyContext {
@@ -235,16 +246,6 @@ func cachedTextureForStableKeyInMemory(stableKey string, packSignature string, e
 	return AppliedItemTexture{}, false
 }
 
-func clearPackSignatureTextureCache() {
-	itemTextureCacheMu.Lock()
-	for key := range itemTextureCache {
-		if strings.HasPrefix(key, orderedPackSignaturePrefix) {
-			delete(itemTextureCache, key)
-		}
-	}
-	itemTextureCacheMu.Unlock()
-}
-
 func cachedTextureByKeyOnce(key string, enabledPacks map[string]struct{}, seenKeys map[string]struct{}) (AppliedItemTexture, bool) {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -294,6 +295,23 @@ func cachedTextureByKey(key string, enabledPacks map[string]struct{}) (AppliedIt
 }
 
 func setCachedTextureForStableKey(packSignature string, stableKey string, texture AppliedItemTexture) {
+	batch := newTextureCacheBatch()
+	batch.set(packSignature, stableKey, texture)
+	batch.apply(false)
+}
+
+// textureCacheBatch collects cache writes off-lock, so loading the whole rendered index takes each lock once instead
+// of once per file.
+type textureCacheBatch struct {
+	textures    map[string]AppliedItemTexture
+	skyblockIDs map[string]struct{}
+}
+
+func newTextureCacheBatch() *textureCacheBatch {
+	return &textureCacheBatch{textures: map[string]AppliedItemTexture{}, skyblockIDs: map[string]struct{}{}}
+}
+
+func (b *textureCacheBatch) set(packSignature string, stableKey string, texture AppliedItemTexture) {
 	stableKey = strings.TrimSpace(stableKey)
 	if stableKey == "" || texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
 		return
@@ -306,22 +324,39 @@ func setCachedTextureForStableKey(packSignature string, stableKey string, textur
 		packSignature = defaultPackSignature()
 	}
 
-	itemTextureCacheMu.Lock()
-	itemTextureCache[textureCacheKey(packSignature, stableKey)] = texture
+	b.textures[textureCacheKey(packSignature, stableKey)] = texture
 	for _, alias := range texturePackAliases(texture.TexturePack) {
-		itemTextureCache[textureCacheKey(alias, stableKey)] = texture
+		b.textures[textureCacheKey(alias, stableKey)] = texture
 	}
 	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
-		itemTextureCache[skyblockID] = texture
-	}
-	itemTextureCacheMu.Unlock()
-
-	if skyblockID := strings.TrimPrefix(stableKey, "skyblock:"); skyblockID != stableKey && skyblockID != "" {
-		rememberRenderedSkyBlockID(skyblockID, packSignature)
+		b.textures[skyblockID] = texture
+		b.skyblockIDs[renderedSkyBlockIndexKey(packSignature, skyblockID)] = struct{}{}
 		if texture.TexturePack != "" && !strings.EqualFold(texture.TexturePack, packSignature) {
-			rememberRenderedSkyBlockID(skyblockID, texture.TexturePack)
+			b.skyblockIDs[renderedSkyBlockIndexKey(strings.TrimSpace(texture.TexturePack), skyblockID)] = struct{}{}
 		}
 	}
+}
+
+// apply writes the batch; clearPackSignatures first drops pack-signature entries in the same critical section, so
+// readers never see the cache between the clear and the reload.
+func (b *textureCacheBatch) apply(clearPackSignatures bool) {
+	itemTextureCacheMu.Lock()
+	if clearPackSignatures {
+		for key := range itemTextureCache {
+			if strings.HasPrefix(key, orderedPackSignaturePrefix) {
+				delete(itemTextureCache, key)
+			}
+		}
+	}
+	maps.Copy(itemTextureCache, b.textures)
+	itemTextureCacheMu.Unlock()
+
+	if len(b.skyblockIDs) == 0 {
+		return
+	}
+	renderedSkyBlockIndexMu.Lock()
+	maps.Copy(renderedSkyBlockIndex, b.skyblockIDs)
+	renderedSkyBlockIndexMu.Unlock()
 }
 
 func itemTextureCacheLen() int {

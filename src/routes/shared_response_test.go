@@ -3,6 +3,7 @@ package routes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"skycrypt/src/api"
 	"sync"
 	"sync/atomic"
@@ -24,7 +25,7 @@ func TestSharedResponseBuildsOnceForConcurrentCallers(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			body, err := sharedResponse(callers[i], key, 60, func(ctx context.Context) ([]byte, error) {
+			body, err := sharedResponse(callers[i], key, key, 60, func(ctx context.Context) ([]byte, error) {
 				builds.Add(1)
 				<-release
 				return []byte(`{"ok":true}`), nil
@@ -51,11 +52,29 @@ func TestSharedResponseBuildsOnceForConcurrentCallers(t *testing.T) {
 
 func TestSharedResponseKeepsBuildErrorMessage(t *testing.T) {
 	t.Setenv("DEV", "true")
-	_, err := sharedResponse(context.Background(), responseCacheKey("test", "error"), 60, func(ctx context.Context) ([]byte, error) {
+	_, err := sharedResponse(context.Background(), responseCacheKey("test", "error"), responseCacheKey("test", "error"), 60, func(ctx context.Context) ([]byte, error) {
 		return nil, failedTo("Failed to fetch data", api.ErrProfileNotFound)
 	})
 	var built buildError
 	if !errors.As(err, &built) || built.message != "Failed to fetch data" || !errors.Is(err, api.ErrProfileNotFound) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestFailedToKeepsInnerBuildErrorMessage(t *testing.T) {
+	inner := failedTo("Failed to resolve player", api.ErrPlayerNotFound)
+	err := failedTo("failed to load data", fmt.Errorf("failed to load profile: %w", inner))
+	var built buildError
+	if !errors.As(err, &built) || built.message != "Failed to resolve player" || !errors.Is(err, api.ErrPlayerNotFound) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestResponseCacheKeysIgnoreCase(t *testing.T) {
+	if responseCacheKey("stats", "DarthGigi", "Apple") != responseCacheKey("stats", "darthgigi", "apple") {
+		t.Fatal("response cache key should ignore case")
+	}
+	if inventoryCacheKey("ABCDEF", "Apple", nil) != inventoryCacheKey("abcdef", "apple", nil) {
+		t.Fatal("inventory cache key should ignore case")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	"sort"
+	"strings"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 )
@@ -20,7 +21,7 @@ func GetProfile(profiles *models.HypixelProfilesResponse, profileId ...string) (
 	if len(profileId) > 0 && profileId[0] != "" {
 		targetProfileId := profileId[0]
 		for _, profile := range profiles.Profiles {
-			if profile.ProfileID == targetProfileId || profile.CuteName == targetProfileId {
+			if strings.EqualFold(profile.ProfileID, targetProfileId) || strings.EqualFold(profile.CuteName, targetProfileId) {
 				return &profile, nil
 			}
 		}
