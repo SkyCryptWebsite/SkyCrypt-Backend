@@ -17,7 +17,7 @@ require (
 )
 
 // replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
-replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
+// replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
 
 // replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
 
