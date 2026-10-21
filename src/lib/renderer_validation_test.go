@@ -2,12 +2,9 @@ package lib
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"image"
-	"image/color"
-	"image/png"
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -32,25 +29,70 @@ func TestRenderRejectsUnknownTextures(t *testing.T) {
 	}
 }
 
-// The golden hash was taken from the At()/Set() implementation before warpImage read pixels directly.
-func TestTo3DHeadOutputUnchanged(t *testing.T) {
-	random := rand.New(rand.NewSource(1))
-	skin := image.NewRGBA(image.Rect(0, 0, 64, 64))
-	for i := range skin.Pix {
-		skin.Pix[i] = uint8(random.Intn(256))
-	}
-	// Some fully opaque and fully transparent pixels hit blendRGBA's fast paths.
-	for y := 0; y < 8; y++ {
-		skin.SetRGBA(8+y, 8, color.RGBA{R: 10, G: 20, B: 30, A: 255})
-		skin.SetRGBA(40+y, 8, color.RGBA{})
+// warpImageReference is warpImage as it was before it read pixels directly, kept to check the output is unchanged.
+// The comparison runs on the same machine because the float32 math rounds differently across CPUs (FMA on arm64).
+func warpImageReference(src *image.RGBA, matrix Matrix, outputSize uint32) *image.RGBA {
+	dst := image.NewRGBA(image.Rect(0, 0, int(outputSize), int(outputSize)))
+
+	det := matrix[0]*(matrix[4]*matrix[8]-matrix[5]*matrix[7]) -
+		matrix[1]*(matrix[3]*matrix[8]-matrix[5]*matrix[6]) +
+		matrix[2]*(matrix[3]*matrix[7]-matrix[4]*matrix[6])
+
+	if math.Abs(float64(det)) < 1e-10 {
+		return dst
 	}
 
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, To3DHead(skin)); err != nil {
-		t.Fatal(err)
+	invMatrix := Matrix{
+		(matrix[4]*matrix[8] - matrix[5]*matrix[7]) / det,
+		(matrix[2]*matrix[7] - matrix[1]*matrix[8]) / det,
+		(matrix[1]*matrix[5] - matrix[2]*matrix[4]) / det,
+		(matrix[5]*matrix[6] - matrix[3]*matrix[8]) / det,
+		(matrix[0]*matrix[8] - matrix[2]*matrix[6]) / det,
+		(matrix[2]*matrix[3] - matrix[0]*matrix[5]) / det,
+		(matrix[3]*matrix[7] - matrix[4]*matrix[6]) / det,
+		(matrix[1]*matrix[6] - matrix[0]*matrix[7]) / det,
+		(matrix[0]*matrix[4] - matrix[1]*matrix[3]) / det,
 	}
-	sum := sha256.Sum256(buf.Bytes())
-	if got, want := hex.EncodeToString(sum[:]), "b53f45f0ce7e9388a70ae44a4585f1edf1ce2785072b1651fff39fa76f209685"; got != want {
-		t.Fatalf("head PNG hash = %s, want %s", got, want)
+
+	srcBounds := src.Bounds()
+
+	for y := 0; y < int(outputSize); y++ {
+		for x := 0; x < int(outputSize); x++ {
+			srcPoint := invMatrix.Transform(Point2D{X: float32(x), Y: float32(y)})
+
+			srcX := int(math.Round(float64(srcPoint.X)))
+			srcY := int(math.Round(float64(srcPoint.Y)))
+
+			if srcX >= srcBounds.Min.X && srcX < srcBounds.Max.X &&
+				srcY >= srcBounds.Min.Y && srcY < srcBounds.Max.Y {
+				dst.Set(x, y, src.At(srcX, srcY))
+			}
+		}
+	}
+
+	return dst
+}
+
+func TestWarpImageMatchesReference(t *testing.T) {
+	random := rand.New(rand.NewSource(1))
+	src := image.NewRGBA(image.Rect(0, 0, 16, 16))
+	for i := range src.Pix {
+		src.Pix[i] = uint8(random.Intn(256))
+	}
+	matrices := []Matrix{
+		{1, 0, 0, 0, 1, 0, 0, 0, 1},
+		{8, 0, 4, 0, 8, 2, 0, 0, 1},
+		{6.928, -6.928, 60, 4, 4, 20, 0, 0, 1},
+		{-5.5, 3.2, 90.7, 2.1, 7.3, -3.4, 0, 0, 1},
+		{0, 0, 0, 0, 0, 0, 0, 0, 1}, // singular: both return an empty image
+	}
+	for i, m := range matrices {
+		if got, want := warpImage(src, m, 128), warpImageReference(src, m, 128); !bytes.Equal(got.Pix, want.Pix) {
+			t.Errorf("matrix %d: warpImage output differs from the reference", i)
+		}
+	}
+	// To3DHead runs every warp the real renderer does; it must still produce an image.
+	if head := To3DHead(src); head == nil || head.Bounds().Empty() {
+		t.Fatal("To3DHead returned no image")
 	}
 }
