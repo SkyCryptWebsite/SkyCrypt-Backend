@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"skycrypt/src/api"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
@@ -75,7 +76,7 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 	}
 
 	body := string(payload)
-	if !processedResponseCacheEnabled() {
+	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 		c.Set("X-SkyCrypt-Backend-Cache", "bypass")
 		return c.SendString(body)

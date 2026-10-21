@@ -19,7 +19,7 @@ import (
 //	@Param			uuid	path		string	true	"Minecraft UUID"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Success		200		{object}	models.PlayerResolve		"Username resolved successfully."
 //	@Failure		400		{object}	models.ProcessingError	"UUID is invalid or the player could not be found."
-//	@Router			/api/username/{uuid} [get]
+//	@Router			/username/{uuid} [get]
 func UsernameHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 

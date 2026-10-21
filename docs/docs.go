@@ -8,6 +8,19 @@ const docTemplate = `{
     "schemes": {{ marshal .Schemes }},
     "components": {
         "schemas": {
+            "models.APIError": {
+                "properties": {
+                    "code": {
+                        "example": "INVALID_API_KEY",
+                        "type": "string"
+                    },
+                    "error": {
+                        "example": "Invalid API key.",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
             "models.ArmorResult": {
                 "properties": {
                     "armor": {
@@ -3208,7 +3221,6 @@ const docTemplate = `{
                 "type": "object"
             },
             "skycrypttypes.ExtraAttributes": {
-                "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `",
                 "properties": {
                     "ability_scroll": {
                         "items": {
@@ -3494,7 +3506,8 @@ const docTemplate = `{
             "skycrypttypes.Tag": {
                 "properties": {
                     "ExtraAttributes": {
-                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes"
+                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes",
+                        "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `"
                     },
                     "ItemModel": {
                         "type": "string"
@@ -3521,9 +3534,10 @@ const docTemplate = `{
             }
         },
         "securitySchemes": {
-            "ApiTokenHeader": {
+            "ApiKeyHeader": {
+                "description": "SkyCrypt API key, starting with ` + "`" + `skycrypt_` + "`" + `.",
                 "in": "header",
-                "name": "X-API-Token",
+                "name": "x-api-key",
                 "type": "apiKey"
             }
         }
@@ -3538,7 +3552,7 @@ const docTemplate = `{
         "url": ""
     },
     "paths": {
-        "/api/combined/{uuid}/{profileId}": {
+        "/combined/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, saved loadouts, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.\nResource pack preferences supplied by cookie can affect rendered item texture URLs in the response.",
                 "operationId": "getCombinedProfileStats",
@@ -3579,11 +3593,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3594,11 +3628,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or combined data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get combined profile data",
@@ -3607,7 +3651,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/constants/enchantments": {
+        "/constants/enchantments": {
             "get": {
                 "description": "Returns the lore strings for enchantments at their maximum level.",
                 "operationId": "listEnchantments",
@@ -3632,7 +3676,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/constants/packs": {
+        "/constants/packs": {
             "get": {
                 "description": "Returns toggleable resource packs sorted by descending priority for the recommended default order.\nThe enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.\nA missing preference uses the default order, while an explicit empty array uses vanilla textures only.\nThe vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.",
                 "operationId": "listResourcePacks",
@@ -3667,7 +3711,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/constants/stats": {
+        "/constants/stats": {
             "get": {
                 "description": "Returns player stats constants.",
                 "operationId": "getStatsConstants",
@@ -3692,7 +3736,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/embed/{uuid}": {
+        "/embed/{uuid}": {
             "get": {
                 "description": "Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.\nIf Hypixel does not mark a selected profile, the first available profile is used.",
                 "operationId": "getSelectedProfileEmbed",
@@ -3733,11 +3777,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3748,11 +3812,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get selected profile embed data",
@@ -3761,7 +3835,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/embed/{uuid}/{profileId}": {
+        "/embed/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.\nThe player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.",
                 "operationId": "getProfileEmbed",
@@ -3812,11 +3886,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3827,11 +3921,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile embed data",
@@ -3840,7 +3944,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/garden/{uuid}/{profileId}": {
+        "/garden/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns Garden progression, visitors, crop milestones, composter data, plots, upgrades, and related Garden state for a specific SkyBlock profile.",
                 "operationId": "getGardenStats",
@@ -3891,16 +3995,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get garden stats",
@@ -3909,7 +4043,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/head/{textureId}": {
+        "/head/{textureId}": {
             "get": {
                 "description": "Renders a Minecraft player head texture as PNG bytes.",
                 "operationId": "renderHeadImage",
@@ -3963,7 +4097,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/inventory/search/{uuid}/{profileId}/{searchParam}": {
+        "/inventory/search/{uuid}/{profileId}/{searchParam}": {
             "get": {
                 "description": "Searches cached inventory tabs for items whose display name or lore contains the search parameter.\nCall GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.",
                 "operationId": "searchProfileInventory",
@@ -4017,11 +4151,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4032,11 +4186,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Cached inventory data is missing or could not be parsed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Search cached profile inventory",
@@ -4045,7 +4209,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/inventory/{uuid}/{profileId}": {
+        "/inventory/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns rendered inventory tabs and stripped item data for a specific SkyBlock profile.\nThis endpoint refreshes the short-lived cache used by the inventory search endpoint. Resource pack preferences supplied by cookie can affect rendered item texture URLs in the response.",
                 "operationId": "getProfileInventory",
@@ -4099,16 +4263,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile inventory",
@@ -4117,7 +4311,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/item/{itemId}": {
+        "/item/{itemId}": {
             "get": {
                 "description": "Renders a SkyBlock or Minecraft item as PNG bytes.\nResource pack preferences supplied by cookie can affect which texture is rendered. Some renderer results redirect to a canonical asset URL.",
                 "operationId": "renderItemImage",
@@ -4189,7 +4383,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/item/{itemId}/resolve": {
+        "/item/{itemId}/resolve": {
             "get": {
                 "description": "Returns the final texture URL and the resource pack that supplied it.",
                 "operationId": "resolveItemImage",
@@ -4242,7 +4436,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/leather/{type}/{color}": {
+        "/leather/{type}/{color}": {
             "get": {
                 "description": "Renders a dyed leather armor piece as PNG bytes for the requested armor piece and color.",
                 "operationId": "renderLeatherArmorImage",
@@ -4306,7 +4500,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/networth/{uuid}/{profileId}": {
+        "/networth/{uuid}/{profileId}": {
             "get": {
                 "description": "Calculates normal and non-cosmetic networth for a player's SkyBlock profile.\nThe player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.",
                 "operationId": "getProfileNetworth",
@@ -4357,11 +4551,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4372,11 +4586,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile networth",
@@ -4385,7 +4609,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/playerStats/{uuid}/{profileId}": {
+        "/playerStats/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns normalized player statistics for a specific SkyBlock profile.\nThe player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.",
                 "operationId": "getPlayerStats",
@@ -4436,16 +4660,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get raw player stats",
@@ -4454,7 +4708,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/potion/{type}/{color}": {
+        "/potion/{type}/{color}": {
             "get": {
                 "description": "Renders a potion image for the requested potion type and color.",
                 "operationId": "renderPotionImage",
@@ -4518,7 +4772,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/source": {
+        "/source": {
             "get": {
                 "description": "Returns repository, license, commit, and notice information for the running SkyCrypt Backend service.",
                 "operationId": "getSourceInfo",
@@ -4540,7 +4794,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/stats/{uuid}": {
+        "/stats/{uuid}": {
             "get": {
                 "description": "Returns the complete SkyCrypt stats payload for a player's selected SkyBlock profile.\nIf Hypixel does not mark a selected profile, the first available profile is used.",
                 "operationId": "getSelectedProfileStats",
@@ -4571,11 +4825,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4586,11 +4860,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get selected profile stats",
@@ -4599,7 +4883,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/stats/{uuid}/{profileId}": {
+        "/stats/{uuid}/{profileId}": {
             "get": {
                 "description": "Returns the complete SkyCrypt stats payload for a player on a specific SkyBlock profile.\nThe player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.",
                 "operationId": "getProfileStats",
@@ -4640,11 +4924,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4655,11 +4959,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile stats",
@@ -4668,7 +4982,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/username/{uuid}": {
+        "/username/{uuid}": {
             "get": {
                 "description": "Resolves a Minecraft UUID to the current username and display name known to SkyCrypt.",
                 "operationId": "resolveUsernameByUuid",
@@ -4712,7 +5026,7 @@ const docTemplate = `{
                 ]
             }
         },
-        "/api/uuid/{username}": {
+        "/uuid/{username}": {
             "get": {
                 "description": "Resolves a Minecraft username to its UUID and returns the normalized player identity payload.",
                 "operationId": "resolveUuidByUsername",
@@ -4755,16 +5069,36 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Resolve UUID by username",
@@ -4777,8 +5111,12 @@ const docTemplate = `{
     "openapi": "3.1.0",
     "servers": [
         {
-            "description": "SkyCrypt production API",
-            "url": "https://sky.shiiyu.moe/"
+            "description": "Production",
+            "url": "https://api.shiiyu.moe"
+        },
+        {
+            "description": "Beta, built from the dev branch",
+            "url": "https://beta-api.shiiyu.moe"
         }
     ]
 }`
@@ -4787,7 +5125,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "3.0",
 	Title:            "SkyCrypt API",
-	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.",
+	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.\n\nProfile endpoints need a SkyCrypt API key in the `x-api-key` header. Request one from the developer page in your SkyCrypt dashboard.\nEach key has its own rate limit; responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.\nKeys only get players that SkyCrypt has already cached, as Hypixel's API policy doesn't allow proxying it. Other players return `404` with code `NOT_CACHED`.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

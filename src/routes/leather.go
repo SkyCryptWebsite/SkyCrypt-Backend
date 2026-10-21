@@ -20,7 +20,7 @@ import (
 //	@Success		200		{file}		binary					"PNG image bytes returned successfully."
 //	@Failure		400		{object}	models.ProcessingError	"Armor type or color is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Leather armor image could not be rendered."
-//	@Router			/api/leather/{type}/{color} [get]
+//	@Router			/leather/{type}/{color} [get]
 func LeatherHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	armorType := c.Params("type")

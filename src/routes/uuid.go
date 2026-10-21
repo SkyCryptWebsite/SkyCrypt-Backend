@@ -16,12 +16,14 @@ import (
 //	@ID				resolveUuidByUsername
 //	@Tags			Mojang
 //	@Produce		json
-//	@Security		ApiTokenHeader
+//	@Security		ApiKeyHeader
 //	@Param			username	path		string	true	"Minecraft username"	minlength(3)	maxlength(16)	example(duckysolucky)
 //	@Success		200			{object}	models.PlayerResolve		"UUID resolved successfully."
 //	@Failure		400			{object}	models.ProcessingError	"Username is invalid or the player could not be found."
-//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
-//	@Router			/api/uuid/{username} [get]
+//	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
+//	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
+//	@Router			/uuid/{username} [get]
 func UUIDHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
 	username := c.Params("username")

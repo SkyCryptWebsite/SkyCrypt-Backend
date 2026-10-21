@@ -23,7 +23,7 @@ type itemTextureResolution struct {
 //	@Success  200  {object} itemTextureResolution
 //	@Failure  400  {object} models.ProcessingError
 //	@Failure  500  {object} models.ProcessingError
-//	@Router   /api/item/{itemId}/resolve [get]
+//	@Router   /item/{itemId}/resolve [get]
 func ItemResolveHandler(c *fiber.Ctx) error {
 	textureID := c.Params("itemId")
 	if textureID == "" {
@@ -52,7 +52,7 @@ func ItemResolveHandler(c *fiber.Ctx) error {
 //	@Header			302		{string}	Location				"Redirect target URL."
 //	@Failure		400		{object}	models.ProcessingError	"Item identifier is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Item image could not be rendered."
-//	@Router			/api/item/{itemId} [get]
+//	@Router			/item/{itemId} [get]
 func ItemHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("itemId")

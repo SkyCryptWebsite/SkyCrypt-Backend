@@ -255,6 +255,11 @@ func GetManyContext(ctx context.Context, keys []string) (map[string]string, erro
 	return result, nil
 }
 
+// Redis returns the shared client for callers that need commands beyond Get and Set.
+func Redis() (*redis.Client, error) {
+	return getRedisClient()
+}
+
 func getRedisClient() (*redis.Client, error) {
 	clientMutex.RLock()
 	client := redisClient

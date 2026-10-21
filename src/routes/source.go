@@ -17,7 +17,7 @@ const sourceRepository = "https://github.com/SkyCryptWebsite/SkyCrypt-Backend"
 //	@Tags			Source
 //	@Produce		json
 //	@Success		200	{object}	models.SourceInfo	"Source and license information returned successfully."
-//	@Router			/api/source [get]
+//	@Router			/source [get]
 func SourceHandler(c *fiber.Ctx) error {
 	commit := os.Getenv("SOURCE_COMMIT")
 	sourceURL := sourceRepository

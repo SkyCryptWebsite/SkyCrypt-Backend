@@ -18,7 +18,7 @@ import (
 //	@Success		200			{file}		binary					"PNG image bytes returned successfully."
 //	@Failure		400			{object}	models.ProcessingError	"Texture identifier is missing or invalid."
 //	@Failure		500			{string}	string					"Head image could not be rendered."
-//	@Router			/api/head/{textureId} [get]
+//	@Router			/head/{textureId} [get]
 func HeadHandlers(c *fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("textureId")

@@ -6,6 +6,7 @@ import (
 	"os"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/api"
+	"skycrypt/src/apikeys"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
@@ -66,6 +67,7 @@ func SetupApplication() error {
 		}
 
 		notenoughupdates.StartUpdateLoop()
+		apikeys.StartUsageSync()
 
 		if err := api.LoadSkyBlockItems(false); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
@@ -143,8 +145,12 @@ func SetupRoutes(app *fiber.App) {
 		*/
 	}
 
-	api := app.Group("/api")
+	// Routes live at the root on api.shiiyu.moe; /api keeps the old sky.shiiyu.moe/api paths and rendered URLs working.
+	registerRoutes(app.Group("/api"), "/api")
+	registerRoutes(app, "")
+}
 
+func registerRoutes(api fiber.Router, prefix string) {
 	api.Get("/source", routes.SourceHandler)
 
 	// Forensic dashboard (live in-memory report)
@@ -160,13 +166,13 @@ func SetupRoutes(app *fiber.App) {
 		html := `<!DOCTYPE html>
 					<html>
 					<head>
-						<title>API Documentation</title>
+						<title>SkyCrypt API Reference</title>
 						<meta charset="utf-8" />
 						<meta name="viewport" content="width=device-width, initial-scale=1" />
 					</head>
 					<body>
-						<script id="api-reference" data-url="/api/openapi/doc.json"></script>
-						<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+						<script id="api-reference" data-url="` + prefix + `/openapi/doc.json"></script>
+						<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1"></script>
 					</body>
 					</html>`
 		c.Set("Content-Type", "text/html")
@@ -174,26 +180,26 @@ func SetupRoutes(app *fiber.App) {
 	})
 
 	// USERNAME AND UUID RESOLVING
-	api.Get("/uuid/:username", routes.ServerAPITokenMiddleware, routes.UUIDHandler)
+	api.Get("/uuid/:username", routes.APIKeyMiddleware, routes.UUIDHandler)
 	api.Get("/username/:uuid", routes.UsernameHandler)
 
 	// STATS ENDPOINTS
-	api.Get("/stats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.StatsHandler)
-	api.Get("/stats/:uuid", routes.ServerAPITokenMiddleware, routes.SelectedProfileStatsHandler)
+	api.Get("/stats/:uuid/:profileId", routes.APIKeyMiddleware, routes.StatsHandler)
+	api.Get("/stats/:uuid", routes.APIKeyMiddleware, routes.SelectedProfileStatsHandler)
 
-	api.Get("/playerStats/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.PlayerStatsHandler)
+	api.Get("/playerStats/:uuid/:profileId", routes.APIKeyMiddleware, routes.PlayerStatsHandler)
 
-	api.Get("/networth/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.NetworthHandler)
+	api.Get("/networth/:uuid/:profileId", routes.APIKeyMiddleware, routes.NetworthHandler)
 
-	api.Get("/combined/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.CombinedHandler)
+	api.Get("/combined/:uuid/:profileId", routes.APIKeyMiddleware, routes.CombinedHandler)
 
-	api.Get("/inventory/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.InventoryHandler)
-	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.ServerAPITokenMiddleware, routes.InventorySearchHandler)
+	api.Get("/inventory/:uuid/:profileId", routes.APIKeyMiddleware, routes.InventoryHandler)
+	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.APIKeyMiddleware, routes.InventorySearchHandler)
 
-	api.Get("/garden/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.GardenHandler)
+	api.Get("/garden/:uuid/:profileId", routes.APIKeyMiddleware, routes.GardenHandler)
 
-	api.Get("/embed/:uuid/:profileId", routes.ServerAPITokenMiddleware, routes.EmbedHandler)
-	api.Get("/embed/:uuid", routes.ServerAPITokenMiddleware, routes.SelectedProfileEmbedHandler)
+	api.Get("/embed/:uuid/:profileId", routes.APIKeyMiddleware, routes.EmbedHandler)
+	api.Get("/embed/:uuid", routes.APIKeyMiddleware, routes.SelectedProfileEmbedHandler)
 
 	// RENDERING ENDPOINTS
 	api.Get("/head/:textureId", routes.HeadHandlers)
@@ -204,6 +210,4 @@ func SetupRoutes(app *fiber.App) {
 	api.Get("/constants/stats", routes.StatsConstantsHandler)
 	api.Get("/constants/packs", routes.ResourcePacksConstantsHandler)
 	api.Get("/constants/enchantments", routes.EnchantmentsConstantsHandler)
-
-	// OTHER
 }

@@ -1,5 +1,14 @@
 components:
   schemas:
+    models.APIError:
+      properties:
+        code:
+          example: INVALID_API_KEY
+          type: string
+        error:
+          example: Invalid API key.
+          type: string
+      type: object
     models.ArmorResult:
       properties:
         armor:
@@ -2110,10 +2119,6 @@ components:
           type: integer
       type: object
     skycrypttypes.ExtraAttributes:
-      description: |-
-        HideFlags       int             `nbt:"HideFlags" json:"HideFlags,omitempty"`
-        Unbreakable     int             `nbt:"Unbreakable" json:"Unbreakable,omitempty"`
-        Enchantments    []Enchantment   `nbt:"ench" json:"ench,omitempty"`
       properties:
         ability_scroll:
           items:
@@ -2307,6 +2312,10 @@ components:
       properties:
         ExtraAttributes:
           $ref: '#/components/schemas/skycrypttypes.ExtraAttributes'
+          description: |-
+            HideFlags       int             `nbt:"HideFlags" json:"HideFlags,omitempty"`
+            Unbreakable     int             `nbt:"Unbreakable" json:"Unbreakable,omitempty"`
+            Enchantments    []Enchantment   `nbt:"ench" json:"ench,omitempty"`
         ItemModel:
           type: string
         SkullOwner:
@@ -2322,22 +2331,26 @@ components:
           type: string
       type: object
   securitySchemes:
-    ApiTokenHeader:
+    ApiKeyHeader:
+      description: SkyCrypt API key, starting with `skycrypt_`.
       in: header
-      name: X-API-Token
+      name: x-api-key
       type: apiKey
 externalDocs:
   description: ""
   url: ""
 info:
-  description: SkyCrypt API provides Hypixel SkyBlock profile data, player statistics,
-    networth calculations, inventory views, rendered Minecraft item assets, resource
-    pack metadata, and source/license information used by SkyCrypt clients.
+  description: |-
+    SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.
+
+    Profile endpoints need a SkyCrypt API key in the `x-api-key` header. Request one from the developer page in your SkyCrypt dashboard.
+    Each key has its own rate limit; responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.
+    Keys only get players that SkyCrypt has already cached, as Hypixel's API policy doesn't allow proxying it. Other players return `404` with code `NOT_CACHED`.
   title: SkyCrypt API
   version: "3.0"
 openapi: 3.1.0
 paths:
-  /api/combined/{uuid}/{profileId}:
+  /combined/{uuid}/{profileId}:
     get:
       description: |-
         Returns the combined SkyCrypt payload for a player's SkyBlock profile, including gear, saved loadouts, accessories, pets, skills, dungeons, slayers, collections, minions, bestiary, and other profile sections.
@@ -2369,20 +2382,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Player, profile, museum, or combined data could not be loaded.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get combined profile data
       tags:
       - Stats
-  /api/constants/enchantments:
+  /constants/enchantments:
     get:
       description: Returns the lore strings for enchantments at their maximum level.
       operationId: listEnchantments
@@ -2398,7 +2432,7 @@ paths:
       summary: List max-level enchantments
       tags:
       - Constants
-  /api/constants/packs:
+  /constants/packs:
     get:
       description: |-
         Returns toggleable resource packs sorted by descending priority for the recommended default order.
@@ -2424,7 +2458,7 @@ paths:
       summary: List resource packs
       tags:
       - Rendering
-  /api/constants/stats:
+  /constants/stats:
     get:
       description: Returns player stats constants.
       operationId: getStatsConstants
@@ -2440,7 +2474,7 @@ paths:
       summary: List player stats constants
       tags:
       - Stats
-  /api/embed/{uuid}:
+  /embed/{uuid}:
     get:
       description: |-
         Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.
@@ -2471,20 +2505,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Networth calculation failed.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get selected profile embed data
       tags:
       - Discord Embed
-  /api/embed/{uuid}/{profileId}:
+  /embed/{uuid}/{profileId}:
     get:
       description: |-
         Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.
@@ -2522,20 +2577,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Networth calculation failed.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get profile embed data
       tags:
       - Discord Embed
-  /api/garden/{uuid}/{profileId}:
+  /garden/{uuid}/{profileId}:
     get:
       description: Returns Garden progression, visitors, crop milestones, composter
         data, plots, upgrades, and related Garden state for a specific SkyBlock profile.
@@ -2572,14 +2648,35 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get garden stats
       tags:
       - Stats
-  /api/head/{textureId}:
+  /head/{textureId}:
     get:
       description: Renders a Minecraft player head texture as PNG bytes.
       operationId: renderHeadImage
@@ -2613,7 +2710,7 @@ paths:
       summary: Render a player head
       tags:
       - Rendering
-  /api/inventory/{uuid}/{profileId}:
+  /inventory/{uuid}/{profileId}:
     get:
       description: |-
         Returns rendered inventory tabs and stripped item data for a specific SkyBlock profile.
@@ -2653,14 +2750,35 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get profile inventory
       tags:
       - Stats
-  /api/inventory/search/{uuid}/{profileId}/{searchParam}:
+  /inventory/search/{uuid}/{profileId}/{searchParam}:
     get:
       description: |-
         Searches cached inventory tabs for items whose display name or lore contains the search parameter.
@@ -2702,20 +2820,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Cached inventory data is missing or could not be parsed.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Search cached profile inventory
       tags:
       - Stats
-  /api/item/{itemId}:
+  /item/{itemId}:
     get:
       description: |-
         Renders a SkyBlock or Minecraft item as PNG bytes.
@@ -2762,7 +2901,7 @@ paths:
       summary: Render an item
       tags:
       - Rendering
-  /api/item/{itemId}/resolve:
+  /item/{itemId}/resolve:
     get:
       description: Returns the final texture URL and the resource pack that supplied
         it.
@@ -2796,7 +2935,7 @@ paths:
       summary: Resolve an item texture
       tags:
       - Rendering
-  /api/leather/{type}/{color}:
+  /leather/{type}/{color}:
     get:
       description: Renders a dyed leather armor piece as PNG bytes for the requested
         armor piece and color.
@@ -2838,7 +2977,7 @@ paths:
       summary: Render leather armor
       tags:
       - Rendering
-  /api/networth/{uuid}/{profileId}:
+  /networth/{uuid}/{profileId}:
     get:
       description: |-
         Calculates normal and non-cosmetic networth for a player's SkyBlock profile.
@@ -2876,20 +3015,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Networth calculation failed.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get profile networth
       tags:
       - Stats
-  /api/playerStats/{uuid}/{profileId}:
+  /playerStats/{uuid}/{profileId}:
     get:
       description: |-
         Returns normalized player statistics for a specific SkyBlock profile.
@@ -2927,14 +3087,35 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get raw player stats
       tags:
       - Stats
-  /api/potion/{type}/{color}:
+  /potion/{type}/{color}:
     get:
       description: Renders a potion image for the requested potion type and color.
       operationId: renderPotionImage
@@ -2975,7 +3156,7 @@ paths:
       summary: Render a potion
       tags:
       - Rendering
-  /api/source:
+  /source:
     get:
       description: Returns repository, license, commit, and notice information for
         the running SkyCrypt Backend service.
@@ -2990,7 +3171,7 @@ paths:
       summary: Get source information
       tags:
       - Source
-  /api/stats/{uuid}:
+  /stats/{uuid}:
     get:
       description: |-
         Returns the complete SkyCrypt stats payload for a player's selected SkyBlock profile.
@@ -3015,20 +3196,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Player, profile, museum, or stats data could not be loaded.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get selected profile stats
       tags:
       - Stats
-  /api/stats/{uuid}/{profileId}:
+  /stats/{uuid}/{profileId}:
     get:
       description: |-
         Returns the complete SkyCrypt stats payload for a player on a specific SkyBlock profile.
@@ -3060,20 +3262,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
+            cache-bypass scope.'
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
         "500":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
           description: Player, profile, museum, or stats data could not be loaded.
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Get profile stats
       tags:
       - Stats
-  /api/username/{uuid}:
+  /username/{uuid}:
     get:
       description: Resolves a Minecraft UUID to the current username and display name
         known to SkyCrypt.
@@ -3102,7 +3325,7 @@ paths:
       summary: Resolve username by UUID
       tags:
       - Mojang
-  /api/uuid/{username}:
+  /uuid/{username}:
     get:
       description: Resolves a Minecraft username to its UUID and returns the normalized
         player identity payload.
@@ -3134,13 +3357,29 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: X-API-Token is missing or invalid.
+                $ref: '#/components/schemas/models.APIError'
+          description: The x-api-key header is missing, or the key is invalid, disabled,
+            or expired.
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
+            header.'
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: API keys can't be verified right now.
       security:
-      - ApiTokenHeader: []
+      - ApiKeyHeader: []
       summary: Resolve UUID by username
       tags:
       - Mojang
 servers:
-- description: SkyCrypt production API
-  url: https://sky.shiiyu.moe/
+- description: Production
+  url: https://api.shiiyu.moe
+- description: Beta, built from the dev branch
+  url: https://beta-api.shiiyu.moe

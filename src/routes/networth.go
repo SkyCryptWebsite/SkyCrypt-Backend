@@ -23,14 +23,17 @@ import (
 //	@ID				getProfileNetworth
 //	@Tags			Stats
 //	@Produce		json
-//	@Security		ApiTokenHeader
+//	@Security		ApiKeyHeader
 //	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.Networth			"Profile networth returned successfully."
 //	@Failure		400			{object}	models.ProcessingError	"Player, profile, or museum data could not be resolved."
-//	@Failure		401			{object}	models.ProcessingError	"X-API-Token is missing or invalid."
+//	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
+//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Networth calculation failed."
-//	@Router			/api/networth/{uuid}/{profileId} [get]
+//	@Router			/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Networth")()
