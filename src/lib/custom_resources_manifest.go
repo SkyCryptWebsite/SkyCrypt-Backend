@@ -510,11 +510,12 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		cacheDir = filepath.Join(cwd, "cache")
 	}
 	rememberRenderedTextureIndexCacheDir(cacheDir)
-	clearPackSignatureTextureCache()
+	batch := newTextureCacheBatch()
 
 	renderedDir := filepath.Join(cacheDir, "rendered")
 	files, err := os.ReadDir(renderedDir)
 	if err != nil {
+		batch.apply(true)
 		if os.IsNotExist(err) {
 			return 0, nil
 		}
@@ -579,22 +580,23 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 			continue
 		}
 		if itemId != "" && texturePack != "" {
-			setCachedTextureForStableKey(texturePack, "skyblock:"+itemId, texture)
+			batch.set(texturePack, "skyblock:"+itemId, texture)
 			if itemModel != "" {
-				setCachedTextureForStableKey(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+				batch.set(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
 			}
 			loaded++
 		}
 		if texturePack != "" {
 			if itemModel != "" {
-				setCachedTextureForStableKey(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+				batch.set(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
 			}
 			if minecraftID != "" {
-				setCachedTextureForStableKey(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
+				batch.set(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
 			}
 		}
 	}
 
+	batch.apply(true)
 	return loaded, nil
 }
 

@@ -74,8 +74,16 @@ func canonicalPackAlias(packID string) string {
 	}
 }
 
+// texturePackAliases returns a shared, read-only slice for configured packs.
 func texturePackAliases(packID string) []string {
 	packID = strings.TrimSpace(packID)
+	if aliases, ok := resourcePackIndex().aliases[packID]; ok {
+		return aliases
+	}
+	return buildTexturePackAliases(packID)
+}
+
+func buildTexturePackAliases(packID string) []string {
 	if packID == "" {
 		return nil
 	}
