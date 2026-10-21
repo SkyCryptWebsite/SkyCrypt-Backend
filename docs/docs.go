@@ -4138,7 +4138,17 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "Texture identifier is missing or invalid."
+                        "description": "Texture identifier is missing."
+                    },
+                    "404": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "description": "Texture identifier is malformed or unknown."
                     },
                     "500": {
                         "content": {
@@ -4563,6 +4573,16 @@ const docTemplate = `{
                         },
                         "description": "Armor type or color is missing or invalid."
                     },
+                    "404": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                }
+                            }
+                        },
+                        "description": "Armor piece is unknown or color is not 6-digit hex."
+                    },
                     "500": {
                         "content": {
                             "image/png": {
@@ -4864,6 +4884,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "Potion type or color is missing or invalid."
+                    },
+                    "404": {
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                }
+                            }
+                        },
+                        "description": "Potion type is not normal or splash, or color is not 6-digit hex."
                     },
                     "500": {
                         "content": {
