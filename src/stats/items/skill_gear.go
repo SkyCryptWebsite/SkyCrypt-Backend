@@ -58,7 +58,6 @@ func GetSkillGear(skill string, allItems []models.ProcessedItem) models.SkillGea
 	}
 
 	category := strings.ToUpper(strings.TrimSpace(skill))
-	metadata := constants.ItemsSnapshot()
 	armorSets := map[string]*skillArmorCandidate{}
 	equipment := map[string]skillOwnedItem{}
 	tools := []models.ProcessedItem{}
@@ -69,7 +68,7 @@ func GetSkillGear(skill string, allItems []models.ProcessedItem) models.SkillGea
 	inspect = func(items []models.ProcessedItem) {
 		for _, item := range items {
 			itemID := GetId(item)
-			itemData, ok := metadata[itemID]
+			itemData, ok := constants.GetItem(itemID)
 			if ok && itemData.MuseumData != nil && strings.EqualFold(itemData.MuseumData.Category, category) {
 				owned := skillOwnedItem{
 					item:       item,

@@ -24,10 +24,6 @@ import (
 func SetupApplication() error {
 	timeNow := time.Now()
 
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
-		log.Println("No .env file found, using environment variables")
-	}
-
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
 		redisHost = "localhost"
@@ -65,6 +61,7 @@ func SetupApplication() error {
 		if err := notenoughupdates.ParseNEURepository(); err != nil {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
+		notenoughupdates.PublishRepositoryVersion()
 
 		notenoughupdates.StartUpdateLoop()
 		apikeys.StartUsageSync()
@@ -72,6 +69,7 @@ func SetupApplication() error {
 		if err := api.LoadSkyBlockItems(false); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
+		startItemsRefresh(false)
 
 		if err := lib.StartCustomResources(); err != nil {
 			return fmt.Errorf("failed to start custom resources: %v", err)
@@ -107,10 +105,12 @@ func SetupApplication() error {
 		if err := api.LoadSkyBlockItems(true); err != nil {
 			return fmt.Errorf("error loading SkyBlock items: %v", err)
 		}
+		startItemsRefresh(true)
 
 		if err := notenoughupdates.ParseNEURepository(); err != nil {
 			return fmt.Errorf("failed to parse NEU repository: %v", err)
 		}
+		notenoughupdates.StartChildReloadLoop()
 
 		if err := lib.PrepareCustomResourceCache(); err != nil {
 			log.Printf("failed to load custom resource index: %v", err)
@@ -120,6 +120,19 @@ func SetupApplication() error {
 	}
 
 	return nil
+}
+
+// startItemsRefresh reloads Hypixel's item and collection constants, which were otherwise only read at startup.
+// The process that fetches reads them from Redis while they are cached there (12 hours) and from Hypixel after;
+// prefork children only read Redis.
+func startItemsRefresh(fromCache bool) {
+	go func() {
+		for range time.Tick(6 * time.Hour) {
+			if err := api.LoadSkyBlockItems(fromCache); err != nil {
+				log.Printf("error refreshing SkyBlock items: %v", err)
+			}
+		}
+	}()
 }
 
 func SetupRoutes(app *fiber.App) {

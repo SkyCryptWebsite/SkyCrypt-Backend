@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,7 +18,16 @@ type MuseumConstants struct {
 	Categories   map[string][]string
 }
 
-var MUSEUM = MuseumConstants{}
+// museumConstants is rebuilt hourly and swapped in whole, so readers need no lock.
+var museumConstants atomic.Pointer[MuseumConstants]
+
+// Museum returns the museum constants. Treat the result as read-only.
+func Museum() *MuseumConstants {
+	if current := museumConstants.Load(); current != nil {
+		return current
+	}
+	return &MuseumConstants{}
+}
 
 func (m *MuseumConstants) GetAllItems() []string {
 	total := 0
@@ -35,7 +45,8 @@ func (m *MuseumConstants) GetAllItems() []string {
 var priorityOrder = []string{"HAT", "HOOD", "HELMET", "CHESTPLATE", "TUNIC", "LEGGINGS", "TROUSERS", "SLIPPERS", "BOOTS", "NECKLACE", "CLOAK", "BELT", "GAUNTLET", "GLOVES"}
 
 func sortMuseumItems(items []string, skyblockItems map[string]models.ProcessedHypixelItem) {
-	sort.Slice(items, func(i, j int) bool {
+	// Stable, so items with the same priority keep their ID order.
+	sort.SliceStable(items, func(i, j int) bool {
 		a := items[i]
 		b := items[j]
 
@@ -79,7 +90,16 @@ func getMuseumItems() {
 		output.Categories[cat] = []string{}
 	}
 
-	for _, item := range skyblockItems {
+	// Walk items in ID order: map order is random per process, and it decides category order and which piece
+	// stands for an armor set, so each prefork process (and each restart) showed a different museum layout.
+	itemIDs := make([]string, 0, len(skyblockItems))
+	for id := range skyblockItems {
+		itemIDs = append(itemIDs, id)
+	}
+	sort.Strings(itemIDs)
+
+	for _, id := range itemIDs {
+		item := skyblockItems[id]
 		if item.MuseumData == nil {
 			continue
 		}
@@ -112,13 +132,13 @@ func getMuseumItems() {
 		}
 	}
 
-	MUSEUM = output
+	museumConstants.Store(&output)
 }
 
 func init() {
 	go func() {
 		getMuseumItems()
-		for len(MUSEUM.Categories["combat"]) == 0 {
+		for len(Museum().Categories["combat"]) == 0 {
 			time.Sleep(1 * time.Second)
 			getMuseumItems()
 		}

@@ -2119,6 +2119,10 @@ components:
           type: integer
       type: object
     skycrypttypes.ExtraAttributes:
+      description: |-
+        HideFlags       int             `nbt:"HideFlags" json:"HideFlags,omitempty"`
+        Unbreakable     int             `nbt:"Unbreakable" json:"Unbreakable,omitempty"`
+        Enchantments    []Enchantment   `nbt:"ench" json:"ench,omitempty"`
       properties:
         ability_scroll:
           items:
@@ -2312,10 +2316,6 @@ components:
       properties:
         ExtraAttributes:
           $ref: '#/components/schemas/skycrypttypes.ExtraAttributes'
-          description: |-
-            HideFlags       int             `nbt:"HideFlags" json:"HideFlags,omitempty"`
-            Unbreakable     int             `nbt:"Unbreakable" json:"Unbreakable,omitempty"`
-            Enchantments    []Enchantment   `nbt:"ench" json:"ench,omitempty"`
         ItemModel:
           type: string
         SkullOwner:
@@ -2390,8 +2390,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -2403,14 +2404,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, museum, or combined data could not be loaded.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Player, profile, museum, or combined data
+            could not be loaded.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get combined profile data
@@ -2495,12 +2510,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.EmbedData'
           description: Selected profile embed data returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, or museum data could not be resolved.
         "401":
           content:
             application/json:
@@ -2513,8 +2522,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -2526,14 +2536,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Networth calculation failed.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Networth calculation failed.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: API keys can't be verified right now.
+          description: 'API keys can''t be verified right now, or PRICES_UNAVAILABLE:
+            item prices haven''t loaded yet.'
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get selected profile embed data
@@ -2567,12 +2591,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.EmbedData'
           description: Profile embed data returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, or museum data could not be resolved.
         "401":
           content:
             application/json:
@@ -2585,8 +2603,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -2598,14 +2617,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Networth calculation failed.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Networth calculation failed.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: API keys can't be verified right now.
+          description: 'API keys can''t be verified right now, or PRICES_UNAVAILABLE:
+            item prices haven''t loaded yet.'
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get profile embed data
@@ -2638,12 +2671,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.Garden'
           description: Garden stats returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, or Garden data could not be loaded.
         "401":
           content:
             application/json:
@@ -2656,8 +2683,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -2665,12 +2693,31 @@ paths:
                 $ref: '#/components/schemas/models.APIError'
           description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
             header.'
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Unexpected failure.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get garden stats
@@ -2740,12 +2787,6 @@ paths:
                   $ref: '#/components/schemas/models.Inventory'
                 type: array
           description: Profile inventory returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Profile, museum, or inventory data could not be loaded.
         "401":
           content:
             application/json:
@@ -2758,8 +2799,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -2767,12 +2809,31 @@ paths:
                 $ref: '#/components/schemas/models.APIError'
           description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
             header.'
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Unexpected failure.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get profile inventory
@@ -3005,12 +3066,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.Networth'
           description: Profile networth returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, or museum data could not be resolved.
         "401":
           content:
             application/json:
@@ -3023,8 +3078,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -3036,14 +3092,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Networth calculation failed.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Networth calculation failed.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: API keys can't be verified right now.
+          description: 'API keys can''t be verified right now, or PRICES_UNAVAILABLE:
+            item prices haven''t loaded yet.'
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get profile networth
@@ -3077,12 +3147,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/models.Stats'
           description: Player stats returned successfully.
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player or profile could not be resolved.
         "401":
           content:
             application/json:
@@ -3095,8 +3159,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -3104,12 +3169,31 @@ paths:
                 $ref: '#/components/schemas/models.APIError'
           description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
             header.'
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Unexpected failure.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get raw player stats
@@ -3204,8 +3288,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -3217,14 +3302,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, museum, or stats data could not be loaded.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Player, profile, museum, or stats data could
+            not be loaded.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get selected profile stats
@@ -3270,8 +3369,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
-          description: 'NOT_CACHED: the player isn''t cached, and the key lacks the
-            cache-bypass scope.'
+          description: 'PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile.
+            NOT_CACHED: the player isn''t cached, and the key lacks the cache-bypass
+            scope.'
         "429":
           content:
             application/json:
@@ -3283,14 +3383,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/models.ProcessingError'
-          description: Player, profile, museum, or stats data could not be loaded.
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Player, profile, museum, or stats data could
+            not be loaded.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Get profile stats
@@ -3321,7 +3435,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: UUID is invalid or the player could not be found.
+          description: The UUID is malformed.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'PLAYER_NOT_FOUND: no player has that name or UUID.'
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Unexpected failure.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       summary: Resolve username by UUID
       tags:
       - Mojang
@@ -3352,7 +3491,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.ProcessingError'
-          description: Username is invalid or the player could not be found.
+          description: The username is malformed.
         "401":
           content:
             application/json:
@@ -3360,6 +3499,12 @@ paths:
                 $ref: '#/components/schemas/models.APIError'
           description: The x-api-key header is missing, or the key is invalid, disabled,
             or expired.
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'PLAYER_NOT_FOUND: no player has that name or UUID.'
         "429":
           content:
             application/json:
@@ -3367,12 +3512,31 @@ paths:
                 $ref: '#/components/schemas/models.APIError'
           description: 'RATE_LIMITED: the key''s rate limit is used up. See the Retry-After
             header.'
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'INTERNAL_ERROR: Unexpected failure.'
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable
+            response.'
         "503":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/models.APIError'
           description: API keys can't be verified right now.
+        "504":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/models.APIError'
+          description: 'UPSTREAM_TIMEOUT: Hypixel or Mojang didn''t answer in time.'
       security:
       - ApiKeyHeader: []
       summary: Resolve UUID by username

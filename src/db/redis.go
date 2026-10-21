@@ -18,9 +18,6 @@ import (
 
 var ctx = context.Background()
 var redisClient *redis.Client
-var redisAddr string
-var redisPassword string
-var redisDB int
 var clientMutex sync.RWMutex
 
 // Values at least this big are stored zstd-compressed; small identity keys aren't worth the frame overhead.
@@ -54,17 +51,9 @@ func decompressValue(value string) (string, error) {
 	return string(out), err
 }
 
-type RedisClient struct {
-	client *redis.Client
-}
-
 func InitRedis(addr string, password string, db int) error {
 	clientMutex.Lock()
 	defer clientMutex.Unlock()
-
-	redisAddr = addr
-	redisPassword = password
-	redisDB = db
 
 	// Don't use sync.Once with prefork mode - each process needs its own connection
 	poolSize := redisOptionInt("REDIS_POOL_SIZE", 25)
@@ -116,20 +105,33 @@ func InitRedis(addr string, password string, db int) error {
 	return nil
 }
 
-func (r *RedisClient) Set(key string, value interface{}, expirationSeconds int) error {
-	expiration := time.Duration(expirationSeconds) * time.Second
-	err := r.client.Set(ctx, key, value, expiration).Err()
-	if err != nil {
-		return fmt.Errorf("could not set value in Redis: %v", err)
-	}
-	return nil
-}
-
 func Get(key string) (string, error) {
 	return GetContext(context.Background(), key)
 }
 
 func GetContext(ctx context.Context, key string) (string, error) {
+	val, err := getRaw(ctx, key)
+	if err != nil || val == "" {
+		return "", err
+	}
+	return decompressValue(val)
+}
+
+// GetBytesContext is GetContext for callers that parse the value. It skips the string copies GetContext makes,
+// which matter for multi-megabyte profile bodies. A missing key returns nil.
+func GetBytesContext(ctx context.Context, key string) ([]byte, error) {
+	val, err := getRaw(ctx, key)
+	if err != nil || val == "" {
+		return nil, err
+	}
+	if strings.HasPrefix(val, zstdMagic) {
+		return zstdDecoder.DecodeAll([]byte(val), nil)
+	}
+	return []byte(val), nil
+}
+
+// getRaw returns the stored value as is, or "" when the key is missing.
+func getRaw(ctx context.Context, key string) (string, error) {
 	start := time.Now()
 
 	client, err := getRedisClient()
@@ -180,7 +182,7 @@ func GetContext(ctx context.Context, key string) (string, error) {
 		}
 	}
 
-	return decompressValue(val)
+	return val, nil
 }
 
 func GetManyContext(ctx context.Context, keys []string) (map[string]string, error) {
@@ -266,54 +268,19 @@ func getRedisClient() (*redis.Client, error) {
 	clientMutex.RUnlock()
 
 	if client == nil {
-		clientMutex.Lock()
-		if redisClient == nil {
-			if redisAddr != "" {
-				err := InitRedis(redisAddr, redisPassword, redisDB)
-				if err != nil {
-					clientMutex.Unlock()
-					return nil, fmt.Errorf("redis client not initialized and re-initialization failed: %v", err)
-				}
-			} else {
-				clientMutex.Unlock()
-				return nil, fmt.Errorf("redis client not initialized. Call InitRedis() first")
-			}
-		}
-		client = redisClient
-		clientMutex.Unlock()
+		return nil, fmt.Errorf("redis client not initialized. Call InitRedis() first")
 	}
 	return client, nil
 }
 
-func NewRedisClient(addr string, password string, db int) *RedisClient {
-	poolSize := redisOptionInt("REDIS_POOL_SIZE", 25)
-	minIdleConns := redisOptionInt("REDIS_MIN_IDLE_CONNS", 10)
-	poolTimeoutSeconds := redisOptionInt("REDIS_POOL_TIMEOUT_SECONDS", 2)
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr:         addr,
-		Password:     password,
-		DB:           db,
-		PoolSize:     poolSize,
-		MinIdleConns: minIdleConns,
-		MaxRetries:   3,
-		PoolTimeout:  time.Duration(poolTimeoutSeconds) * time.Second,
-		IdleTimeout:  time.Minute * 5,
-		DialTimeout:  time.Second * 5,
-		ReadTimeout:  time.Second * 3,
-		WriteTimeout: time.Second * 3,
-		PoolFIFO:     false,
-	})
-
-	ctxTimeout, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-
-	_, err := rdb.Ping(ctxTimeout).Result()
-	if err != nil {
-		panic(fmt.Errorf("could not connect to Redis: %v", err))
+// CloseRedis closes the shared client during shutdown.
+func CloseRedis() {
+	clientMutex.Lock()
+	defer clientMutex.Unlock()
+	if redisClient != nil {
+		_ = redisClient.Close()
+		redisClient = nil
 	}
-
-	return &RedisClient{client: rdb}
 }
 
 func redisOptionInt(name string, fallback int) int {
@@ -443,15 +410,4 @@ func SetContext(ctx context.Context, key string, value interface{}, expirationSe
 	}
 
 	return nil
-}
-
-func (r *RedisClient) Get(key string) (string, error) {
-	val, err := r.client.Get(ctx, key).Result()
-	if err != nil {
-		if err == redis.Nil {
-			return "", nil
-		}
-		return "", fmt.Errorf("could not get value from Redis: %v", err)
-	}
-	return val, nil
 }

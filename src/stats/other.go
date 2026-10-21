@@ -13,7 +13,7 @@ import (
 
 func GetProfile(profiles *models.HypixelProfilesResponse, profileId ...string) (*skycrypttypes.Profile, error) {
 	if len(profiles.Profiles) == 0 {
-		return nil, fmt.Errorf("no profiles found")
+		return nil, fmt.Errorf("%w: no profiles found", api.ErrProfileNotFound)
 	}
 
 	// If profileId is provided, search for it
@@ -24,7 +24,7 @@ func GetProfile(profiles *models.HypixelProfilesResponse, profileId ...string) (
 				return &profile, nil
 			}
 		}
-		return nil, fmt.Errorf("profile with ID %s not found", targetProfileId)
+		return nil, fmt.Errorf("%w: profile with ID %s not found", api.ErrProfileNotFound, targetProfileId)
 	}
 
 	// If no profileId provided, return the selected profile or the first profile

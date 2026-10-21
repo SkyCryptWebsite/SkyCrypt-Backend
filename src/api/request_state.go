@@ -45,6 +45,40 @@ func isCacheOnly(ctx context.Context) bool {
 	return state != nil && state.CacheOnly
 }
 
+type flightResult[T any] struct {
+	value     T
+	stale     bool
+	notCached bool
+}
+
+// sharedFetch runs fetch once per key across concurrent callers. The shared call gets its own RequestState, and its
+// stale and notCached flags are copied onto every caller's state, not just the caller that happened to start it.
+func sharedFetch[T any](ctx context.Context, key string, fetch func(fetchCtx context.Context) (T, error)) (T, error) {
+	result, err, _ := hypixelFetchGroup.Do(flightKey(ctx, key), func() (interface{}, error) {
+		flightState := &RequestState{CacheOnly: isCacheOnly(ctx)}
+		fetchCtx, cancel := detachedFetchContext(WithRequestState(ctx, flightState))
+		defer cancel()
+
+		value, err := fetch(fetchCtx)
+		return flightResult[T]{value: value, stale: flightState.stale.Load(), notCached: flightState.notCached.Load()}, err
+	})
+
+	flight, _ := result.(flightResult[T])
+	if state := requestState(ctx); state != nil {
+		if flight.stale {
+			state.stale.Store(true)
+		}
+		if flight.notCached {
+			state.notCached.Store(true)
+		}
+	}
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return flight.value, nil
+}
+
 // flightKey keeps cache-only and fetching callers out of each other's singleflight calls.
 func flightKey(ctx context.Context, key string) string {
 	if isCacheOnly(ctx) {

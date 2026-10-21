@@ -3221,6 +3221,7 @@ const docTemplate = `{
                 "type": "object"
             },
             "skycrypttypes.ExtraAttributes": {
+                "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `",
                 "properties": {
                     "ability_scroll": {
                         "items": {
@@ -3506,8 +3507,7 @@ const docTemplate = `{
             "skycrypttypes.Tag": {
                 "properties": {
                     "ExtraAttributes": {
-                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes",
-                        "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `"
+                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes"
                     },
                     "ItemModel": {
                         "type": "string"
@@ -3607,7 +3607,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -3623,11 +3623,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Player, profile, museum, or combined data could not be loaded."
+                        "description": "INTERNAL_ERROR: Player, profile, museum, or combined data could not be loaded."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -3638,6 +3648,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -3763,16 +3783,6 @@ const docTemplate = `{
                         },
                         "description": "Selected profile embed data returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Player, profile, or museum data could not be resolved."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -3791,7 +3801,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -3807,11 +3817,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Networth calculation failed."
+                        "description": "INTERNAL_ERROR: Networth calculation failed."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -3821,7 +3841,17 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "API keys can't be verified right now."
+                        "description": "API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -3872,16 +3902,6 @@ const docTemplate = `{
                         },
                         "description": "Profile embed data returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Player, profile, or museum data could not be resolved."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -3900,7 +3920,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -3916,11 +3936,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Networth calculation failed."
+                        "description": "INTERNAL_ERROR: Networth calculation failed."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -3930,7 +3960,17 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "API keys can't be verified right now."
+                        "description": "API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -3981,16 +4021,6 @@ const docTemplate = `{
                         },
                         "description": "Garden stats returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Player, profile, or Garden data could not be loaded."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -4009,7 +4039,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4021,6 +4051,26 @@ const docTemplate = `{
                         },
                         "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "INTERNAL_ERROR: Unexpected failure."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+                    },
                     "503": {
                         "content": {
                             "application/json": {
@@ -4030,6 +4080,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -4249,16 +4309,6 @@ const docTemplate = `{
                         },
                         "description": "Profile inventory returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Profile, museum, or inventory data could not be loaded."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -4277,7 +4327,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4289,6 +4339,26 @@ const docTemplate = `{
                         },
                         "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "INTERNAL_ERROR: Unexpected failure."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+                    },
                     "503": {
                         "content": {
                             "application/json": {
@@ -4298,6 +4368,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -4537,16 +4617,6 @@ const docTemplate = `{
                         },
                         "description": "Profile networth returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Player, profile, or museum data could not be resolved."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -4565,7 +4635,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4581,11 +4651,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Networth calculation failed."
+                        "description": "INTERNAL_ERROR: Networth calculation failed."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -4595,7 +4675,17 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "API keys can't be verified right now."
+                        "description": "API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -4646,16 +4736,6 @@ const docTemplate = `{
                         },
                         "description": "Player stats returned successfully."
                     },
-                    "400": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
-                                }
-                            }
-                        },
-                        "description": "Player or profile could not be resolved."
-                    },
                     "401": {
                         "content": {
                             "application/json": {
@@ -4674,7 +4754,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4686,6 +4766,26 @@ const docTemplate = `{
                         },
                         "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "INTERNAL_ERROR: Unexpected failure."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+                    },
                     "503": {
                         "content": {
                             "application/json": {
@@ -4695,6 +4795,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -4839,7 +4949,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4855,11 +4965,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Player, profile, museum, or stats data could not be loaded."
+                        "description": "INTERNAL_ERROR: Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -4870,6 +4990,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -4938,7 +5068,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                        "description": "PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
                     },
                     "429": {
                         "content": {
@@ -4954,11 +5084,21 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "Player, profile, museum, or stats data could not be loaded."
+                        "description": "INTERNAL_ERROR: Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
                     },
                     "503": {
                         "content": {
@@ -4969,6 +5109,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [
@@ -5017,7 +5167,47 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "UUID is invalid or the player could not be found."
+                        "description": "The UUID is malformed."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "PLAYER_NOT_FOUND: no player has that name or UUID."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "INTERNAL_ERROR: Unexpected failure."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "summary": "Resolve username by UUID",
@@ -5063,7 +5253,7 @@ const docTemplate = `{
                                 }
                             }
                         },
-                        "description": "Username is invalid or the player could not be found."
+                        "description": "The username is malformed."
                     },
                     "401": {
                         "content": {
@@ -5075,6 +5265,16 @@ const docTemplate = `{
                         },
                         "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
                     },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "PLAYER_NOT_FOUND: no player has that name or UUID."
+                    },
                     "429": {
                         "content": {
                             "application/json": {
@@ -5085,6 +5285,26 @@ const docTemplate = `{
                         },
                         "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "INTERNAL_ERROR: Unexpected failure."
+                    },
+                    "502": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+                    },
                     "503": {
                         "content": {
                             "application/json": {
@@ -5094,6 +5314,16 @@ const docTemplate = `{
                             }
                         },
                         "description": "API keys can't be verified right now."
+                    },
+                    "504": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
                     }
                 },
                 "security": [

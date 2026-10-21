@@ -75,7 +75,11 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 		return fmt.Errorf("failed to marshal cached response: %v", err)
 	}
 
-	body := string(payload)
+	return sendAndCacheBody(c, ctx, cacheKey, string(payload), ttlSeconds)
+}
+
+// sendAndCacheBody is sendAndCacheJSON for a body that is already JSON.
+func sendAndCacheBody(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body string, ttlSeconds int) error {
 	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 		c.Set("X-SkyCrypt-Backend-Cache", "bypass")

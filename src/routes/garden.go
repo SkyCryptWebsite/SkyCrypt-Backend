@@ -2,7 +2,6 @@ package routes
 
 import (
 	"skycrypt/src/api"
-	"skycrypt/src/constants"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
@@ -25,11 +24,13 @@ import (
 //	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.Garden			"Garden stats returned successfully."
-//	@Failure		400			{object}	models.ProcessingError	"Player, profile, or Garden data could not be loaded."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Unexpected failure."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/garden/{uuid}/{profileId} [get]
 func GardenHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -111,8 +112,7 @@ func GardenHandler(c *fiber.Ctx) error {
 	})
 
 	if err := g.Wait(); err != nil {
-		c.Status(400)
-		return c.JSON(constants.InvalidUserError)
+		return sendLoadError(c, "Failed to fetch data", err)
 	}
 
 	userProfileValue := profile.Members[uuid]

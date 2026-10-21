@@ -1,8 +1,23 @@
 package constants
 
-import "skycrypt/src/models"
+import (
+	"skycrypt/src/models"
+	"sync/atomic"
+)
 
-var COLLECTIONS = models.ProcessedHypixelCollection{}
+// collections is replaced whole on reload, never edited in place, so readers need no lock.
+var collections atomic.Pointer[models.ProcessedHypixelCollection]
+
+func Collections() models.ProcessedHypixelCollection {
+	if current := collections.Load(); current != nil {
+		return *current
+	}
+	return models.ProcessedHypixelCollection{}
+}
+
+func SetCollections(value models.ProcessedHypixelCollection) {
+	collections.Store(&value)
+}
 
 var COLLECTION_ICONS = map[string]string{
 	"farming":  "/api/item/GOLDEN_HOE",

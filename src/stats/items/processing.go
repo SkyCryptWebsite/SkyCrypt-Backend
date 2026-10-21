@@ -393,7 +393,7 @@ func selectWikiLink(wiki []string) *string {
 
 func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []models.ProcessedItem {
 	prices, _ := skyhelpernetworthgo.GetPrices(true, 0, 0)
-	sacksConstants := notenoughupdates.NEUConstants.Sacks
+	sacksConstants := notenoughupdates.Constants().Sacks
 
 	for i := range items {
 		sackData := sacksConstants[GetId(items[i])]
@@ -419,10 +419,14 @@ func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []m
 			}
 
 			itemAmount := sackContents[rawItemId]
-			lore := NEUItem.Lore
+			// Clip so appends copy instead of writing into the cached NEU item's backing array.
+			lore := slices.Clip(NEUItem.Lore)
 			if itemAmount > 1 {
 				lore = append(lore, "", fmt.Sprintf("§7Amount: §c%s", utility.AddCommas(itemAmount)))
+			}
 
+			// Networth counts single items too, so the sack value does as well.
+			if itemAmount > 0 {
 				itemPrice := prices[rawItemId]
 				if itemPrice > 0 {
 					totalPrice := float64(itemAmount) * itemPrice

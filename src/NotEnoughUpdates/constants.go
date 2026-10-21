@@ -6,11 +6,22 @@ import (
 	"skycrypt/src/models"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
-var NEUConstants = models.NEUConstant{}
+// neuConstants is parsed into a fresh value and swapped in whole, so a reload never races with readers.
+var neuConstants atomic.Pointer[models.NEUConstant]
+
+// Constants returns the parsed NEU constants. Treat the result as read-only.
+func Constants() *models.NEUConstant {
+	if current := neuConstants.Load(); current != nil {
+		return current
+	}
+	return &models.NEUConstant{}
+}
+
 var CACHED_NEU_ITEMS sync.Map
 var CACHED_NEU_ITEM_WIKIS sync.Map
 

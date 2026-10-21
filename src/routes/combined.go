@@ -11,9 +11,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 // CombinedHandler godoc
@@ -29,10 +27,12 @@ import (
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.CombinedOutput	"Combined profile data returned successfully."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Player, profile, museum, or combined data could not be loaded."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or combined data could not be loaded."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/combined/{uuid}/{profileId} [get]
 func CombinedHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -50,115 +50,35 @@ func CombinedHandler(c *fiber.Ctx) error {
 	enabledPacks := enabledPacksFromRequest(c)
 
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("combined", uuid, profileId, enabledPacksCachePart(enabledPacks))
+	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
+	if err != nil {
+		return sendLoadError(c, "failed to resolve player", err)
+	}
+
+	cacheKey := responseCacheKey("combined", mowojang.UUID, profileId, enabledPacksCachePart(enabledPacks))
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
 
-	result, err := computeCombinedContext(reqCtx, uuid, profileId, enabledPacks)
+	result, err := computeCombinedContext(reqCtx, mowojang, profileId, enabledPacks)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return sendLoadError(c, "failed to load data", err)
 	}
 
 	utility.LogVerbose("Returning /api/combined/%s in %s pid=%d", uuid, time.Since(timeNow), os.Getpid())
 	return sendAndCacheJSON(c, reqCtx, cacheKey, result, 5*60)
 }
 
-func computeCombinedContext(ctx context.Context, uuid string, profileId string, enabledPacks []string) (*models.CombinedOutput, error) {
-	var (
-		mowojang      *models.MowojangResponse
-		profiles      *models.HypixelProfilesResponse
-		profile       *skycrypttypes.Profile
-		player        *skycrypttypes.Player
-		profileMuseum map[string]*skycrypttypes.Museum
-		err           error
-	)
-
-	isProfileUUID := utility.IsUUID(profileId)
-	g, groupCtx := errgroup.WithContext(ctx)
-	type museumResult struct {
-		profileID string
-		museum    map[string]*skycrypttypes.Museum
-		err       error
-	}
-	var selectedMuseumCh chan museumResult
-
-	if isProfileUUID {
-		g.Go(func() error {
-			var err error
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
-			return err
-		})
-	}
-
-	mowojang, err = api.ResolvePlayerContext(ctx, uuid)
+func computeCombinedContext(ctx context.Context, mowojang *models.MowojangResponse, profileId string, enabledPacks []string) (*models.CombinedOutput, error) {
+	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve player: %v", err)
-	}
-
-	uuid = mowojang.UUID
-
-	if profileId == "" {
-		if cachedProfileID := getCachedSelectedProfileID(ctx, uuid); cachedProfileID != "" {
-			selectedMuseumCh = make(chan museumResult, 1)
-			g.Go(func() error {
-				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
-				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
-				return nil
-			})
-		}
-	}
-
-	g.Go(func() error {
-		var err error
-		player, err = api.GetPlayerContext(groupCtx, uuid)
-		return err
-	})
-
-	g.Go(func() error {
-		var err error
-		profiles, err = api.GetProfilesContext(groupCtx, uuid)
-		if err != nil {
-			return err
-		}
-
-		profile, err = stats.GetProfile(profiles, profileId)
-		if err != nil {
-			return err
-		}
-		if profileId == "" {
-			cacheSelectedProfileID(groupCtx, uuid, profile.ProfileID)
-		}
-
-		if !isProfileUUID {
-			if selectedMuseumCh != nil {
-				result := <-selectedMuseumCh
-				if result.err == nil && result.profileID == profile.ProfileID {
-					profileMuseum = result.museum
-					return nil
-				}
-			}
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
-			return err
-		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	members, err := stats.FormatMembersContext(ctx, profile)
+	members, err := stats.FormatMembersContext(ctx, data.Profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
 
-	userProfileValue := profile.Members[uuid]
-	museum := profileMuseum[uuid]
-	userProfile := &userProfileValue
-
-	return stats.GetCombinedContext(ctx, mowojang, profiles, profile, player, userProfile, museum, members, enabledPacks)
+	return stats.GetCombinedContext(ctx, mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members, enabledPacks)
 }

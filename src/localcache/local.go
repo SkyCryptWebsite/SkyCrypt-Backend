@@ -2,7 +2,7 @@ package localcache
 
 import (
 	"os"
-	"runtime"
+	"runtime/metrics"
 	"strconv"
 	"sync"
 	"time"
@@ -153,9 +153,13 @@ func memoryPressure() bool {
 	if limitMB <= 0 {
 		return false
 	}
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	return m.HeapAlloc > uint64(limitMB)*1024*1024
+	// runtime/metrics reads this without the stop-the-world pause of runtime.ReadMemStats, which ran on every Set.
+	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	metrics.Read(sample)
+	if sample[0].Value.Kind() != metrics.KindUint64 {
+		return false
+	}
+	return sample[0].Value.Uint64() > uint64(limitMB)*1024*1024
 }
 
 var (

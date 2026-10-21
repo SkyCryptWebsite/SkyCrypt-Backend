@@ -99,13 +99,13 @@ func markChildrenAsDonated(children string, output *map[string]models.ProcessedM
 		}
 	}
 
-	if childOfChild, exists := constants.MUSEUM.Children[children]; exists && childOfChild != "" {
+	if childOfChild, exists := constants.Museum().Children[children]; exists && childOfChild != "" {
 		markChildrenAsDonated(childOfChild, output, decodedMuseum)
 	}
 }
 
 func getCategoryItems(category string, output map[string]models.ProcessedMuseumItem) []string {
-	categoryList := constants.MUSEUM.Categories[category]
+	categoryList := constants.Museum().Categories[category]
 	if categoryList == nil {
 		return []string{}
 	}
@@ -119,7 +119,10 @@ func getCategoryItems(category string, output map[string]models.ProcessedMuseumI
 	return result
 }
 
-func ProcessMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) models.MuseumResult {
+func ProcessMuseumItems(sharedMuseum *skycrypttypes.Museum, enabledPacks ...[]string) models.MuseumResult {
+	// The museum can be shared between concurrent requests, so defaults go on a copy.
+	museumCopy := *sharedMuseum
+	museumData := &museumCopy
 	if museumData.Items == nil {
 		museumData.Items = &map[string]skycrypttypes.MuseumItem{}
 	}
@@ -131,7 +134,7 @@ func ProcessMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]stri
 	decodedMuseum := decodeMuseumItems(museumData, enabledPacks...)
 
 	output := make(map[string]models.ProcessedMuseumItem)
-	for _, itemId := range constants.MUSEUM.GetAllItems() {
+	for _, itemId := range constants.Museum().GetAllItems() {
 		_, exists := (*museumData.Items)[itemId]
 		_, alreadySet := output[itemId]
 		if !exists && !alreadySet {
@@ -142,7 +145,7 @@ func ProcessMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]stri
 			continue
 		}
 
-		if _, hasChildren := constants.MUSEUM.Children[itemId]; hasChildren {
+		if _, hasChildren := constants.Museum().Children[itemId]; hasChildren {
 			markChildrenAsDonated(itemId, &output, decodedMuseum)
 		}
 
@@ -261,7 +264,7 @@ func getMuseumSectionAmount(museumData models.MuseumResult, section string) int 
 }
 
 func getMuseumCategoryItems(section string) []string {
-	return constants.MUSEUM.Categories[section]
+	return constants.Museum().Categories[section]
 }
 
 func GetMuseum(museum *skycrypttypes.Museum, enabledPacks ...[]string) []models.ProcessedItem {
@@ -326,14 +329,14 @@ func GetMuseum(museum *skycrypttypes.Museum, enabledPacks ...[]string) []models.
 				// MISSING ITEM
 				if museumItem.SkyblockID == "" || museumItem.Missing {
 					var itemData models.ProcessedItem
-					if _, isArmorSet := constants.MUSEUM.ArmorSets[itemId]; isArmorSet {
+					if _, isArmorSet := constants.Museum().ArmorSets[itemId]; isArmorSet {
 						itemData = constants.MUSEUM_INVENTORY_MISSING_ARMOR_SET_TEMPLATE
 					} else {
 						itemData = constants.MUSEUM_INVENTORY_MISSING_ITEM_TEMPLATE
 					}
 					itemData.Texture = fmt.Sprintf("%s%s", utility.GetDomain(), itemData.Texture)
 
-					itemName := constants.MUSEUM.ArmorSetToId[itemId]
+					itemName := constants.Museum().ArmorSetToId[itemId]
 					if itemName == "" {
 						itemName = itemId
 					}
@@ -348,7 +351,7 @@ func GetMuseum(museum *skycrypttypes.Museum, enabledPacks ...[]string) []models.
 					itemData := constants.MUSEUM_INVENTORY_HIGHER_TIER_DONATED_TEMPLATE
 					itemData.Texture = fmt.Sprintf("%s%s", utility.GetDomain(), itemData.Texture)
 
-					itemName := constants.MUSEUM.ArmorSetToId[itemId]
+					itemName := constants.Museum().ArmorSetToId[itemId]
 					if itemName == "" {
 						itemName = itemId
 					}

@@ -249,9 +249,7 @@ func LoadSkyBlockItems(fromCache bool) error {
 		return fmt.Errorf("failed to get SkyBlock collections: %v", err)
 	}
 
-	constants.COLLECTIONS = processCollections(collections)
-
-	// fmt.Printf("[COLLECTIONS] Loaded %d collections in %s on %v\n", len(constants.COLLECTIONS), time.Since(timeNow), os.Getpid())
+	constants.SetCollections(processCollections(collections))
 
 	return nil
 }

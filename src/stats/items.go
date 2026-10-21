@@ -10,6 +10,14 @@ import (
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 )
 
+// recoverInventoryPanic turns a panic in an inventory goroutine into an error. The recover middleware only covers
+// the handler goroutine, and an unrecovered panic here would take down every prefork process.
+func recoverInventoryPanic(inventoryId string, report func(error)) {
+	if r := recover(); r != nil {
+		report(fmt.Errorf("panic decoding inventory %s: %v", inventoryId, r))
+	}
+}
+
 func GetRawInventory(userProfile *skycrypttypes.Member, inventoryId string) string {
 	switch inventoryId {
 	case "inventory":
@@ -23,7 +31,8 @@ func GetRawInventory(userProfile *skycrypttypes.Member, inventoryId string) stri
 	case "personal_vault":
 		return userProfile.Inventory.PersonalVault.Data
 	case "wardrobe":
-		panic("wardrobe should be handled separately in GetInventory, not here")
+		// Wardrobe items live in the loadout sets, not in one encoded inventory.
+		return ""
 	case "sacks":
 		return userProfile.Inventory.BagContents.SacksBag.Data
 
@@ -76,6 +85,7 @@ func GetInventory(useProfile *skycrypttypes.Member, inventoryId string) []*skycr
 			wg.Add(1)
 			go func(id string, data *string) {
 				defer wg.Done()
+				defer recoverInventoryPanic(id, func(err error) { resultChan <- result{id, nil, err} })
 
 				decodedInventory, err := skyhelpernetworthgo.CalculateFromSpecifiedInventories(
 					skyhelpernetworthgo.SpecifiedInventory{
@@ -248,6 +258,7 @@ func GetItems(useProfile *skycrypttypes.Member, profileId string, memberUUID str
 		wg.Add(1)
 		go func(id string, data *string) {
 			defer wg.Done()
+			defer recoverInventoryPanic(id, func(err error) { resultChan <- result{id, nil, err} })
 
 			decodedInventory, err := utility.DecodeInventory(data)
 			if err != nil {

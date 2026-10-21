@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"fmt"
 	"skycrypt/src/api"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
@@ -24,11 +23,13 @@ import (
 //	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.Stats			"Player stats returned successfully."
-//	@Failure		400			{object}	models.ProcessingError	"Player or profile could not be resolved."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Unexpected failure."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/playerStats/{uuid}/{profileId} [get]
 func PlayerStatsHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -41,20 +42,16 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
 
-	cacheKey := responseCacheKey("playerStats", uuid, profileId)
-
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
-	}
-
 	resolvedPlayer, err := api.ResolvePlayerContext(reqCtx, uuid)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to resolve player: %v", err),
-		})
+		return sendLoadError(c, "Failed to resolve player", err)
 	}
 
 	resolvedUUID := resolvedPlayer.UUID
+	cacheKey := responseCacheKey("playerStats", resolvedUUID, profileId)
+	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
+		return err
+	}
 
 	profile, err := api.GetProfileContext(
 		reqCtx,
@@ -62,9 +59,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 		profileId,
 	)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get profile: %v", err),
-		})
+		return sendLoadError(c, "Failed to get profile", err)
 	}
 
 	userProfileValue := profile.Members[resolvedUUID]

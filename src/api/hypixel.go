@@ -10,6 +10,7 @@ import (
 	"os"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
+	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/security"
 	"skycrypt/src/utility"
@@ -25,6 +26,37 @@ import (
 var hypixelFetchGroup singleflight.Group
 
 var hypixelRequestTimeout = 30 * time.Second
+
+// Parsed upstream bodies are kept in process memory briefly, so the endpoints one page load calls in parallel (stats,
+// networth, combined, inventory, ...) parse a profile once instead of once each. Values are shared between requests
+// and must be treated as read-only; singleflight already shares them between concurrent callers.
+const parsedCacheTTL = 30 * time.Second
+
+var (
+	parsedPlayers  = localcache.NewLocalCache[*skycrypttypes.Player](256)
+	parsedProfiles = localcache.NewLocalCache[*models.HypixelProfilesResponse](64)
+	parsedMuseums  = localcache.NewLocalCache[map[string]*skycrypttypes.Museum](64)
+	parsedGardens  = localcache.NewLocalCache[*skycrypttypes.Garden](64)
+)
+
+// readParsed returns the parsed value for a Redis key, from process memory when it was parsed recently.
+func readParsed[T any](ctx context.Context, local *localcache.LocalCache[T], key string, parse func([]byte) (T, error)) (T, bool) {
+	if value, ok, _ := local.Get(key); ok {
+		return value, true
+	}
+
+	var zero T
+	body, err := redis.GetBytesContext(ctx, key)
+	if err != nil || len(body) == 0 {
+		return zero, false
+	}
+	value, err := parse(body)
+	if err != nil {
+		return zero, false
+	}
+	local.Set(key, value, parsedCacheTTL, 0)
+	return value, true
+}
 
 const (
 	playerCacheTTL         = 24 * time.Hour
@@ -58,10 +90,7 @@ func GetPlayerContext(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 		return player, nil
 	}
 
-	result, err, _ := hypixelFetchGroup.Do(flightKey(ctx, fmt.Sprintf("player:%s", uuid)), func() (interface{}, error) {
-		fetchCtx, cancel := detachedFetchContext(ctx)
-		defer cancel()
-
+	result, err := sharedFetch(ctx, fmt.Sprintf("player:%s", uuid), func(fetchCtx context.Context) (*skycrypttypes.Player, error) {
 		if player, ok := getPlayerFromCache(fetchCtx, uuid); ok {
 			return player, nil
 		}
@@ -72,24 +101,20 @@ func GetPlayerContext(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 		return &response, err
 	}
 
-	return result.(*skycrypttypes.Player), nil
+	return result, nil
 }
 
 func getPlayerFromCache(ctx context.Context, uuid string) (*skycrypttypes.Player, bool) {
+	return readParsed(ctx, parsedPlayers, fmt.Sprintf(`player:%s`, uuid), parsePlayer)
+}
+
+func parsePlayer(body []byte) (*skycrypttypes.Player, error) {
 	var rawReponse models.HypixelPlayerResponse
-	key := fmt.Sprintf(`player:%s`, uuid)
-	cache, err := redis.GetContext(ctx, key)
-	if err != nil || cache == "" {
-		return nil, false
-	}
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal([]byte(cache), &rawReponse); err != nil {
-		return nil, false
+	if err := json.Unmarshal(body, &rawReponse); err != nil {
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
-
-	player := &rawReponse.Player
-	return player, true
+	return &rawReponse.Player, nil
 }
 
 func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, error) {
@@ -106,11 +131,12 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(body, &rawReponse); err != nil {
-		return &rawReponse.Player, fmt.Errorf("error parsing JSON: %v", err)
+		return &rawReponse.Player, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, string(body), int(playerCacheTTL.Seconds()))
+		_ = redis.SetContext(ctx, key, body, int(playerCacheTTL.Seconds()))
+		parsedPlayers.Set(key, &rawReponse.Player, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -146,10 +172,7 @@ func GetProfilesContext(ctx context.Context, uuid string) (*models.HypixelProfil
 		return profiles, nil
 	}
 
-	result, err, _ := hypixelFetchGroup.Do(flightKey(ctx, fmt.Sprintf("profiles:%s", uuid)), func() (interface{}, error) {
-		fetchCtx, cancel := detachedFetchContext(ctx)
-		defer cancel()
-
+	result, err := sharedFetch(ctx, fmt.Sprintf("profiles:%s", uuid), func(fetchCtx context.Context) (*models.HypixelProfilesResponse, error) {
 		if profiles, ok := getProfilesFromCache(fetchCtx, uuid); ok {
 			return profiles, nil
 		}
@@ -160,23 +183,20 @@ func GetProfilesContext(ctx context.Context, uuid string) (*models.HypixelProfil
 		return &response, err
 	}
 
-	return result.(*models.HypixelProfilesResponse), nil
+	return result, nil
 }
 
 func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, bool) {
+	return readParsed(ctx, parsedProfiles, fmt.Sprintf(`profiles:%s`, uuid), parseProfiles)
+}
+
+func parseProfiles(body []byte) (*models.HypixelProfilesResponse, error) {
 	var response models.HypixelProfilesResponse
-	key := fmt.Sprintf(`profiles:%s`, uuid)
-	cache, err := redis.GetContext(ctx, key)
-	if err != nil || cache == "" {
-		return nil, false
-	}
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal([]byte(cache), &response); err != nil {
-		return nil, false
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
-
-	return &response, true
+	return &response, nil
 }
 
 func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, error) {
@@ -192,15 +212,16 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(body, &response); err != nil {
-		return &response, fmt.Errorf("error parsing JSON: %v", err)
+		return &response, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
 	if response.Cause != "" && !response.Success {
-		return &response, fmt.Errorf("error fetching profiles: %s", response.Cause)
+		return &response, fmt.Errorf("%w: Hypixel couldn't return profiles: %s", ErrUpstream, response.Cause)
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, string(body), int(profilesCacheTTL.Seconds()))
+		_ = redis.SetContext(ctx, key, body, int(profilesCacheTTL.Seconds()))
+		parsedProfiles.Set(key, &response, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -230,7 +251,7 @@ func GetProfileContext(ctx context.Context, uuid string, profileId ...string) (*
 	// If no profileId provided, return the first profile or selected profile
 	if len(profileId) == 0 || (len(profileId) == 1 && profileId[0] == "") {
 		if len(profiles.Profiles) == 0 {
-			return &skycrypttypes.Profile{}, fmt.Errorf("no profiles found for UUID %s", uuid)
+			return &skycrypttypes.Profile{}, fmt.Errorf("%w: no profiles found for UUID %s", ErrProfileNotFound, uuid)
 		}
 
 		for _, profile := range profiles.Profiles {
@@ -250,7 +271,7 @@ func GetProfileContext(ctx context.Context, uuid string, profileId ...string) (*
 		}
 	}
 
-	return &skycrypttypes.Profile{}, fmt.Errorf("profile with ID %s not found for UUID %s", targetProfileId, uuid)
+	return &skycrypttypes.Profile{}, fmt.Errorf("%w: profile with ID %s not found for UUID %s", ErrProfileNotFound, targetProfileId, uuid)
 }
 
 func GetMuseum(profileId string) (map[string]*skycrypttypes.Museum, error) {
@@ -266,10 +287,7 @@ func GetMuseumContext(ctx context.Context, profileId string) (map[string]*skycry
 		return museum, nil
 	}
 
-	result, err, _ := hypixelFetchGroup.Do(flightKey(ctx, fmt.Sprintf("museum:%s", profileId)), func() (interface{}, error) {
-		fetchCtx, cancel := detachedFetchContext(ctx)
-		defer cancel()
-
+	result, err := sharedFetch(ctx, fmt.Sprintf("museum:%s", profileId), func(fetchCtx context.Context) (map[string]*skycrypttypes.Museum, error) {
 		if museum, ok := getMuseumFromCache(fetchCtx, profileId); ok {
 			return museum, nil
 		}
@@ -280,23 +298,20 @@ func GetMuseumContext(ctx context.Context, profileId string) (map[string]*skycry
 		return nil, err
 	}
 
-	return result.(map[string]*skycrypttypes.Museum), nil
+	return result, nil
 }
 
 func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, bool) {
+	return readParsed(ctx, parsedMuseums, fmt.Sprintf(`museum:%s`, profileId), parseMuseum)
+}
+
+func parseMuseum(body []byte) (map[string]*skycrypttypes.Museum, error) {
 	var rawReponse models.HypixelMuseumResponse
-	key := fmt.Sprintf(`museum:%s`, profileId)
-	cache, err := redis.GetContext(ctx, key)
-	if err != nil || cache == "" {
-		return nil, false
-	}
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal([]byte(cache), &rawReponse); err != nil {
-		return nil, false
+	if err := json.Unmarshal(body, &rawReponse); err != nil {
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
-
-	return rawReponse.Members, true
+	return rawReponse.Members, nil
 }
 
 func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, error) {
@@ -312,11 +327,12 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(body, &rawReponse); err != nil {
-		return nil, fmt.Errorf("error parsing JSON: %v", err)
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, string(body), int(museumCacheTTL.Seconds()))
+		_ = redis.SetContext(ctx, key, body, int(museumCacheTTL.Seconds()))
+		parsedMuseums.Set(key, rawReponse.Members, parsedCacheTTL, 0)
 	}
 	return rawReponse.Members, nil
 }
@@ -334,10 +350,7 @@ func GetGardenContext(ctx context.Context, profileId string) (*skycrypttypes.Gar
 		return garden, nil
 	}
 
-	result, err, _ := hypixelFetchGroup.Do(flightKey(ctx, fmt.Sprintf("garden:%s", profileId)), func() (interface{}, error) {
-		fetchCtx, cancel := detachedFetchContext(ctx)
-		defer cancel()
-
+	result, err := sharedFetch(ctx, fmt.Sprintf("garden:%s", profileId), func(fetchCtx context.Context) (*skycrypttypes.Garden, error) {
 		if garden, ok := getGardenFromCache(fetchCtx, profileId); ok {
 			return garden, nil
 		}
@@ -348,24 +361,20 @@ func GetGardenContext(ctx context.Context, profileId string) (*skycrypttypes.Gar
 		return nil, err
 	}
 
-	return result.(*skycrypttypes.Garden), nil
+	return result, nil
 }
 
 func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.Garden, bool) {
+	return readParsed(ctx, parsedGardens, fmt.Sprintf(`garden:%s`, profileId), parseGarden)
+}
+
+func parseGarden(body []byte) (*skycrypttypes.Garden, error) {
 	var rawReponse models.HypixelGardenResponse
-	key := fmt.Sprintf(`garden:%s`, profileId)
-	cache, err := redis.GetContext(ctx, key)
-	if err != nil || cache == "" {
-		return nil, false
-	}
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal([]byte(cache), &rawReponse); err != nil {
-		return nil, false
+	if err := json.Unmarshal(body, &rawReponse); err != nil {
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
-
-	garden := &rawReponse.Garden
-	return garden, true
+	return &rawReponse.Garden, nil
 }
 
 func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Garden, error) {
@@ -381,11 +390,12 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(body, &rawReponse); err != nil {
-		return nil, fmt.Errorf("error parsing JSON: %v", err)
+		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, string(body), int(gardenCacheTTL.Seconds()))
+		_ = redis.SetContext(ctx, key, body, int(gardenCacheTTL.Seconds()))
+		parsedGardens.Set(key, &rawReponse.Garden, parsedCacheTTL, 0)
 	}
 	return &rawReponse.Garden, nil
 }
@@ -440,7 +450,7 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 				HTTPClient.CloseIdleConnections()
 				continue
 			}
-			return nil, security.RedactError(fmt.Errorf("error making request: %w", err))
+			return nil, upstreamError("Hypixel", err)
 		}
 
 		body, readErr := func() ([]byte, error) {
@@ -449,7 +459,7 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 			}()
 
 			if resp.StatusCode != http.StatusOK {
-				return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+				return nil, fmt.Errorf("%w: Hypixel returned status code %d", ErrUpstream, resp.StatusCode)
 			}
 
 			return io.ReadAll(resp.Body)
@@ -460,19 +470,19 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 				continue
 			}
 			if resp.StatusCode == http.StatusOK {
-				return nil, fmt.Errorf("error reading response: %v", readErr)
+				return nil, upstreamError("Hypixel", readErr)
 			}
 			return nil, readErr
 		}
 
 		if len(body) == 0 {
-			return nil, fmt.Errorf("received empty response from API")
+			return nil, fmt.Errorf("%w: Hypixel sent an empty response", ErrUpstream)
 		}
 
 		return body, nil
 	}
 
-	return nil, fmt.Errorf("failed after %d request attempts", hypixelRequestAttempts)
+	return nil, fmt.Errorf("%w: Hypixel failed after %d request attempts", ErrUpstream, hypixelRequestAttempts)
 }
 
 func shouldRetryHypixelRequest(ctx context.Context, err error, attempt int) bool {

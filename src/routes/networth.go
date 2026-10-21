@@ -1,18 +1,19 @@
 package routes
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"skycrypt/src/api"
+	"skycrypt/src/db"
 	"skycrypt/src/forensics"
-	"skycrypt/src/models"
-	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/sync/errgroup"
+	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 )
 
 // NetworthHandler godoc
@@ -27,12 +28,13 @@ import (
 //	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.Networth			"Profile networth returned successfully."
-//	@Failure		400			{object}	models.ProcessingError	"Player, profile, or museum data could not be resolved."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
-//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		500			{object}	models.ProcessingError	"Networth calculation failed."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Networth calculation failed."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/networth/{uuid}/{profileId} [get]
 func NetworthHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -47,115 +49,116 @@ func NetworthHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("networth", uuid, profileId)
+
+	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
+	if err != nil {
+		return sendLoadError(c, "Failed to resolve player", err)
+	}
+
+	cacheKey := responseCacheKey("networth", mowojang.UUID, profileId)
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
 
-	var (
-		mowojang      *models.MowojangResponse
-		profiles      *models.HypixelProfilesResponse
-		profile       *skycrypttypes.Profile
-		profileMuseum map[string]*skycrypttypes.Museum
-		err           error
-	)
-
-	isProfileUUID := utility.IsUUID(profileId)
-	g, groupCtx := errgroup.WithContext(reqCtx)
-	type museumResult struct {
-		profileID string
-		museum    map[string]*skycrypttypes.Museum
-		err       error
-	}
-	var selectedMuseumCh chan museumResult
-
-	if isProfileUUID {
-		g.Go(func() error {
-			var err error
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
-			return err
-		})
-	}
-
-	mowojang, err = api.ResolvePlayerContext(reqCtx, uuid)
+	data, err := loadProfileData(reqCtx, mowojang, profileId, profileParts{museum: true})
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to resolve player: %v", err),
-		})
+		return sendLoadError(c, "Failed to fetch data", err)
 	}
 
-	if profileId == "" {
-		if cachedProfileID := getCachedSelectedProfileID(reqCtx, mowojang.UUID); cachedProfileID != "" {
-			selectedMuseumCh = make(chan museumResult, 1)
-			g.Go(func() error {
-				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
-				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
-				return nil
-			})
-		}
+	payload, _, err := profileNetworth(reqCtx, data)
+	if err != nil {
+		return sendLoadError(c, "Failed to create networth calculator", err)
 	}
 
-	g.Go(func() error {
-		var err error
-		profiles, err = api.GetProfilesContext(groupCtx, mowojang.UUID)
-		if err != nil {
-			return err
-		}
+	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
 
-		profile, err = stats.GetProfile(profiles, profileId)
-		if err != nil {
-			return err
-		}
-		if profileId == "" {
-			cacheSelectedProfileID(groupCtx, mowojang.UUID, profile.ProfileID)
-		}
+	return sendAndCacheBody(c, reqCtx, cacheKey, string(payload), 5*60)
+}
 
-		if !isProfileUUID {
-			if selectedMuseumCh != nil {
-				result := <-selectedMuseumCh
-				if result.err == nil && result.profileID == profile.ProfileID {
-					profileMuseum = result.museum
-					return nil
-				}
+const networthCacheTTLSeconds = 5 * 60
+
+// networthTotals are the two totals /embed shows.
+type networthTotals struct {
+	Normal      float64
+	NonCosmetic float64
+}
+
+// profileNetworth calculates normal and non-cosmetic networth for a profile member, cached by resolved IDs so
+// /networth (under any spelling of the player or profile) and /embed share one calculation and show the same
+// number. It returns the /networth response body and its totals.
+func profileNetworth(ctx context.Context, data *profileData) ([]byte, networthTotals, error) {
+	cacheKey := fmt.Sprintf("networth:%s:%s", data.Profile.ProfileID, data.Mowojang.UUID)
+	if processedResponseCacheEnabled() {
+		if cached, err := db.GetBytesContext(ctx, cacheKey); err == nil && len(cached) > 0 {
+			if totals, err := parseNetworthTotals(cached); err == nil {
+				return cached, totals, nil
 			}
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
-			return err
 		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to fetch data: %v", err),
-		})
 	}
 
-	userProfileValue := profile.Members[mowojang.UUID]
-	museum := profileMuseum[mowojang.UUID]
-	userProfile := &userProfileValue
-
+	start := time.Now()
 	var bankBalance float64
-	if profile.Banking != nil && profile.Banking.Balance != nil {
-		bankBalance = *profile.Banking.Balance
-	} else {
-		bankBalance = 0.0
+	if data.Profile.Banking != nil && data.Profile.Banking.Balance != nil {
+		bankBalance = *data.Profile.Banking.Balance
 	}
 
-	calculator, err := skyhelpernetworthgo.NewProfileNetworthCalculator(userProfile, museum, bankBalance)
+	calculator, err := skyhelpernetworthgo.NewProfileNetworthCalculator(data.Member(), data.Museum(), bankBalance)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to create networth calculator: %v", err),
-		})
+		return nil, networthTotals{}, err
 	}
 
 	networth := calculator.GetNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
 	nonCosmeticNetworth := calculator.GetNonCosmeticNetworth(skyhelpernetworthgo.NetworthOptions{OnlyNetworth: true})
 
-	utility.LogVerbose("Returning /api/networth/%s in %s", uuid, time.Since(timeNow))
+	if utility.IsForensicsEnabled() {
+		// Enough to explain a wrong number later: which prices, which data, and where the total came from.
+		categoryTotals := make(map[string]float64, len(networth.Types))
+		for categoryID, category := range networth.Types {
+			categoryTotals[categoryID] = category.Total
+		}
+		forensics.Logger.Info("networth_calculated",
+			zap.String("uuid", data.Mowojang.UUID),
+			zap.String("profile_id", data.Profile.ProfileID),
+			zap.Float64("normal", networth.Networth),
+			zap.Float64("non_cosmetic", nonCosmeticNetworth.Networth),
+			zap.Int64("prices_updated_unix", int64(calculator.Prices["lastUpdated"])),
+			zap.Bool("stale_profile_data", api.ServedStale(ctx)),
+			zap.Any("category_totals", categoryTotals),
+			zap.Duration("duration", time.Since(start)),
+			zap.Int("pid", os.Getpid()),
+		)
+	}
 
-	return sendAndCacheJSON(c, reqCtx, cacheKey, fiber.Map{
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	payload, err := json.Marshal(fiber.Map{
 		"normal":      networth,
 		"nonCosmetic": nonCosmeticNetworth,
-	}, 5*60)
+	})
+	if err != nil {
+		return nil, networthTotals{}, fmt.Errorf("failed to marshal networth: %v", err)
+	}
+
+	if processedResponseCacheEnabled() && !api.ServedStale(ctx) {
+		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		_ = db.SetContext(cacheCtx, cacheKey, payload, networthCacheTTLSeconds)
+	}
+
+	return payload, networthTotals{Normal: networth.Networth, NonCosmetic: nonCosmeticNetworth.Networth}, nil
+}
+
+func parseNetworthTotals(payload []byte) (networthTotals, error) {
+	var parsed struct {
+		Normal struct {
+			Networth float64 `json:"networth"`
+		} `json:"normal"`
+		NonCosmetic struct {
+			Networth float64 `json:"networth"`
+		} `json:"nonCosmetic"`
+	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return networthTotals{}, err
+	}
+	return networthTotals{Normal: parsed.Normal.Networth, NonCosmetic: parsed.NonCosmetic.Networth}, nil
 }

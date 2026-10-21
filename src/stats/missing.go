@@ -243,6 +243,14 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 	}
 }
 
+// priceLore formats a missing accessory's price, with the price per magical power when it has any.
+func priceLore(price float64, magicalPower int) string {
+	if magicalPower <= 0 {
+		return fmt.Sprintf("§7Price: §6%s Coins", utility.AddCommas(int(price)))
+	}
+	return fmt.Sprintf("§7Price: §6%s Coins §7(§6%s§7 per MP)", utility.AddCommas(int(price)), utility.FormatNumber(price/float64(magicalPower)))
+}
+
 func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices map[string]float64) {
 	for i := range *accessories {
 		specialAccessory := constants.SPECIAL_ACCESSORIES[(*accessories)[i].Id]
@@ -256,7 +264,7 @@ func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices ma
 					}
 				}
 
-				(*accessories)[i].Lore = append((*accessories)[i].Lore, "", fmt.Sprintf("§7Price: §6%s Coins §7(§6%s§7 per MP)", utility.AddCommas(int(price)), utility.FormatNumber(price/float64(GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))))
+				(*accessories)[i].Lore = append((*accessories)[i].Lore, "", priceLore(price, GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))
 				(*accessories)[i].Price = price
 				continue
 			}
@@ -269,7 +277,7 @@ func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices ma
 					amount := upgradeCost[(*accessories)[i].Rarity]
 					if amount > 0 {
 						price := prices[upgradeItem] * float64(amount)
-						(*accessories)[i].Lore = append((*accessories)[i].Lore, "", fmt.Sprintf("§7Price: §6%s Coins §7(§6%s§7 per MP)", utility.AddCommas(int(price)), utility.FormatNumber(price/float64(GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))))
+						(*accessories)[i].Lore = append((*accessories)[i].Lore, "", priceLore(price, GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))
 						(*accessories)[i].Price = price
 						continue
 					}
@@ -280,7 +288,7 @@ func addMissingDataToTheAccessory(accessories *[]models.ProcessedItem, prices ma
 
 		price := prices[(*accessories)[i].Id]
 		if price > 0 {
-			(*accessories)[i].Lore = append((*accessories)[i].Lore, "", fmt.Sprintf("§7Price: §6%s Coins §7(§6%s§7 per MP)", utility.AddCommas(int(price)), utility.FormatNumber(price/float64(GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))))
+			(*accessories)[i].Lore = append((*accessories)[i].Lore, "", priceLore(price, GetMagicalPower((*accessories)[i].Rarity, (*accessories)[i].Id)))
 			(*accessories)[i].Price = price
 		}
 	}

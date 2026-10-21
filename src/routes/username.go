@@ -18,7 +18,11 @@ import (
 //	@Produce		json
 //	@Param			uuid	path		string	true	"Minecraft UUID"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Success		200		{object}	models.PlayerResolve		"Username resolved successfully."
-//	@Failure		400		{object}	models.ProcessingError	"UUID is invalid or the player could not be found."
+//	@Failure		400		{object}	models.ProcessingError	"The UUID is malformed."
+//	@Failure		404		{object}	models.APIError	"PLAYER_NOT_FOUND: no player has that name or UUID."
+//	@Failure		500		{object}	models.APIError	"INTERNAL_ERROR: Unexpected failure."
+//	@Failure		502		{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
+//	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/username/{uuid} [get]
 func UsernameHandler(c *fiber.Ctx) error {
 	timeNow := time.Now()
@@ -36,8 +40,7 @@ func UsernameHandler(c *fiber.Ctx) error {
 
 	username, err := api.GetUsernameContext(reqCtx, uuid)
 	if err != nil {
-		c.Status(400)
-		return c.JSON(constants.InvalidUserError)
+		return sendLoadError(c, "Failed to resolve player", err)
 	}
 
 	utility.LogVerbose("Returning /api/username/%s in %s", username, time.Since(timeNow))

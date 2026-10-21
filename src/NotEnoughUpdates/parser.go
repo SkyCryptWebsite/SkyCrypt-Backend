@@ -25,6 +25,9 @@ func ParseNEURepository() error {
 		return fmt.Errorf("failed to read constants directory: %w", err)
 	}
 
+	// Fill a copy, then swap it in: readers never see a half-parsed value.
+	parsed := *Constants()
+
 	for _, constant := range constants {
 		if constant.IsDir() {
 			// fmt.Printf("[NOT-ENOUGH-UPDATES] Skipping directory: %s\n", constant.Name())
@@ -45,7 +48,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.PetNums = petNums
+			parsed.PetNums = petNums
 		} else if constant.Name() == "pets.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -60,7 +63,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.Pets = pets
+			parsed.Pets = pets
 		} else if constant.Name() == "bestiary.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -75,7 +78,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.Bestiary = neustats.FormatBestiaryConstants(bestiaryConstants)
+			parsed.Bestiary = neustats.FormatBestiaryConstants(bestiaryConstants)
 		} else if constant.Name() == "garden.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -90,7 +93,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.Garden = neustats.FormatGardenConstants(gardenConstants)
+			parsed.Garden = neustats.FormatGardenConstants(gardenConstants)
 		} else if constant.Name() == "hotmlayout.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -105,7 +108,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.HeartOfTheMountain = hotmConstants
+			parsed.HeartOfTheMountain = hotmConstants
 		} else if constant.Name() == "hotflayout.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -120,7 +123,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.HeartOfTheForest = hotfConstants
+			parsed.HeartOfTheForest = hotfConstants
 		} else if constant.Name() == "attribute_shards.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -135,7 +138,7 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.AttributeShards = neustats.FormatAttributeShards(attributeShards, GetItem)
+			parsed.AttributeShards = neustats.FormatAttributeShards(attributeShards, GetItem)
 		} else if constant.Name() == "sacks.json" {
 			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
 			data, err := os.ReadFile(filePath)
@@ -150,12 +153,13 @@ func ParseNEURepository() error {
 				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
 			}
 
-			NEUConstants.Sacks = neustats.FormatSacks(sacks)
+			parsed.Sacks = neustats.FormatSacks(sacks)
 		}
 	}
 
 	// fmt.Printf("[NOT-ENOUGH-UPDATES] Parsing completed in %s on %v\n", time.Since(timeNow), os.Getpid())
 
+	neuConstants.Store(&parsed)
 	return nil
 }
 
@@ -168,9 +172,11 @@ func StartUpdateLoop() {
 			if err != nil {
 				fmt.Printf("Error updating NEU repository: %v\n", err)
 			} else {
-				err = ParseNEURepository()
+				err = reloadParsedRepository()
 				if err != nil {
 					fmt.Printf("Error parsing NEU repository: %v\n", err)
+				} else {
+					PublishRepositoryVersion()
 				}
 			}
 		}

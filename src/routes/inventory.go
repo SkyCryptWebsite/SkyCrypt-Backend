@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
@@ -19,7 +18,6 @@ import (
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
-	"golang.org/x/sync/errgroup"
 )
 
 // InventoryHandler godoc
@@ -34,11 +32,13 @@ import (
 //	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{array}		models.Inventory		"Profile inventory returned successfully."
-//	@Failure		400			{object}	models.ProcessingError	"Profile, museum, or inventory data could not be loaded."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Unexpected failure."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/inventory/{uuid}/{profileId} [get]
 func InventoryHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -57,75 +57,13 @@ func InventoryHandler(c *fiber.Ctx) error {
 		return err
 	}
 
-	var (
-		profiles      *models.HypixelProfilesResponse
-		profile       *skycrypttypes.Profile
-		profileMuseum map[string]*skycrypttypes.Museum
-	)
-
-	isProfileUUID := utility.IsUUID(profileId)
-	g, groupCtx := errgroup.WithContext(reqCtx)
-	type museumResult struct {
-		profileID string
-		museum    map[string]*skycrypttypes.Museum
-		err       error
+	// The route takes a UUID, so the loader gets it as is rather than through a Mojang lookup.
+	data, err := loadProfileData(reqCtx, &models.MowojangResponse{UUID: uuid}, profileId, profileParts{museum: true})
+	if err != nil {
+		return sendLoadError(c, "Failed to fetch data", err)
 	}
-	var selectedMuseumCh chan museumResult
-
-	if isProfileUUID {
-		g.Go(func() error {
-			var err error
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profileId)
-			return err
-		})
-	}
-
-	if profileId == "" {
-		if cachedProfileID := getCachedSelectedProfileID(reqCtx, uuid); cachedProfileID != "" {
-			selectedMuseumCh = make(chan museumResult, 1)
-			g.Go(func() error {
-				museum, err := api.GetMuseumContext(groupCtx, cachedProfileID)
-				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: err}
-				return nil
-			})
-		}
-	}
-
-	g.Go(func() error {
-		var err error
-		profiles, err = api.GetProfilesContext(groupCtx, uuid)
-		if err != nil {
-			return err
-		}
-
-		profile, err = stats.GetProfile(profiles, profileId)
-		if err != nil {
-			return err
-		}
-		if profileId == "" {
-			cacheSelectedProfileID(groupCtx, uuid, profile.ProfileID)
-		}
-
-		if !isProfileUUID {
-			if selectedMuseumCh != nil {
-				result := <-selectedMuseumCh
-				if result.err == nil && result.profileID == profile.ProfileID {
-					profileMuseum = result.museum
-					return nil
-				}
-			}
-			profileMuseum, err = api.GetMuseumContext(groupCtx, profile.ProfileID)
-			return err
-		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to fetch data: %v", err),
-		})
-	}
+	profile := data.Profile
+	profileMuseum := data.Museums
 
 	userProfile := profile.Members[uuid]
 	if userProfile.Inventory == nil {

@@ -40,7 +40,7 @@ func newPetProcessingContext() *petProcessingContext {
 
 func getMaxPetIds() map[string]int {
 	maxPetIds := make(map[string]int)
-	for petType, petData := range notenoughupdates.NEUConstants.PetNums {
+	for petType, petData := range notenoughupdates.Constants().PetNums {
 		if len(petData) == 0 || petType == "BINGO" {
 			continue
 		}
@@ -64,7 +64,7 @@ func getMaxPetIds() map[string]int {
 }
 
 func getPetLevel(pet skycrypttypes.Pet) models.PetLevel {
-	petData := notenoughupdates.NEUConstants.Pets
+	petData := notenoughupdates.Constants().Pets
 
 	rarityOffset := petData.CustomPetLeveling[pet.Type].RarityOffset[pet.Rarity]
 	if rarityOffset == nil {
@@ -138,7 +138,7 @@ func getPetLevel(pet skycrypttypes.Pet) models.PetLevel {
 }
 
 func getPetData(level int, petType string, rarity string) map[string]float64 {
-	petNums := notenoughupdates.NEUConstants.PetNums
+	petNums := notenoughupdates.Constants().PetNums
 	petData, exists := petNums[petType]
 	if !exists {
 		return nil
@@ -374,7 +374,7 @@ func getMissingPets(userProfile *skycrypttypes.Member, pets []models.ProcessedPe
 	}
 
 	missingPets := make([]skycrypttypes.Pet, 0, len(petCtx.maxPetIds))
-	for pet := range notenoughupdates.NEUConstants.PetNums {
+	for pet := range notenoughupdates.Constants().PetNums {
 		if _, ok := ownedPetTypes[pet]; ok || (pet == "BINGO" && gameMode != "bingo") {
 			continue
 		}

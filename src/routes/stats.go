@@ -10,7 +10,6 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -27,10 +26,12 @@ import (
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
 //	@Success		200			{object}	models.StatsOutput		"Profile stats returned successfully."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Player, profile, museum, or stats data could not be loaded."
+//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		500			{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
+//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/stats/{uuid}/{profileId} [get]
 func StatsHandler(c *fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
@@ -45,16 +46,19 @@ func StatsHandler(c *fiber.Ctx) error {
 		profileId = profileId[1:]
 	}
 	reqCtx := c.UserContext()
-	cacheKey := responseCacheKey("stats", uuid, profileId)
+	mowojang, err := api.ResolvePlayerContext(reqCtx, uuid)
+	if err != nil {
+		return sendLoadError(c, "failed to resolve player", err)
+	}
+
+	cacheKey := responseCacheKey("stats", mowojang.UUID, profileId)
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err
 	}
 
-	output, err := computeStatsContext(reqCtx, uuid, profileId)
+	output, err := computeStatsContext(reqCtx, mowojang, profileId)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return sendLoadError(c, "failed to load data", err)
 	}
 
 	utility.LogVerbose("Returning /api/stats/%s in %s", uuid, time.Since(timeNow))
@@ -73,105 +77,27 @@ func StatsHandler(c *fiber.Ctx) error {
 //	@Param			uuid	path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Success		200		{object}	models.StatsOutput		"Selected profile stats returned successfully."
 //	@Failure		401		{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404		{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+//	@Failure		404		{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
 //	@Failure		429		{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+//	@Failure		500		{object}	models.APIError	"INTERNAL_ERROR: Player, profile, museum, or stats data could not be loaded."
+//	@Failure		502		{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		503		{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		500		{object}	models.ProcessingError	"Player, profile, museum, or stats data could not be loaded."
+//	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/stats/{uuid} [get]
 func SelectedProfileStatsHandler(c *fiber.Ctx) error {
 	return StatsHandler(c)
 }
 
-func computeStatsContext(ctx context.Context, rawInput string, profileId string) (*models.StatsOutput, error) {
-	var mowojang *models.MowojangResponse
-	var err error
-	mowojang, err = api.ResolvePlayerContext(ctx, rawInput)
+func computeStatsContext(ctx context.Context, mowojang *models.MowojangResponse, profileId string) (*models.StatsOutput, error) {
+	data, err := loadProfileData(ctx, mowojang, profileId, profileParts{player: true, museum: true})
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve player: %v", err)
-	}
-	uuid := mowojang.UUID
-	requestedProfileID := profileId
-
-	type profilesResult struct {
-		profiles *models.HypixelProfilesResponse
-		err      error
-	}
-	type playerResult struct {
-		player *skycrypttypes.Player
-		err    error
-	}
-	type museumResult struct {
-		profileID string
-		museum    map[string]*skycrypttypes.Museum
-		err       error
+		return nil, fmt.Errorf("failed to load profile: %w", err)
 	}
 
-	profilesCh := make(chan profilesResult, 1)
-	playerCh := make(chan playerResult, 1)
-	var selectedMuseumCh chan museumResult
-
-	go func() {
-		profiles, fetchErr := api.GetProfilesContext(ctx, uuid)
-		profilesCh <- profilesResult{profiles: profiles, err: fetchErr}
-	}()
-
-	go func() {
-		player, fetchErr := api.GetPlayerContext(ctx, uuid)
-		playerCh <- playerResult{player: player, err: fetchErr}
-	}()
-
-	if requestedProfileID == "" {
-		if cachedProfileID := getCachedSelectedProfileID(ctx, uuid); cachedProfileID != "" {
-			selectedMuseumCh = make(chan museumResult, 1)
-			go func() {
-				museum, fetchErr := api.GetMuseumContext(ctx, cachedProfileID)
-				selectedMuseumCh <- museumResult{profileID: cachedProfileID, museum: museum, err: fetchErr}
-			}()
-		}
-	}
-
-	profilesRes := <-profilesCh
-	if profilesRes.err != nil {
-		return nil, fmt.Errorf("failed to get profiles: %v", profilesRes.err)
-	}
-	profiles := profilesRes.profiles
-
-	profile, err := stats.GetProfile(profiles, profileId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get profile: %v", err)
-	}
-	if requestedProfileID == "" {
-		cacheSelectedProfileID(ctx, uuid, profile.ProfileID)
-	}
-
-	playerRes := <-playerCh
-	if playerRes.err != nil {
-		return nil, fmt.Errorf("failed to get player: %v", playerRes.err)
-	}
-	player := playerRes.player
-
-	var profileMuseum map[string]*skycrypttypes.Museum
-	if selectedMuseumCh != nil {
-		result := <-selectedMuseumCh
-		if result.err == nil && result.profileID == profile.ProfileID {
-			profileMuseum = result.museum
-		}
-	}
-	if profileMuseum == nil {
-		profileMuseum, err = api.GetMuseumContext(ctx, profile.ProfileID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get museum: %v", err)
-		}
-	}
-
-	members, err := stats.FormatMembersContext(ctx, profile)
+	members, err := stats.FormatMembersContext(ctx, data.Profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
 
-	userProfileValue := profile.Members[mowojang.UUID]
-	museum := profileMuseum[mowojang.UUID]
-	userProfile := &userProfileValue
-
-	return stats.GetStats(mowojang, profiles, profile, player, userProfile, museum, members)
+	return stats.GetStats(mowojang, data.Profiles, data.Profile, data.Player, data.Member(), data.Museum(), members)
 }

@@ -35,11 +35,11 @@ func getXpTable(skillType string) map[int]int {
 	}
 
 	if skillType == "garden" {
-		return notenoughupdates.NEUConstants.Garden.GardenExperience
+		return notenoughupdates.Constants().Garden.GardenExperience
 	} else if skillType == "crop_upgrade" {
-		return notenoughupdates.NEUConstants.Garden.CropUpgrades
+		return notenoughupdates.Constants().Garden.CropUpgrades
 	} else if cropId, ok := strings.CutPrefix(skillType, "crop_milestone_"); ok {
-		return notenoughupdates.NEUConstants.Garden.CropMilestones[cropId]
+		return notenoughupdates.Constants().Garden.CropMilestones[cropId]
 	}
 
 	return constants.DEFAULT_LEVELLING_XP

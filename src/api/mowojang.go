@@ -63,7 +63,7 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		if shouldThrowError {
-			return post.UUID, fmt.Errorf("error reading response: %v", err)
+			return post.UUID, upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
@@ -75,7 +75,7 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 
 	if len(body) == 0 {
 		if shouldThrowError {
-			return post.UUID, fmt.Errorf("received empty response from API")
+			return post.UUID, fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 		}
 		return "", nil
 	}
@@ -84,7 +84,7 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 	err = json.Unmarshal(body, &post)
 	if err != nil {
 		if shouldThrowError {
-			return post.UUID, fmt.Errorf("error parsing JSON: %v", err)
+			return post.UUID, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
 		}
 		return "", nil
 	}
@@ -135,7 +135,7 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		if shouldThrowError {
-			return post.Name, fmt.Errorf("error reading response: %v", err)
+			return post.Name, upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
@@ -147,7 +147,7 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 
 	if len(body) == 0 {
 		if shouldThrowError {
-			return post.Name, fmt.Errorf("received empty response from API")
+			return post.Name, fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 		}
 		return "", nil
 	}
@@ -156,7 +156,7 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 	err = json.Unmarshal(body, &post)
 	if err != nil {
 		if shouldThrowError {
-			return post.Name, fmt.Errorf("error parsing JSON: %v", err)
+			return post.Name, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
 		}
 		return "", nil
 	}
@@ -190,7 +190,7 @@ func ResolvePlayerContext(ctx context.Context, input string, throwAnError ...boo
 		tempUUID, err := GetUUIDContext(ctx, uuid, shouldThrowError)
 		if err != nil {
 			if shouldThrowError {
-				return &post, fmt.Errorf("error resolving UUID for username '%s': %v", uuid, err)
+				return &post, fmt.Errorf("error resolving UUID for username '%s': %w", uuid, err)
 			}
 			return &post, nil
 		}
@@ -369,7 +369,7 @@ func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &post, fmt.Errorf("error reading response: %v", err)
+		return &post, upstreamError("Mojang", err)
 	}
 
 	if string(body) == "player not found" {
@@ -378,13 +378,13 @@ func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.
 	}
 
 	if len(body) == 0 {
-		return &post, fmt.Errorf("received empty response from API")
+		return &post, fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err = json.Unmarshal(body, &post)
 	if err != nil {
-		return &post, fmt.Errorf("error parsing JSON: %v", err)
+		return &post, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
 	}
 
 	cacheMowojangIdentity(ctx, post.Name, post.UUID, string(body), true)
@@ -405,7 +405,7 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 			err = fmt.Errorf("status code %d", resp.StatusCode)
 		}
 		if shouldThrowError {
-			return "", fmt.Errorf("error making request to Mojang API: %v", err)
+			return "", upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
@@ -416,21 +416,21 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		if shouldThrowError {
-			return "", fmt.Errorf("error reading Mojang API response: %v", err)
+			return "", upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
 		if shouldThrowError {
-			return "", fmt.Errorf("invalid username or UUID provided")
+			return "", fmt.Errorf("%w: invalid username or UUID provided", ErrPlayerNotFound)
 		}
 		return "Player not Found", nil
 	}
 
 	if len(body) == 0 {
 		if shouldThrowError {
-			return "", fmt.Errorf("received empty response from Mojang API")
+			return "", fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 		}
 		return "", nil
 	}
@@ -471,7 +471,7 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 			err = fmt.Errorf("status code %d", resp.StatusCode)
 		}
 		if shouldThrowError {
-			return "", fmt.Errorf("error making request to Mojang API: %v", err)
+			return "", upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
@@ -482,7 +482,7 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		if shouldThrowError {
-			return "", fmt.Errorf("error reading Mojang API response: %v", err)
+			return "", upstreamError("Mojang", err)
 		}
 		return "", nil
 	}
@@ -493,7 +493,7 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 
 	if len(body) == 0 {
 		if shouldThrowError {
-			return "", fmt.Errorf("received empty response from Mojang API")
+			return "", fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 		}
 		return "", nil
 	}
@@ -533,7 +533,7 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 		if err == nil {
 			err = fmt.Errorf("status code %d", resp.StatusCode)
 		}
-		return &models.MowojangResponse{}, fmt.Errorf("error making request to Mojang API: %v", err)
+		return &models.MowojangResponse{}, upstreamError("Mojang", err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -541,7 +541,7 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &models.MowojangResponse{}, fmt.Errorf("error reading Mojang API response: %v", err)
+		return &models.MowojangResponse{}, upstreamError("Mojang", err)
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
@@ -552,7 +552,7 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 	}
 
 	if len(body) == 0 {
-		return &models.MowojangResponse{}, fmt.Errorf("received empty response from Mojang API")
+		return &models.MowojangResponse{}, fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
 	}
 
 	var mojangResp struct {

@@ -138,7 +138,7 @@ func getCollectionsWithUsernames(userProfile *skycrypttypes.Member, profile *sky
 
 	userCollections := userProfile.Collections
 	output.Categories["BOSSES"] = getBossCollections(userProfile)
-	for categoryId, categoryData := range constants.COLLECTIONS {
+	for categoryId, categoryData := range constants.Collections() {
 		category := models.CollectionCategory{
 			Name:    categoryData.Name,
 			Texture: categoryData.Texture,

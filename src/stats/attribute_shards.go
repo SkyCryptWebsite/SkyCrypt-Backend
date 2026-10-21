@@ -12,7 +12,7 @@ import (
 
 func getMaxSyphon(shardRarity string) int {
 	sum := 0
-	for _, i := range notenoughupdates.NEUConstants.AttributeShards.Level[shardRarity] {
+	for _, i := range notenoughupdates.Constants().AttributeShards.Level[shardRarity] {
 		sum += i
 	}
 
@@ -20,7 +20,7 @@ func getMaxSyphon(shardRarity string) int {
 }
 
 func getAbilityLevel(rarity string, amount int) int {
-	table := notenoughupdates.NEUConstants.AttributeShards.Level[rarity]
+	table := notenoughupdates.Constants().AttributeShards.Level[rarity]
 	if len(table) == 0 {
 		return 0
 	}
@@ -37,11 +37,11 @@ func getAbilityLevel(rarity string, amount int) int {
 func GetAttributeShards(userProfile *skycrypttypes.Member) models.AttributeShardsOutput {
 	output := models.AttributeShardsOutput{
 		Shards:      []models.AttributeShard{},
-		MaxUnlocked: len(notenoughupdates.NEUConstants.AttributeShards.Shards) - len(notenoughupdates.NEUConstants.AttributeShards.UnconsumableShards),
+		MaxUnlocked: len(notenoughupdates.Constants().AttributeShards.Shards) - len(notenoughupdates.Constants().AttributeShards.UnconsumableShards),
 	}
 
-	for _, shard := range notenoughupdates.NEUConstants.AttributeShards.Shards {
-		if slices.Contains(notenoughupdates.NEUConstants.AttributeShards.UnconsumableShards, shard.BazaarName) {
+	for _, shard := range notenoughupdates.Constants().AttributeShards.Shards {
+		if slices.Contains(notenoughupdates.Constants().AttributeShards.UnconsumableShards, shard.BazaarName) {
 			continue
 		}
 

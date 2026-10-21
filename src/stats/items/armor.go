@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+var (
+	armorPieceRegex = regexp.MustCompile(`^Armor .*? (Helmet|Chestplate|Leggings|Boots)$`)
+	pieceTypeRegex  = regexp.MustCompile(`(Helmet|Chestplate|Leggings|Boots)`)
+)
+
 func isInvalidItem(a models.ProcessedItem) bool {
 	return len(GetId(a)) == 0
 }
@@ -76,16 +81,13 @@ func GetArmor(armor []models.ProcessedItem) models.ArmorResult {
 				}
 			}
 
-			armorPieceRegex := regexp.MustCompile(`^Armor .*? (Helmet|Chestplate|Leggings|Boots)$`)
 			if armorPieceRegex.MatchString(name) {
-				pieceTypeRegex := regexp.MustCompile(`(Helmet|Chestplate|Leggings|Boots)`)
 				name = pieceTypeRegex.ReplaceAllString(name, "")
 				name = strings.TrimSpace(name)
 			} else {
 				name = strings.ReplaceAll(name, "Armor", "")
 				name = strings.ReplaceAll(name, "  ", " ")
 				name = strings.TrimSpace(name)
-				pieceTypeRegex := regexp.MustCompile(`(Helmet|Chestplate|Leggings|Boots)`)
 				name = pieceTypeRegex.ReplaceAllString(name, "Armor")
 				name = strings.TrimSpace(name)
 			}

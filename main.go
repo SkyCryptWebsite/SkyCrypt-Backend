@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime/debug"
 	"skycrypt/src"
+	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/security"
 	"skycrypt/src/utility"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "skycrypt/docs"
@@ -75,11 +79,12 @@ func main() {
 		panic(err)
 	}
 
+	prefork := preforkEnabled()
 	app := fiber.New(fiber.Config{
-		Prefork:                   preforkEnabled(), // Requires --pid=host in Docker when enabled
-		ServerHeader:              "",               // Remove server header for slight perf gain
-		DisableKeepalive:          false,            // Keep connections alive
-		DisableDefaultDate:        true,             // Disable date header
+		Prefork:                   prefork, // Requires --pid=host in Docker when enabled
+		ServerHeader:              "",      // Remove server header for slight perf gain
+		DisableKeepalive:          false,   // Keep connections alive
+		DisableDefaultDate:        true,    // Disable date header
 		DisableDefaultContentType: false,
 		BodyLimit:                 10 << 20, // 10MB
 		ReadBufferSize:            32 << 10, // Caps request header size; the frontend forwards browser cookies, so match Cloudflare's 32KB
@@ -114,10 +119,9 @@ func main() {
 
 			utility.SendWebhook(redactedURL, panicDetail, []byte(redactedStack))
 
+			// The panic detail goes to logs and the webhook only, never to clients.
 			_ = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":  "Internal Server Error",
-				"type":   fmt.Sprintf("%T", err),
-				"detail": panicDetail,
+				"error": "Internal Server Error",
 			})
 		},
 	}))
@@ -125,8 +129,27 @@ func main() {
 
 	src.SetupRoutes(app)
 
+	if !prefork || fiber.IsChild() {
+		go shutdownOnSignal(app)
+	}
+
 	if err := app.Listen(":8080"); err != nil {
 		panic(err)
+	}
+
+	db.ClosePostgres()
+	db.CloseRedis()
+}
+
+// shutdownOnSignal drains in-flight requests on SIGINT/SIGTERM. The prefork master serves nothing and keeps the
+// default signal behaviour; Fiber stops the children when the master exits.
+func shutdownOnSignal(app *fiber.App) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+
+	if err := app.ShutdownWithTimeout(10 * time.Second); err != nil {
+		fmt.Printf("[SKYCRYPT] shutdown failed: %v\n", err)
 	}
 }
 

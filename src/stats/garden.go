@@ -15,8 +15,8 @@ import (
 )
 
 func getVisitors(gardenData *skycrypttypes.Garden) models.Visitors {
-	VISITOR_RARITIES := notenoughupdates.NEUConstants.Garden.Visitors
-	MAX_VISITORS := notenoughupdates.NEUConstants.Garden.MaxVisitors
+	VISITOR_RARITIES := notenoughupdates.Constants().Garden.Visitors
+	MAX_VISITORS := notenoughupdates.Constants().Garden.MaxVisitors
 
 	visited, completed, unique := 0, 0, map[string]bool{}
 	visitors := make(map[string]models.VisitorRarityData, len(gardenData.CommissionData.Visits))
@@ -85,7 +85,7 @@ func getCropUpgrades(gardenData *skycrypttypes.Garden) []models.CropUpgrade {
 
 func getComposter(gardenData *skycrypttypes.Garden) map[string]int {
 	output := make(map[string]int, len(gardenData.ComposterData.Upgrades))
-	for _, upgrade := range notenoughupdates.NEUConstants.Garden.ComposterUpgrades {
+	for _, upgrade := range notenoughupdates.Constants().Garden.ComposterUpgrades {
 		output[upgrade] = int(gardenData.ComposterData.Upgrades[upgrade])
 	}
 
@@ -93,8 +93,8 @@ func getComposter(gardenData *skycrypttypes.Garden) map[string]int {
 }
 
 func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
-	PLOT_LAYOUT := notenoughupdates.NEUConstants.Garden.SortedPlots
-	PLOT_NAMES := notenoughupdates.NEUConstants.Garden.Plots
+	PLOT_LAYOUT := notenoughupdates.Constants().Garden.SortedPlots
+	PLOT_NAMES := notenoughupdates.Constants().Garden.Plots
 
 	output := models.PlotLayout{
 		Unlocked: len(gardenData.UnlockedPlotsIds),
@@ -126,9 +126,9 @@ func getPlotLayout(gardenData *skycrypttypes.Garden) models.PlotLayout {
 
 		// BARN SKIN
 		if index == 12 {
-			item := notenoughupdates.NEUConstants.Garden.BarnSkins[gardenData.SelectedBarnSkin]
+			item := notenoughupdates.Constants().Garden.BarnSkins[gardenData.SelectedBarnSkin]
 			if item == nil {
-				item = notenoughupdates.NEUConstants.Garden.BarnSkins["default_1"]
+				item = notenoughupdates.Constants().Garden.BarnSkins["default_1"]
 				output.BarnSkin = utility.TitleCase(gardenData.SelectedBarnSkin)
 			} else {
 				output.BarnSkin = utility.GetRawLore(item.Name)

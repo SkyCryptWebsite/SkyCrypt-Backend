@@ -5,6 +5,7 @@ import (
 	"os"
 	"skycrypt/src/models"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -57,7 +58,15 @@ type ExtraAccessory struct {
 	Rarity  string `json:"rarity"`
 }
 
-var ACCESSORIES []models.ProcessedHypixelItem
+// accessories is rebuilt hourly and swapped in whole, so readers need no lock.
+var accessories atomic.Pointer[[]models.ProcessedHypixelItem]
+
+func loadAccessories() []models.ProcessedHypixelItem {
+	if current := accessories.Load(); current != nil {
+		return *current
+	}
+	return nil
+}
 
 func getAccessories() {
 	var output []models.ProcessedHypixelItem
@@ -67,8 +76,7 @@ func getAccessories() {
 		}
 	}
 
-	ACCESSORIES = output
-	//fmt.Printf("[ACCESSORIES] Loaded %d accessories\n", len(ACCESSORIES))
+	accessories.Store(&output)
 }
 
 var AccessoryUpgrades = [][]string{
@@ -283,7 +291,7 @@ func findInAliases(id string) bool {
 func GetAllAccessories() []Accessory {
 	var output []Accessory
 
-	for _, item := range ACCESSORIES {
+	for _, item := range loadAccessories() {
 		if slices.Contains(ignoredAccessories, item.SkyblockID) {
 			continue
 		}
@@ -402,7 +410,7 @@ func GetBaseIdFromAlias(id string) string {
 func init() {
 	go func() {
 		getAccessories()
-		for len(ACCESSORIES) == 0 {
+		for len(loadAccessories()) == 0 {
 			time.Sleep(1 * time.Second)
 			getAccessories()
 		}
