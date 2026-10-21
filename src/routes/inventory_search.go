@@ -42,7 +42,8 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 
 	enabledPacks := enabledPacksFromRequest(c)
 
-	uuid := c.Params("uuid")
+	// Members is keyed by the lowercase UUID, and the cache key is lowercased too.
+	uuid := strings.ToLower(c.Params("uuid"))
 	profileId := c.Params("profileId")
 	searchParam := c.Params("searchParam")
 

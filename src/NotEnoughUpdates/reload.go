@@ -44,12 +44,15 @@ func StartInitialUpdate() {
 // updateAndReload pulls the repository and, only if HEAD moved, re-parses it and publishes the new commit.
 // An unchanged HEAD needs no publish: the commit already published (or loaded by children) is still current.
 func updateAndReload() {
-	before := repoHead()
+	if parsedHead == "" {
+		parsedHead = repoHead() // the startup parse read this commit
+	}
 	if err := UpdateNEURepository(); err != nil {
 		fmt.Printf("[NOT-ENOUGH-UPDATES] Failed to update repository: %v\n", err)
 		return
 	}
-	if before != "" && repoHead() == before {
+	head := repoHead()
+	if parsedHead != "" && head == parsedHead {
 		return
 	}
 	if err := reloadParsedRepository(); err != nil {
@@ -57,7 +60,12 @@ func updateAndReload() {
 		return
 	}
 	PublishRepositoryVersion()
+	parsedHead = head
 }
+
+// parsedHead is the commit the constants were last parsed from. Comparing against it, not the pre-update HEAD,
+// makes a failed re-parse retry on the next cycle. Only updateAndReload touches it; its runs are 12h apart.
+var parsedHead string
 
 // ParseWithRetry parses the repository, retrying a few times. Prefork children parse while the main process may be
 // updating the files, so a parse can catch one mid-write.

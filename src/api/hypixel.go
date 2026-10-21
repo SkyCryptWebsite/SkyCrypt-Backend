@@ -274,7 +274,7 @@ func GetProfileContext(ctx context.Context, uuid string, profileId ...string) (*
 	// If profileId is provided, search for it
 	targetProfileId := profileId[0]
 	for _, profile := range profiles.Profiles {
-		if profile.ProfileID == targetProfileId || profile.CuteName == targetProfileId {
+		if strings.EqualFold(profile.ProfileID, targetProfileId) || strings.EqualFold(profile.CuteName, targetProfileId) {
 			return &profile, nil
 		}
 	}

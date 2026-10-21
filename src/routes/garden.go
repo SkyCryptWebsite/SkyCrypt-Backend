@@ -7,6 +7,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
+	"strings"
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
@@ -40,7 +41,8 @@ func GardenHandler(c *fiber.Ctx) error {
 
 	timeNow := time.Now()
 
-	uuid := c.Params("uuid")
+	// Members is keyed by the lowercase UUID, and the cache key is lowercased too.
+	uuid := strings.ToLower(c.Params("uuid"))
 	profileId := c.Params("profileId")
 	reqCtx := c.UserContext()
 	cacheKey := responseCacheKey("garden", uuid, profileId)

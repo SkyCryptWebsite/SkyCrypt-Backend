@@ -20,6 +20,8 @@ func decodeMuseumEntries(entries []skycrypttypes.MuseumItem) []*models.DecodedIn
 	group.SetLimit(runtime.GOMAXPROCS(0))
 	for i := range entries {
 		group.Go(func() error {
+			// errgroup does not recover: a panic here would kill the process, not just this request.
+			defer func() { _ = recover() }()
 			if inventory, err := utility.DecodeInventory(&entries[i].Items.Data); err == nil {
 				decoded[i] = inventory
 			}
