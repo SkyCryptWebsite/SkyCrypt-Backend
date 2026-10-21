@@ -64,7 +64,7 @@ type dashboardReport struct {
 	CacheKeySummary         []dependencyReportEntry   `json:"cache_key_summary"`
 	UpstreamSummary         []dependencyReportEntry   `json:"upstream_summary"`
 	RedisSummary            []dependencyReportEntry   `json:"redis_summary"`
-	MongoSummary            []dependencyReportEntry   `json:"mongo_summary"`
+	PostgresSummary         []dependencyReportEntry   `json:"postgres_summary"`
 	ResourceUsage           resourceReport            `json:"resource_usage"`
 	Memory                  memoryAnalysis            `json:"memory_analysis"`
 	LogStats                logStatsReport            `json:"log_stats"`
@@ -148,7 +148,7 @@ type cacheLatencyEntry struct {
 	MaxMs          float64 `json:"max_ms"`
 	AvgRedisMs     float64 `json:"avg_redis_ms"`
 	AvgHTTPMs      float64 `json:"avg_http_ms"`
-	AvgMongoMs     float64 `json:"avg_mongo_ms"`
+	AvgPostgresMs  float64 `json:"avg_postgres_ms"`
 	AvgCacheHits   float64 `json:"avg_cache_hits"`
 	AvgCacheMisses float64 `json:"avg_cache_misses"`
 }
@@ -184,8 +184,8 @@ type recentRequestEntry struct {
 	RedisMs             float64 `json:"redis_ms"`
 	HTTPCalls           int     `json:"http_calls"`
 	HTTPMs              float64 `json:"http_ms"`
-	MongoCalls          int     `json:"mongo_calls"`
-	MongoMs             float64 `json:"mongo_ms"`
+	PostgresCalls       int     `json:"postgres_calls"`
+	PostgresMs          float64 `json:"postgres_ms"`
 	Timestamp           string  `json:"timestamp"`
 }
 
@@ -244,8 +244,8 @@ type logLine struct {
 	HTTPMs                float64                `json:"http_ms,omitempty"`
 	HTTPErrors            int                    `json:"http_errors,omitempty"`
 	HTTPRateLimits        int                    `json:"http_rate_limits,omitempty"`
-	MongoCalls            int                    `json:"mongo_calls,omitempty"`
-	MongoMs               float64                `json:"mongo_ms,omitempty"`
+	PostgresCalls         int                    `json:"postgres_calls,omitempty"`
+	PostgresMs            float64                `json:"postgres_ms,omitempty"`
 	AllocDeltaBytes       int64                  `json:"alloc_delta_bytes,omitempty"`
 	Dependencies          []DependencySummary    `json:"dependencies,omitempty"`
 	RepeatedDeps          []RepeatedDependency   `json:"repeated_dependencies,omitempty"`
@@ -280,7 +280,7 @@ type latencyAgg struct {
 	Durations   []int64
 	RedisMs     float64
 	HTTPMs      float64
-	MongoMs     float64
+	PostgresMs  float64
 	CacheHits   int
 	CacheMisses int
 }
@@ -373,7 +373,7 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	cacheDeps := make(map[string]*dependencyReportEntry)
 	upstreamDeps := make(map[string]*dependencyReportEntry)
 	redisDeps := make(map[string]*dependencyReportEntry)
-	mongoDeps := make(map[string]*dependencyReportEntry)
+	postgresDeps := make(map[string]*dependencyReportEntry)
 	var allCachedDurations, mixedDurations, coldDurations []int64
 	var cacheHits, cacheMisses uint64
 	var legacyCacheHits, legacyCacheMisses uint64
@@ -441,7 +441,7 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			agg.Durations = append(agg.Durations, entry.DurationMs)
 			agg.RedisMs += entry.RedisMs
 			agg.HTTPMs += entry.HTTPMs
-			agg.MongoMs += entry.MongoMs
+			agg.PostgresMs += entry.PostgresMs
 			agg.CacheHits += entry.CacheHits
 			agg.CacheMisses += entry.CacheMisses
 
@@ -491,8 +491,8 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 				RedisMs:             entry.RedisMs,
 				HTTPCalls:           entry.HTTPCalls,
 				HTTPMs:              entry.HTTPMs,
-				MongoCalls:          entry.MongoCalls,
-				MongoMs:             entry.MongoMs,
+				PostgresCalls:       entry.PostgresCalls,
+				PostgresMs:          entry.PostgresMs,
 				Timestamp:           entry.Timestamp,
 			})
 			if len(recent) > 50 {
@@ -518,8 +518,8 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 					addDependency(redisDeps, dep)
 				case "http":
 					addDependency(upstreamDeps, dep)
-				case "mongo":
-					addDependency(mongoDeps, dep)
+				case "postgres":
+					addDependency(postgresDeps, dep)
 				}
 			}
 			for _, repeated := range entry.RepeatedDeps {
@@ -621,7 +621,7 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	report.CacheKeySummary = dependencyEntries(cacheDeps, 25)
 	report.UpstreamSummary = dependencyEntries(upstreamDeps, 25)
 	report.RedisSummary = dependencyEntries(redisDeps, 25)
-	report.MongoSummary = dependencyEntries(mongoDeps, 25)
+	report.PostgresSummary = dependencyEntries(postgresDeps, 25)
 	sort.Slice(report.RepeatedDependencyCalls, func(i, j int) bool {
 		return report.RepeatedDependencyCalls[i].TotalMs > report.RepeatedDependencyCalls[j].TotalMs
 	})
@@ -715,7 +715,7 @@ func buildLatencyEntries(latency map[string]*latencyAgg) []cacheLatencyEntry {
 			MaxMs:          float64(maxDuration(agg.Durations)),
 			AvgRedisMs:     agg.RedisMs / float64(count),
 			AvgHTTPMs:      agg.HTTPMs / float64(count),
-			AvgMongoMs:     agg.MongoMs / float64(count),
+			AvgPostgresMs:  agg.PostgresMs / float64(count),
 			AvgCacheHits:   float64(agg.CacheHits) / float64(count),
 			AvgCacheMisses: float64(agg.CacheMisses) / float64(count),
 		})
@@ -977,7 +977,7 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 	out += renderRepeatedTable(r.RepeatedDependencyCalls)
 	out += renderDependencyTable("Slow External APIs", "upstream-table", r.UpstreamSummary)
 	out += renderDependencyTable("Slow Redis Keys / Key Groups", "redis-table", r.RedisSummary)
-	out += renderDependencyTable("Mongo Operations", "mongo-table", r.MongoSummary)
+	out += renderDependencyTable("Postgres Operations", "postgres-table", r.PostgresSummary)
 	out += renderOperationsTable(r.TopSpans)
 	out += renderSlowestRequestsTable(r.SlowestRequests)
 	out += `</div>`
@@ -1118,10 +1118,10 @@ func renderCacheLatencyTable(entries []cacheLatencyEntry) string {
 	if len(entries) == 0 {
 		return out + `<div class="empty">No request summaries recorded yet.</div>`
 	}
-	out += `<table id="cache-latency-table"><tr><th>Route</th><th>Method</th><th>Cache</th><th>Count</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th><th>Redis</th><th>HTTP</th><th>Mongo</th><th>Hits</th><th>Misses</th></tr>`
+	out += `<table id="cache-latency-table"><tr><th>Route</th><th>Method</th><th>Cache</th><th>Count</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th><th>Redis</th><th>HTTP</th><th>Postgres</th><th>Hits</th><th>Misses</th></tr>`
 	for _, e := range entries {
 		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
-			esc(e.Route), esc(e.Method), cacheBadge(e.CacheStatus), e.Count, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs, e.AvgRedisMs, e.AvgHTTPMs, e.AvgMongoMs, e.AvgCacheHits, e.AvgCacheMisses)
+			esc(e.Route), esc(e.Method), cacheBadge(e.CacheStatus), e.Count, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs, e.AvgRedisMs, e.AvgHTTPMs, e.AvgPostgresMs, e.AvgCacheHits, e.AvgCacheMisses)
 	}
 	return out + `</table>`
 }
@@ -1144,11 +1144,11 @@ func renderRecentRequestsTable(entries []recentRequestEntry) string {
 	if len(entries) == 0 {
 		return out + `<div class="empty">No recent request summaries recorded.</div>`
 	}
-	out += `<table id="recent-table"><tr><th>Time</th><th>Method</th><th>Route</th><th>Status</th><th>Cache</th><th>Response</th><th>Duration</th><th>Hits</th><th>Misses</th><th>Redis</th><th>HTTP</th><th>Mongo</th><th>Request ID</th></tr>`
+	out += `<table id="recent-table"><tr><th>Time</th><th>Method</th><th>Route</th><th>Status</th><th>Cache</th><th>Response</th><th>Duration</th><th>Hits</th><th>Misses</th><th>Redis</th><th>HTTP</th><th>Postgres</th><th>Request ID</th></tr>`
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%s</td><td>%d ms</td><td>%d</td><td>%d</td><td>%d / %.1f ms</td><td>%d / %.1f ms</td><td>%d / %.1f ms</td><td style="font-size:11px;color:#8b949e">%s</td></tr>`,
-			esc(e.Timestamp), esc(e.Method), esc(e.Route), e.StatusCode, cacheBadge(e.CacheStatus), responseCacheBadge(e.ResponseCacheStatus), e.DurationMs, e.CacheHits, e.CacheMisses, e.RedisCalls, e.RedisMs, e.HTTPCalls, e.HTTPMs, e.MongoCalls, e.MongoMs, esc(e.RequestID))
+			esc(e.Timestamp), esc(e.Method), esc(e.Route), e.StatusCode, cacheBadge(e.CacheStatus), responseCacheBadge(e.ResponseCacheStatus), e.DurationMs, e.CacheHits, e.CacheMisses, e.RedisCalls, e.RedisMs, e.HTTPCalls, e.HTTPMs, e.PostgresCalls, e.PostgresMs, esc(e.RequestID))
 	}
 	return out + `</table>`
 }

@@ -29,7 +29,7 @@ Originally inspired by [LeaPhant's skyblock-stats](https://github.com/LeaPhant/s
   - [System Dependencies](#system-dependencies)
   - [Go Installation](#go-installation)
   - [Redis Installation](#redis-installation)
-  - [MongoDB Installation](#mongodb-installation)
+  - [PostgreSQL Installation](#postgresql-installation)
 - [Configuration](#configuration)
 - [Development](#development)
 - [Common Issues](#common-issues)
@@ -38,7 +38,7 @@ Originally inspired by [LeaPhant's skyblock-stats](https://github.com/LeaPhant/s
 
 - Go 1.26 or later
 - Redis 7.0 or later
-- MongoDB 6.0 or later
+- PostgreSQL 14 or later (optional)
 - Git (for submodule initialization)
 
 ## Installation
@@ -91,34 +91,19 @@ redis-cli ping
 
 Expected output: `PONG`
 
-### MongoDB Installation
+### PostgreSQL Installation
 
-Install MongoDB from the AUR. Using an AUR helper such as `yay`:
-
-```bash
-yay -S mongodb-bin
-```
-
-Alternatively, build from source:
+PostgreSQL stores the fallback cache that is served when Hypixel or Mojang is unavailable. It is optional for local development.
 
 ```bash
-git clone https://aur.archlinux.org/mongodb-bin.git
-cd mongodb-bin
-makepkg -si
+sudo pacman -S postgresql
+sudo -iu postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
+sudo -iu postgres createuser --pwprompt skycrypt
+sudo -iu postgres createdb -O skycrypt skycrypt_backend
 ```
 
-Enable and start the MongoDB service:
-
-```bash
-sudo systemctl enable mongodb
-sudo systemctl start mongodb
-```
-
-Verify MongoDB is running:
-
-```bash
-mongosh --eval "db.runCommand({ ping: 1 })"
-```
+With Docker, reuse the PostgreSQL container from the frontend's `docker-compose.yml` and create a `skycrypt_backend` database in it. The backend's `docker compose up -d` starts Redis only.
 
 ## Configuration
 
@@ -156,9 +141,8 @@ DOMAIN="http://localhost:8080"
 # Commit hash exposed by /api/source. Docker builds set this automatically.
 SOURCE_COMMIT=""
 
-# MongoDB connection.
-MONGO_URI="mongodb://localhost:27017"
-MONGO_DB_NAME="SkyCrypt"
+# PostgreSQL connection for the fallback cache. Leave empty to disable it.
+DATABASE_URL="postgres://skycrypt:DEV@localhost:5432/skycrypt_backend"
 
 # Redis connection.
 REDIS_HOST="localhost"
@@ -184,8 +168,7 @@ DISABLE_SERVER_API_AUTH="true"
 | `LOG_STDOUT` | Also write forensic JSON logs to stdout when set to `1` | `0` | No |
 | `DOMAIN` | Public backend origin used for generated image/resource URLs | `https://sky.shiiyu.moe` | No |
 | `SOURCE_COMMIT` | Git commit hash exposed by `/api/source`; normally injected by Docker builds | - | No |
-| `MONGO_URI` | MongoDB connection URI | `mongodb://localhost:27017` | No |
-| `MONGO_DB_NAME` | MongoDB database name | `SkyCrypt` | No |
+| `DATABASE_URL` | PostgreSQL connection URL for the fallback cache | - | No |
 | `REDIS_HOST` | Redis server hostname | `localhost` | No |
 | `REDIS_PORT` | Redis server port | `6379` | No |
 | `REDIS_PASSWORD` | Redis authentication password | - | No |

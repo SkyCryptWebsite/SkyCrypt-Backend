@@ -76,7 +76,6 @@ func GetEmbedData(mowojang *models.MowojangResponse, player *skycrypttypes.Playe
 	}
 
 	return &models.EmbedData{
-		DisplayName:     mowojang.Name,
 		Username:        mowojang.Name,
 		Rank:            *GetRank(player),
 		Uuid:            mowojang.UUID,

@@ -3,7 +3,6 @@ package routes
 import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
-	"skycrypt/src/db"
 	"skycrypt/src/utility"
 	"time"
 
@@ -44,8 +43,7 @@ func UsernameHandler(c *fiber.Ctx) error {
 	utility.LogVerbose("Returning /api/username/%s in %s", username, time.Since(timeNow))
 
 	return sendAndCacheJSON(c, reqCtx, cacheKey, fiber.Map{
-		"displayName": db.GetDisplayName(username, uuid),
-		"username":    username,
-		"uuid":        uuid,
+		"username": username,
+		"uuid":     uuid,
 	}, 24*60*60)
 }
