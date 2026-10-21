@@ -24,12 +24,19 @@ import (
 // @title			SkyCrypt API
 // @version		3.0
 // @description	SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.
-// @servers.url		https://sky.shiiyu.moe/
-// @servers.description	SkyCrypt production API
+// @description
+// @description	Profile endpoints need a SkyCrypt API key in the `x-api-key` header. Request one from the developer page in your SkyCrypt dashboard.
+// @description	Each key has its own rate limit; responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.
+// @description	Keys only get players that SkyCrypt has already cached, as Hypixel's API policy doesn't allow proxying it. Other players return `404` with code `NOT_CACHED`.
+// @servers.url		https://api.shiiyu.moe
+// @servers.description	Production
+// @servers.url		https://beta-api.shiiyu.moe
+// @servers.description	Beta, built from the dev branch
 
-// @securityDefinitions.apikey ApiTokenHeader
+// @securityDefinitions.apikey ApiKeyHeader
 // @in header
-// @name X-API-Token
+// @name x-api-key
+// @description SkyCrypt API key, starting with `skycrypt_`.
 func main() {
 	err := godotenv.Load()
 	if err != nil {

@@ -26,7 +26,8 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 		}
 	}
 
-	body, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
+	// Stale items still go to Redis: prefork children load them from there at startup.
+	body, _, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/items")
 	})
 	if err != nil {
@@ -104,7 +105,7 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 		}
 	}
 
-	body, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
+	body, _, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/collections")
 	})
 	if err != nil {

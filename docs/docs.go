@@ -8,6 +8,19 @@ const docTemplate = `{
     "schemes": {{ marshal .Schemes }},
     "components": {
         "schemas": {
+            "models.APIError": {
+                "properties": {
+                    "code": {
+                        "example": "INVALID_API_KEY",
+                        "type": "string"
+                    },
+                    "error": {
+                        "example": "Invalid API key.",
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
             "models.ArmorResult": {
                 "properties": {
                     "armor": {
@@ -3208,7 +3221,6 @@ const docTemplate = `{
                 "type": "object"
             },
             "skycrypttypes.ExtraAttributes": {
-                "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `",
                 "properties": {
                     "ability_scroll": {
                         "items": {
@@ -3494,7 +3506,8 @@ const docTemplate = `{
             "skycrypttypes.Tag": {
                 "properties": {
                     "ExtraAttributes": {
-                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes"
+                        "$ref": "#/components/schemas/skycrypttypes.ExtraAttributes",
+                        "description": "HideFlags       int             ` + "`" + `nbt:\"HideFlags\" json:\"HideFlags,omitempty\"` + "`" + `\nUnbreakable     int             ` + "`" + `nbt:\"Unbreakable\" json:\"Unbreakable,omitempty\"` + "`" + `\nEnchantments    []Enchantment   ` + "`" + `nbt:\"ench\" json:\"ench,omitempty\"` + "`" + `"
                     },
                     "ItemModel": {
                         "type": "string"
@@ -3521,9 +3534,10 @@ const docTemplate = `{
             }
         },
         "securitySchemes": {
-            "ApiTokenHeader": {
+            "ApiKeyHeader": {
+                "description": "SkyCrypt API key, starting with ` + "`" + `skycrypt_` + "`" + `.",
                 "in": "header",
-                "name": "X-API-Token",
+                "name": "x-api-key",
                 "type": "apiKey"
             }
         }
@@ -3579,11 +3593,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3594,11 +3628,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or combined data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get combined profile data",
@@ -3733,11 +3777,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3748,11 +3812,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get selected profile embed data",
@@ -3812,11 +3886,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -3827,11 +3921,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile embed data",
@@ -3891,16 +3995,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get garden stats",
@@ -4017,11 +4151,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4032,11 +4186,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Cached inventory data is missing or could not be parsed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Search cached profile inventory",
@@ -4099,16 +4263,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile inventory",
@@ -4357,11 +4551,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4372,11 +4586,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Networth calculation failed."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile networth",
@@ -4436,16 +4660,46 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get raw player stats",
@@ -4571,11 +4825,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4586,11 +4860,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get selected profile stats",
@@ -4640,11 +4924,31 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
                     },
                     "500": {
                         "content": {
@@ -4655,11 +4959,21 @@ const docTemplate = `{
                             }
                         },
                         "description": "Player, profile, museum, or stats data could not be loaded."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Get profile stats",
@@ -4755,16 +5069,36 @@ const docTemplate = `{
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/models.ProcessingError"
+                                    "$ref": "#/components/schemas/models.APIError"
                                 }
                             }
                         },
-                        "description": "X-API-Token is missing or invalid."
+                        "description": "The x-api-key header is missing, or the key is invalid, disabled, or expired."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/models.APIError"
+                                }
+                            }
+                        },
+                        "description": "API keys can't be verified right now."
                     }
                 },
                 "security": [
                     {
-                        "ApiTokenHeader": []
+                        "ApiKeyHeader": []
                     }
                 ],
                 "summary": "Resolve UUID by username",
@@ -4777,8 +5111,12 @@ const docTemplate = `{
     "openapi": "3.1.0",
     "servers": [
         {
-            "description": "SkyCrypt production API",
-            "url": "https://sky.shiiyu.moe/"
+            "description": "Production",
+            "url": "https://api.shiiyu.moe"
+        },
+        {
+            "description": "Beta, built from the dev branch",
+            "url": "https://beta-api.shiiyu.moe"
         }
     ]
 }`
@@ -4787,7 +5125,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "3.0",
 	Title:            "SkyCrypt API",
-	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.",
+	Description:      "SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.\n\nProfile endpoints need a SkyCrypt API key in the `x-api-key` header. Request one from the developer page in your SkyCrypt dashboard.\nEach key has its own rate limit; responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.\nKeys only get players that SkyCrypt has already cached, as Hypixel's API policy doesn't allow proxying it. Other players return `404` with code `NOT_CACHED`.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

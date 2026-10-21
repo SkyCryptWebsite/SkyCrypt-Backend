@@ -149,8 +149,9 @@ REDIS_HOST="localhost"
 REDIS_PORT="6379"
 REDIS_PASSWORD=""
 
-# Server-to-server API protection for private API routes.
+# Shared token between frontend and backend, and the frontend origin used to verify API keys.
 SERVER_API_TOKEN="DuckySoLuckyWasHere"
+FRONTEND_INTERNAL_URL="http://localhost:5173"
 DISABLE_SERVER_API_AUTH="true"
 ```
 
@@ -174,10 +175,17 @@ DISABLE_SERVER_API_AUTH="true"
 | `REDIS_PASSWORD` | Redis authentication password | - | No |
 | `REDIS_MAXMEMORY` | Redis maximum memory when using the bundled Compose deployment | `8gb` | No |
 | `REDIS_MAXMEMORY_POLICY` | Redis eviction policy when the maximum is reached | `allkeys-lfu` | No |
-| `SERVER_API_TOKEN` | Shared token required by protected API routes through the `X-API-Token` header | - | Yes in production |
-| `DISABLE_SERVER_API_AUTH` | Disable `X-API-Token` checks for local development only | `false` | No |
+| `SERVER_API_TOKEN` | Shared token the frontend sends in `X-API-Token` for full access; also authenticates the backend to the frontend's internal routes | - | Yes in production |
+| `FRONTEND_INTERNAL_URL` | Frontend origin reachable from the backend, used to verify API keys and report their usage | - | Yes in production |
+| `DISABLE_SERVER_API_AUTH` | Disable API key and `X-API-Token` checks for local development only | `false` | No |
 
-Protected API routes return `401 Unauthorized` unless the request includes `X-API-Token: <SERVER_API_TOKEN>`. Keep `DISABLE_SERVER_API_AUTH` unset or `false` outside local development.
+Profile routes need either the frontend's `X-API-Token: <SERVER_API_TOKEN>` or a user's SkyCrypt API key in `x-api-key`. Keys are Better Auth API keys managed by the frontend:
+
+- The backend verifies a key through the frontend's `POST /api/internal/api-keys/verify` and caches the result for a minute, so a disabled key stops working within a minute.
+- Each key's `rateLimitMax` per `rateLimitTimeWindow` is enforced in Redis. Every 15 seconds the backend writes each key's request count for its current window back to the frontend (`POST /api/internal/api-keys/usage`), so `requestCount` in the admin dashboard shows real usage, rejected requests included.
+- Keys only get cached data (Redis, then the Postgres fallback cache) and get `404 NOT_CACHED` otherwise, because Hypixel's policy doesn't allow proxying its API. Keys with the `cache-bypass` scope, and the frontend, may fetch from Hypixel.
+
+Keep `DISABLE_SERVER_API_AUTH` unset or `false` outside local development.
 
 ## Development
 
