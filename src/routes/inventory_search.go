@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"fmt"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
@@ -10,48 +11,48 @@ import (
 
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 	jsoniter "github.com/json-iterator/go"
 )
 
-// InventorySearchHandler godoc
-//
-//	@Summary		Search cached profile inventory
-//	@Description	Searches cached inventory tabs for items whose display name or lore contains the search parameter.
-//	@Description	Call GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.
-//	@ID				searchProfileInventory
-//	@Tags			Stats
-//	@Produce		json
-//	@Security		ApiKeyHeader
-//	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
-//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
-//	@Param			searchParam	path		string	true	"Search text matched against item display names and lore, ignoring case"	example(hyperion)
-//	@Success		200			{array}		models.StrippedItem		"Matching inventory items returned successfully."
-//	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
-//	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
-//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		500			{object}	models.ProcessingError	"Cached inventory data is missing or could not be parsed."
-//	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
-func InventorySearchHandler(c fiber.Ctx) error {
+func registerInventorySearch(humaAPI huma.API) {
+	responses := errorResponses(humaAPI, map[int]string{
+		fiber.StatusInternalServerError: "INTERNAL_ERROR: Cached inventory data is missing or could not be parsed.",
+	})
+	responses["200"] = &huma.Response{Description: "Matching inventory items returned successfully."}
+	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
+		OperationID: "searchProfileInventory",
+		Method:      fiber.MethodGet,
+		Path:        "/api/inventory/search/{uuid}/{profileId}/{searchParam}",
+		Summary:     "Search cached profile inventory",
+		Description: "Searches cached inventory tabs for items whose display name or lore contains the search parameter.\n" +
+			"Call GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.",
+		Tags:      []string{"Stats"},
+		Responses: responses,
+	}), func(ctx context.Context, in *struct {
+		MemberInput
+		SearchParam string `path:"searchParam" doc:"Search text matched against item display names and lore, ignoring case" example:"hyperion"`
+		PacksInput
+	}) (*bodyOutput[[]models.StrippedItem], error) {
+		return searchInventory(ctx, in.UUID, in.ProfileID, in.SearchParam, in.enabledPacks)
+	})
+}
+
+func searchInventory(ctx context.Context, uuid string, profileId string, searchParam string, enabledPacks []string) (*bodyOutput[[]models.StrippedItem], error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Inventory")()
 	}
 
 	timeNow := time.Now()
 
-	enabledPacks := enabledPacksFromRequest(c)
-
 	// Members is keyed by the lowercase UUID, and the cache key is lowercased too.
-	uuid := strings.ToLower(c.Params("uuid"))
-	profileId := c.Params("profileId")
-	searchParam := strings.ToLower(c.Params("searchParam"))
+	uuid = strings.ToLower(uuid)
+	searchParam = strings.ToLower(searchParam)
 
-	cache, err := db.GetContext(c.Context(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
+	cache, err := db.GetContext(ctx, inventoryCacheKey(uuid, profileId, enabledPacks).key)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to get items: %v", err),
-		})
+		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to get items: %v", err))
 	}
 
 	var inventories []models.Inventory
@@ -59,14 +60,10 @@ func InventorySearchHandler(c fiber.Ctx) error {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err = json.Unmarshal([]byte(cache), &inventories)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to parse items: %v", err),
-			})
+			return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to parse items: %v", err))
 		}
 	} else {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "No cached items found for this player and profile. Please try again later.",
-		})
+		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, "No cached items found for this player and profile. Please try again later.")
 	}
 
 	output := []models.StrippedItem{}
@@ -95,8 +92,9 @@ func InventorySearchHandler(c fiber.Ctx) error {
 
 	utility.LogVerbose("Returning /api/inventory/search/%s/%s/%s in %s", uuid, profileId, searchParam, time.Since(timeNow))
 
-	return c.JSON(output)
+	return &bodyOutput[[]models.StrippedItem]{Body: output}, nil
 }
+
 // itemMatchesSearch reports whether the name or lore contains query, ignoring case. query must already be lowercase.
 func itemMatchesSearch(displayName string, lore []string, query string) bool {
 	return strings.Contains(strings.ToLower(displayName), query) || strings.Contains(strings.ToLower(strings.Join(lore, " ")), query)

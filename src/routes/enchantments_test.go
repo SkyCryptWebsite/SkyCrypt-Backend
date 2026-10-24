@@ -14,7 +14,7 @@ import (
 
 func TestEnchantmentsConstantsHandler(t *testing.T) {
 	app := fiber.New()
-	app.Get("/api/constants/enchantments", EnchantmentsConstantsHandler)
+	NewAPI(app, "")
 
 	response, err := app.Test(httptest.NewRequest("GET", "/api/constants/enchantments", nil))
 	if err != nil {

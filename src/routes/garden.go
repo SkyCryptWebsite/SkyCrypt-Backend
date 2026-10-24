@@ -11,30 +11,28 @@ import (
 	"time"
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 	"golang.org/x/sync/errgroup"
 )
 
-// GardenHandler godoc
-//
-//	@Summary		Get garden stats
-//	@Description	Returns Garden progression, visitors, crop milestones, composter data, plots, upgrades, and related Garden state for a specific SkyBlock profile.
-//	@ID				getGardenStats
-//	@Tags			Stats
-//	@Produce		json
-//	@Security		ApiKeyHeader
-//	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
-//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
-//	@Success		200			{object}	models.Garden			"Garden stats returned successfully."
-//	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
-//	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
-//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Unexpected failure."
-//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
-//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
-//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
-//	@Router			/api/garden/{uuid}/{profileId} [get]
-func GardenHandler(c fiber.Ctx) error {
+func registerGarden(humaAPI huma.API) {
+	responses := profileErrors(humaAPI, "Unexpected failure.")
+	responses["200"] = jsonResponse[models.Garden](humaAPI, "Garden stats returned successfully.")
+	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
+		OperationID: "getGardenStats",
+		Method:      fiber.MethodGet,
+		Path:        "/api/garden/{uuid}/{profileId}",
+		Summary:     "Get garden stats",
+		Description: "Returns Garden progression, visitors, crop milestones, composter data, plots, upgrades, and related Garden state for a specific SkyBlock profile.",
+		Tags:        []string{"Stats"},
+		Responses:   responses,
+	}), func(ctx context.Context, in *MemberInput) (*jsonOutput, error) {
+		return gardenResponse(ctx, in.UUID, in.ProfileID)
+	})
+}
+
+func gardenResponse(reqCtx context.Context, uuid string, profileId string) (*jsonOutput, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Garden")()
 	}
@@ -42,24 +40,22 @@ func GardenHandler(c fiber.Ctx) error {
 	timeNow := time.Now()
 
 	// Members is keyed by the lowercase UUID, and the cache key is lowercased too.
-	uuid := strings.ToLower(c.Params("uuid"))
-	profileId := c.Params("profileId")
-	reqCtx := c.Context()
+	uuid = strings.ToLower(uuid)
 	cacheKey := responseCacheKey("garden", uuid, profileId)
-	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-		return err
+	if cached := cachedJSON(reqCtx, cacheKey); cached != nil {
+		return cached, nil
 	}
 
 	body, err := sharedResponse(reqCtx, cacheKey, cacheKey, 60*60, func(ctx context.Context) ([]byte, error) {
 		return buildGarden(ctx, uuid, profileId)
 	})
 	if err != nil {
-		return sendBuildError(c, err)
+		return nil, buildFailure(err)
 	}
 
 	utility.LogVerbose("Returning /api/garden/%s in %s", profileId, time.Since(timeNow))
 
-	return sendBody(c, reqCtx, cacheKey, body)
+	return jsonBody(reqCtx, cacheKey, body), nil
 }
 
 func buildGarden(ctx context.Context, uuid string, profileId string) ([]byte, error) {

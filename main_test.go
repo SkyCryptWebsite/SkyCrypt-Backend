@@ -31,7 +31,7 @@ func TestRecoverHidesPanicDetail(t *testing.T) {
 	if res.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", res.StatusCode)
 	}
-	if strings.Contains(string(body), "secret") || !strings.Contains(string(body), `"error":"Internal Server Error"`) {
+	if strings.Contains(string(body), "secret") || !strings.Contains(string(body), `"code":"INTERNAL_ERROR"`) {
 		t.Errorf("body = %s", body)
 	}
 }

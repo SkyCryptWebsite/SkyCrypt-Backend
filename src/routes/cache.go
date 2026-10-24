@@ -54,37 +54,34 @@ func enabledPacksCachePart(enabledPacks []string) string {
 	return "enabled-v7:" + strings.Join(normalized, ",")
 }
 
-func sendCachedJSON(c fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
+// cachedJSON returns the cached response under cacheKey, or nil when there is none.
+func cachedJSON(ctx context.Context, cacheKey responseCacheHandle) *jsonOutput {
 	if !processedResponseCacheEnabled() {
-		return false, nil
+		return nil
 	}
 
-	cached, err := db.GetContext(c.Context(), cacheKey.key)
+	cached, err := db.GetContext(ctx, cacheKey.key)
 	if err != nil || cached == "" {
-		return false, nil
+		return nil
 	}
 
-	recordResponseCache(c.Context(), cacheKey.endpoint, "redis")
-	setResponseCacheHeaders(c, cacheKey.endpoint)
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
-	c.Set("X-SkyCrypt-Backend-Cache", "redis")
-	return true, c.SendString(cached)
+	recordResponseCache(ctx, cacheKey.endpoint, "redis")
+	return &jsonOutput{
+		ContentType:  fiber.MIMEApplicationJSONCharsetUTF8,
+		CacheControl: responseCacheControl(cacheKey.endpoint),
+		Cache:        "redis",
+		Body:         []byte(cached),
+	}
 }
 
-func sendAndCacheJSON(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) error {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	payload, err := json.Marshal(value)
+func cacheJSON(ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) (*jsonOutput, error) {
+	body, err := marshalBody(value)
 	if err != nil {
-		return fmt.Errorf("failed to marshal cached response: %v", err)
+		return nil, err
 	}
 
-	return sendAndCacheBody(c, ctx, cacheKey, string(payload), ttlSeconds)
-}
-
-// sendAndCacheBody is sendAndCacheJSON for a body that is already JSON.
-func sendAndCacheBody(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body string, ttlSeconds int) error {
-	cacheBody(ctx, cacheKey, []byte(body), ttlSeconds)
-	return sendBody(c, ctx, cacheKey, []byte(body))
+	cacheBody(ctx, cacheKey, body, ttlSeconds)
+	return jsonBody(ctx, cacheKey, body), nil
 }
 
 // cacheBody stores a response unless caching is off or it was built from stale fallback data.
@@ -98,16 +95,17 @@ func cacheBody(ctx context.Context, cacheKey responseCacheHandle, body []byte, t
 	_ = db.SetContext(cacheCtx, cacheKey.key, body, ttlSeconds)
 }
 
-// sendBody sends a freshly built response. ctx decides the cache header, so pass the request's own context.
-func sendBody(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body []byte) error {
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+// jsonBody is the output for a freshly built response. ctx decides the cache header, so pass the request's own
+// context.
+func jsonBody(ctx context.Context, cacheKey responseCacheHandle, body []byte) *jsonOutput {
+	out := &jsonOutput{ContentType: fiber.MIMEApplicationJSONCharsetUTF8, Body: body}
 	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
-		c.Set("X-SkyCrypt-Backend-Cache", "bypass")
-		return c.Send(body)
+		out.Cache = "bypass"
+		return out
 	}
-	setResponseCacheHeaders(c, cacheKey.endpoint)
-	c.Set("X-SkyCrypt-Backend-Cache", "miss")
-	return c.Send(body)
+	out.CacheControl = responseCacheControl(cacheKey.endpoint)
+	out.Cache = "miss"
+	return out
 }
 
 var responseGroup singleflight.Group
@@ -118,7 +116,7 @@ const sharedResponseTimeout = 60 * time.Second
 // sharedResponse builds a response body once for concurrent requests with the same cache key, so a profile link
 // shared on Discord doesn't make every viewer repeat the same work. The body is cached once, under cacheKey and
 // rawCacheKey (the request as given, before resolving the player), and returned to every caller, who then sends it
-// with sendBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
+// with jsonBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
 func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) ([]byte, error) {
 	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) ([]byte, error) {
 		body, err := build(flightCtx)
@@ -133,7 +131,7 @@ func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheK
 	})
 }
 
-// marshalBody encodes a response the same way sendAndCacheJSON does.
+// marshalBody encodes a response for the response cache.
 func marshalBody(value interface{}) ([]byte, error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	body, err := json.Marshal(value)
@@ -147,10 +145,11 @@ func marshalBody(value interface{}) ([]byte, error) {
 // and the CDN may keep them; a week rather than forever so a renderer fix still reaches everyone.
 const renderedImageCacheControl = "public, max-age=604800"
 
-func setResponseCacheHeaders(c fiber.Ctx, endpoint string) {
+func responseCacheControl(endpoint string) string {
 	if endpoint == "embed" {
-		c.Set(fiber.HeaderCacheControl, "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60")
+		return "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60"
 	}
+	return ""
 }
 
 func processedResponseCacheEnabled() bool {

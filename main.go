@@ -1,7 +1,5 @@
 package main
 
-//go:generate go tool swag init -g main.go --v3.1 --parseDependency --parseInternal --markdownFiles docs/markdown
-
 import (
 	"context"
 	"fmt"
@@ -11,14 +9,13 @@ import (
 	"skycrypt/src"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
+	"skycrypt/src/routes"
 	"skycrypt/src/security"
 	"skycrypt/src/utility"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	_ "skycrypt/docs"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -27,18 +24,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// @title			SkyCrypt API
-// @version		3.0
-// @description.markdown
-// @servers.url		https://api.shiiyu.moe
-// @servers.description	Production
-// @servers.url		https://beta-api.shiiyu.moe
-// @servers.description	Beta, built from the dev branch
-
-// @securityDefinitions.apikey ApiKeyHeader
-// @in header
-// @name x-api-key
-// @description SkyCrypt API key, starting with `skycrypt_`.
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -156,9 +141,7 @@ func newRecoverMiddleware() fiber.Handler {
 		// The panic detail goes to logs and the webhook only, never to clients. Returning nil keeps the default
 		// error handler from replacing this body with the panic message.
 		PanicHandler: func(c fiber.Ctx, _ any) error {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Internal Server Error",
-			})
+			return c.Status(fiber.StatusInternalServerError).JSON(routes.InternalError(), "application/problem+json")
 		},
 	})
 }

@@ -1,6 +1,7 @@
 package models
 
+// PlayerResolve keeps username first, the order these responses had when they were marshaled from a sorted map.
 type PlayerResolve struct {
-	UUID     string `json:"uuid"`
 	Username string `json:"username"`
+	UUID     string `json:"uuid"`
 }

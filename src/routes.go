@@ -14,6 +14,7 @@ import (
 	"skycrypt/src/routes"
 	"skycrypt/src/utility"
 	"strings"
+	"sync"
 	"time"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
@@ -171,54 +172,27 @@ func SetupRoutes(app *fiber.App) {
 
 	api := app.Group("/api")
 
-	api.Get("/source", routes.SourceHandler)
-
 	// Forensic dashboard (live in-memory report)
 	if utility.IsForensicsEnabled() {
 		api.Get("/forensics", forensics.DashboardHandler())
 		api.Get("/forensics/dashboard", forensics.DashboardHTMLHandler())
 	}
 
-	// Documentation - serve openapi files directly
-	// The spec changes on every deploy, so browsers must revalidate it instead of guessing a cache lifetime.
-	api.Get("/openapi/doc.json", static.New("./docs/swagger.json", static.Config{ModifyResponse: func(c fiber.Ctx) error {
+	humaAPI := routes.NewAPI(app, string(apiReferenceIntro))
+	// Marshaled once, on the first request.
+	spec := sync.OnceValues(humaAPI.OpenAPI().MarshalJSON)
+	api.Get("/openapi/doc.json", func(c fiber.Ctx) error {
+		body, err := spec()
+		if err != nil {
+			return err
+		}
+		// The spec changes on every deploy, so browsers must revalidate it instead of guessing a cache lifetime.
 		c.Set(fiber.HeaderCacheControl, "no-cache")
-		return nil
-	}}))
+		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
+		return c.Send(body)
+	})
 	api.Get("/openapi/", apiReferenceHandler)
 	api.Get("/openapi/reference.js", apiReferenceScriptHandler)
-
-	// USERNAME AND UUID RESOLVING
-	api.Get("/uuid/:username", routes.APIKeyMiddleware, routes.UUIDHandler)
-	api.Get("/username/:uuid", routes.UsernameHandler)
-
-	// STATS ENDPOINTS
-	api.Get("/stats/:uuid/:profileId", routes.APIKeyMiddleware, routes.StatsHandler)
-	api.Get("/stats/:uuid", routes.APIKeyMiddleware, routes.SelectedProfileStatsHandler)
-
-	api.Get("/playerStats/:uuid/:profileId", routes.APIKeyMiddleware, routes.PlayerStatsHandler)
-
-	api.Get("/networth/:uuid/:profileId", routes.APIKeyMiddleware, routes.NetworthHandler)
-
-	api.Get("/combined/:uuid/:profileId", routes.APIKeyMiddleware, routes.CombinedHandler)
-
-	api.Get("/inventory/:uuid/:profileId", routes.APIKeyMiddleware, routes.InventoryHandler)
-	api.Get("/inventory/search/:uuid/:profileId/:searchParam", routes.APIKeyMiddleware, routes.InventorySearchHandler)
-
-	api.Get("/garden/:uuid/:profileId", routes.APIKeyMiddleware, routes.GardenHandler)
-
-	api.Get("/embed/:uuid/:profileId", routes.APIKeyMiddleware, routes.EmbedHandler)
-	api.Get("/embed/:uuid", routes.APIKeyMiddleware, routes.SelectedProfileEmbedHandler)
-
-	// RENDERING ENDPOINTS
-	api.Get("/head/:textureId", routes.HeadHandlers)
-	api.Get("/item/:itemId/resolve", routes.ItemResolveHandler)
-	api.Get("/item/:itemId", routes.ItemHandlers)
-	api.Get("/potion/:type/:color", routes.PotionHandlers)
-	api.Get("/leather/:type/:color", routes.LeatherHandlers)
-	api.Get("/constants/stats", routes.StatsConstantsHandler)
-	api.Get("/constants/packs", routes.ResourcePacksConstantsHandler)
-	api.Get("/constants/enchantments", routes.EnchantmentsConstantsHandler)
 }
 
 // cacheStaticResponse keeps the week-long max-age for files whose URL fixes their bytes: hash= renders, and heads,
@@ -237,6 +211,9 @@ var apiReferenceHTML []byte
 
 //go:embed api-reference/index.js
 var apiReferenceJS []byte
+
+//go:embed api-reference/api.md
+var apiReferenceIntro []byte
 
 func apiReferenceHandler(c fiber.Ctx) error {
 	c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)

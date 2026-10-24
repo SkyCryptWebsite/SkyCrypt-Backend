@@ -1,13 +1,26 @@
 package routes
 
 import (
+	"context"
 	"io"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/gofiber/fiber/v3"
 )
+
+// packsTestApp answers GET path with the cache part of the packs that packs reads from the request's input.
+func packsTestApp[I any](path string, packs func(*I) []string) *fiber.App {
+	app := fiber.New()
+	humaAPI := humafiber.New(app, huma.DefaultConfig("test", "1"))
+	huma.Get(humaAPI, path, func(_ context.Context, in *I) (*struct{ Body []byte }, error) {
+		return &struct{ Body []byte }{Body: []byte(enabledPacksCachePart(packs(in)))}, nil
+	})
+	return app
+}
 
 func TestParseEnabledPacksFormats(t *testing.T) {
 	tests := map[string][]string{
@@ -27,8 +40,8 @@ func TestParseEnabledPacksFormats(t *testing.T) {
 
 func TestEncodedEnabledPacksCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	// Handlers embed PacksInput, so check the cookie is still read through an embedded field.
+	app := packsTestApp("/", func(in *struct{ PacksInput }) []string { return in.enabledPacks })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=%5B%22HYPIXEL_PACK%22%2C%22HYPIXEL_PLUS%22%2C%22FSR%22%5D")
@@ -58,8 +71,7 @@ func TestEncodedEnabledPacksCookie(t *testing.T) {
 
 func TestEncodedEmptyEnabledPacksCookieUsesVanillaOnly(t *testing.T) {
 	t.Setenv("DEV", "false")
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app := packsTestApp("/", func(in *PacksInput) []string { return in.enabledPacks })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=%5B%5D")
@@ -84,8 +96,7 @@ func TestEncodedEmptyEnabledPacksCookieUsesVanillaOnly(t *testing.T) {
 func TestEnabledPacksFromRequestDefaultsAndIgnoresLegacyCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
 	want := enabledPacksCachePart(nil)
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app := packsTestApp("/", func(in *PacksInput) []string { return in.enabledPacks })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "disabledPacks=[\"FSR\"]")
@@ -109,8 +120,7 @@ func TestEnabledPacksFromRequestDefaultsAndIgnoresLegacyCookie(t *testing.T) {
 
 func TestEnabledPacksFromDevelopmentQuery(t *testing.T) {
 	t.Setenv("DEV", "true")
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app := packsTestApp("/", func(in *PacksInput) []string { return in.enabledPacks })
 
 	request := httptest.NewRequest("GET", "/?enabledPacks=FSR,HPLUS", nil)
 	response, err := app.Test(request)
@@ -133,8 +143,7 @@ func TestEnabledPacksFromDevelopmentQuery(t *testing.T) {
 
 func TestEnabledPacksCookiePreservesPriorityOrder(t *testing.T) {
 	t.Setenv("DEV", "false")
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app := packsTestApp("/", func(in *PacksInput) []string { return in.enabledPacks })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=['FSR','HPLUS','HYPIXEL_PACK']")
@@ -158,10 +167,7 @@ func TestEnabledPacksCookiePreservesPriorityOrder(t *testing.T) {
 
 func TestResolverEnabledPacksQueryOverridesCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
-	app := fiber.New()
-	app.Get("/api/item/:itemId/resolve", func(c fiber.Ctx) error {
-		return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c)))
-	})
+	app := packsTestApp("/api/item/{itemId}/resolve", (*ResolveInput).packs)
 
 	request := httptest.NewRequest("GET", "/api/item/HYPERION/resolve?enabledPacks=HYPIXEL_PACK,FSR", nil)
 	request.Header.Set("Cookie", `enabledPacks=["HYPIXEL_PLUS","FSR"]`)

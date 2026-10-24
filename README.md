@@ -202,12 +202,6 @@ If you have already cloned the repository without submodules:
 git submodule update --init --recursive
 ```
 
-Enable the repository git hooks so Swagger docs are regenerated automatically before each push:
-
-```bash
-git config core.hooksPath .githooks
-```
-
 Download Go dependencies:
 
 ```bash
