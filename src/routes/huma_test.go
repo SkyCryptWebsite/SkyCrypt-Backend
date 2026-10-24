@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"skycrypt/src/api"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -63,6 +64,16 @@ func TestSpecDocumentsEveryOperation(t *testing.T) {
 		}
 		if response := operation.Responses["200"]; response == nil || len(response.Content) == 0 {
 			t.Errorf("%s: 200 response has no content", path)
+		}
+		// An error response without its own example shows Huma's placeholder (status 400, "Property foo...").
+		for status, response := range operation.Responses {
+			if status[0] < '4' || status == "default" {
+				continue
+			}
+			example, ok := response.Content["application/problem+json"].Example.(*APIError)
+			if !ok || example.Code == "" || strconv.Itoa(example.Status) != status {
+				t.Errorf("%s %s: error response has no example with its status and code", path, status)
+			}
 		}
 	}
 	if operations != 21 {

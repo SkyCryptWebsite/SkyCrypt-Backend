@@ -11,7 +11,7 @@ import (
 
 func registerResourcePacks(humaAPI huma.API) {
 	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusInternalServerError: "Resource pack metadata could not be read.",
+		fiber.StatusInternalServerError: "INTERNAL_ERROR: Resource pack metadata could not be read.",
 	})
 	responses["200"] = &huma.Response{Description: "Resource packs returned successfully."}
 	huma.Register(humaAPI, huma.Operation{

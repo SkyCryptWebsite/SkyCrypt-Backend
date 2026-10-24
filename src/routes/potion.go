@@ -10,8 +10,8 @@ import (
 
 func registerPotion(humaAPI huma.API) {
 	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusNotFound:            "Potion type is not normal or splash, or color is not 6-digit hex.",
-		fiber.StatusInternalServerError: "Potion image could not be rendered.",
+		fiber.StatusNotFound:            "TEXTURE_NOT_FOUND: Potion type is not normal or splash, or color is not 6-digit hex.",
+		fiber.StatusInternalServerError: "RENDER_FAILED: Potion image could not be rendered.",
 	})
 	responses["200"] = imageResponse("PNG image bytes returned successfully.", "image/png")
 	huma.Register(humaAPI, huma.Operation{

@@ -33,7 +33,7 @@ func (in *ResolveInput) packs() []string {
 
 func registerItem(humaAPI huma.API) {
 	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusInternalServerError: "Item texture could not be resolved.",
+		fiber.StatusInternalServerError: "RENDER_FAILED: Item texture could not be resolved.",
 	})
 	responses["200"] = &huma.Response{Description: "Texture resolved successfully."}
 	huma.Register(humaAPI, huma.Operation{
@@ -54,7 +54,7 @@ func registerItem(humaAPI huma.API) {
 	})
 
 	responses = errorResponses(humaAPI, map[int]string{
-		fiber.StatusInternalServerError: "Item image could not be rendered.",
+		fiber.StatusInternalServerError: "RENDER_FAILED: Item image could not be rendered.",
 	})
 	responses["200"] = imageResponse("Image bytes returned successfully.", "image/png", "image/webp")
 	responses["302"] = &huma.Response{

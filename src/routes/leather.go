@@ -12,8 +12,8 @@ import (
 
 func registerLeather(humaAPI huma.API) {
 	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusNotFound:            "Armor piece is unknown or color is not 6-digit hex.",
-		fiber.StatusInternalServerError: "Leather armor image could not be rendered.",
+		fiber.StatusNotFound:            "TEXTURE_NOT_FOUND: Armor piece is unknown or color is not 6-digit hex.",
+		fiber.StatusInternalServerError: "RENDER_FAILED: Leather armor image could not be rendered.",
 	})
 	responses["200"] = imageResponse("PNG image bytes returned successfully.", "image/png")
 	huma.Register(humaAPI, huma.Operation{

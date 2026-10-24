@@ -22,9 +22,9 @@ func requireAPIKey(humaAPI huma.API, op huma.Operation) huma.Operation {
 	op.Security = []map[string][]string{{apiKeyScheme: {}}}
 	op.Middlewares = append(op.Middlewares, apiKeyMiddleware)
 	documented := errorResponses(humaAPI, map[int]string{
-		fiber.StatusUnauthorized:       "The x-api-key header is missing, or the key is invalid, disabled, or expired.",
+		fiber.StatusUnauthorized:       "MISSING_API_KEY, INVALID_API_KEY, or INVALID_API_TOKEN: the x-api-key header is missing, or the key is invalid, disabled, or expired.",
 		fiber.StatusTooManyRequests:    "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header.",
-		fiber.StatusServiceUnavailable: "API keys can't be verified right now.",
+		fiber.StatusServiceUnavailable: "API_KEY_VERIFICATION_UNAVAILABLE or RATE_LIMIT_UNAVAILABLE: API keys can't be verified right now.",
 	})
 	if op.Responses == nil {
 		op.Responses = map[string]*huma.Response{}

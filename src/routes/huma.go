@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
@@ -50,6 +52,12 @@ func NewAPI(app *fiber.App, description string) huma.API {
 	registerStatsConstants(api)
 	registerEnchantments(api)
 	registerResourcePacks(api)
+	// Huma adds this response to operations without documented errors, with no example of its own.
+	for _, item := range api.OpenAPI().Paths {
+		if response := item.Get.Responses["default"]; response != nil {
+			response.Content["application/problem+json"].Example = InternalError()
+		}
+	}
 	return api
 }
 
@@ -105,12 +113,22 @@ func jsonResponse[T any](api huma.API, description string) *huma.Response {
 	}
 }
 
-// errorResponse documents an error status answered with an APIError.
-func errorResponse(api huma.API, description string) *huma.Response {
+// documentedCode reads the codes and detail out of an error description written as "CODE: what happened" or
+// "CODE or OTHER_CODE: what happened".
+var documentedCode = regexp.MustCompile(`^([A-Z_]+)(?:,? (?:or )?[A-Z_]+)*: ([^.]+\.?)`)
+
+// errorResponse documents an error status answered with an APIError. Its example comes from the description;
+// without one, docs fall back to the placeholder examples on Huma's ErrorModel fields.
+func errorResponse(api huma.API, status int, description string) *huma.Response {
 	schema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeFor[APIError](), true, "")
+	media := &huma.MediaType{Schema: schema}
+	if match := documentedCode.FindStringSubmatch(description); match != nil {
+		detail := strings.ToUpper(match[2][:1]) + match[2][1:]
+		media.Example = NewAPIError(status, match[1], detail)
+	}
 	return &huma.Response{
 		Description: description,
-		Content:     map[string]*huma.MediaType{"application/problem+json": {Schema: schema}},
+		Content:     map[string]*huma.MediaType{"application/problem+json": media},
 	}
 }
 
@@ -118,7 +136,7 @@ func errorResponse(api huma.API, description string) *huma.Response {
 func errorResponses(api huma.API, responses map[int]string) map[string]*huma.Response {
 	documented := make(map[string]*huma.Response, len(responses))
 	for status, description := range responses {
-		documented[strconv.Itoa(status)] = errorResponse(api, description)
+		documented[strconv.Itoa(status)] = errorResponse(api, status, description)
 	}
 	return documented
 }

@@ -16,7 +16,7 @@ import (
 func registerEmbed(humaAPI huma.API) {
 	responses := profileErrors(humaAPI, "Networth calculation failed.")
 	responses["200"] = jsonResponse[models.EmbedData](humaAPI, "Profile embed data returned successfully.")
-	responses["503"] = errorResponse(humaAPI, pricesUnavailableDescription)
+	responses["503"] = errorResponse(humaAPI, fiber.StatusServiceUnavailable, pricesUnavailableDescription)
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
 		OperationID: "getProfileEmbed",
 		Method:      fiber.MethodGet,
@@ -32,7 +32,7 @@ func registerEmbed(humaAPI huma.API) {
 
 	responses = profileErrors(humaAPI, "Networth calculation failed.")
 	responses["200"] = jsonResponse[models.EmbedData](humaAPI, "Selected profile embed data returned successfully.")
-	responses["503"] = errorResponse(humaAPI, pricesUnavailableDescription)
+	responses["503"] = errorResponse(humaAPI, fiber.StatusServiceUnavailable, pricesUnavailableDescription)
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
 		OperationID: "getSelectedProfileEmbed",
 		Method:      fiber.MethodGet,

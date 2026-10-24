@@ -21,7 +21,7 @@ import (
 func registerNetworth(humaAPI huma.API) {
 	responses := profileErrors(humaAPI, "Networth calculation failed.")
 	responses["200"] = jsonResponse[models.Networth](humaAPI, "Profile networth returned successfully.")
-	responses["503"] = errorResponse(humaAPI, pricesUnavailableDescription)
+	responses["503"] = errorResponse(humaAPI, fiber.StatusServiceUnavailable, pricesUnavailableDescription)
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
 		OperationID: "getProfileNetworth",
 		Method:      fiber.MethodGet,
@@ -87,7 +87,7 @@ func networthResponse(reqCtx context.Context, uuid string, profileId string) (*j
 }
 
 // pricesUnavailableDescription documents the 503 of the endpoints that calculate networth.
-const pricesUnavailableDescription = "API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
+const pricesUnavailableDescription = "PRICES_UNAVAILABLE or API_KEY_VERIFICATION_UNAVAILABLE: item prices haven't loaded yet, or API keys can't be verified right now."
 
 const networthCacheTTLSeconds = 5 * 60
 
