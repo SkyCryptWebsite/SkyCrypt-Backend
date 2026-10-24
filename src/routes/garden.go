@@ -18,6 +18,7 @@ import (
 
 func registerGarden(humaAPI huma.API) {
 	responses := profileErrors(humaAPI, "Unexpected failure.")
+	responses["404"] = errorResponse(humaAPI, fiber.StatusNotFound, "GARDEN_NOT_FOUND, PLAYER_NOT_FOUND, or PROFILE_NOT_FOUND: the profile has no garden, or there is no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope.")
 	responses["200"] = jsonResponse[models.Garden](humaAPI, "Garden stats returned successfully.")
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
 		OperationID: "getGardenStats",

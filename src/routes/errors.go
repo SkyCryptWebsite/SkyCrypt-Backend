@@ -18,6 +18,7 @@ const (
 	codeUpstreamTimeout   = "UPSTREAM_TIMEOUT"
 	codePricesUnavailable = "PRICES_UNAVAILABLE"
 	codeInternalError     = "INTERNAL_ERROR"
+	codeGardenNotFound    = "GARDEN_NOT_FOUND"
 	codeInvalidRequest    = "INVALID_REQUEST"
 	codeTextureNotFound   = "TEXTURE_NOT_FOUND"
 	codeRenderFailed      = "RENDER_FAILED"
@@ -32,6 +33,8 @@ func loadErrorStatus(err error) (int, string) {
 		return fiber.StatusNotFound, codePlayerNotFound
 	case errors.Is(err, api.ErrProfileNotFound):
 		return fiber.StatusNotFound, codeProfileNotFound
+	case errors.Is(err, api.ErrGardenNotFound):
+		return fiber.StatusNotFound, codeGardenNotFound
 	case errors.Is(err, api.ErrUpstreamTimeout):
 		return fiber.StatusGatewayTimeout, codeUpstreamTimeout
 	case errors.Is(err, api.ErrUpstream):

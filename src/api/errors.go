@@ -18,6 +18,11 @@ var (
 	ErrUpstream = errors.New("upstream API failed")
 	// ErrUpstreamTimeout means Hypixel or Mojang didn't answer in time.
 	ErrUpstreamTimeout = errors.New("upstream API timed out")
+	// ErrGardenNotFound means the profile has no garden, which Hypixel answers with a 404.
+	ErrGardenNotFound = errors.New("garden not found")
+
+	// errHypixelNotFound marks a Hypixel 404. It also counts as ErrUpstream, except where a caller expects one.
+	errHypixelNotFound = errors.New("status code 404 from Hypixel")
 )
 
 // upstreamError wraps a failed call to service as ErrUpstreamTimeout or ErrUpstream, with secrets redacted.

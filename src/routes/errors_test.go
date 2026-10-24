@@ -21,6 +21,7 @@ func TestLoadErrorStatus(t *testing.T) {
 		{fmt.Errorf("%w: Hypixel returned status code 500", api.ErrUpstream), fiber.StatusBadGateway, codeUpstreamError},
 		{fmt.Errorf("%w: Hypixel: timeout", api.ErrUpstreamTimeout), fiber.StatusGatewayTimeout, codeUpstreamTimeout},
 		{api.ErrNotCached, fiber.StatusNotFound, codeNotCached},
+		{fmt.Errorf("failed to fetch data: %w", fmt.Errorf("%w: profile x has no garden", api.ErrGardenNotFound)), fiber.StatusNotFound, codeGardenNotFound},
 		{fmt.Errorf("failed to fetch prices: %w", skyhelpernetworthgo.ErrPricesUnavailable), fiber.StatusServiceUnavailable, codePricesUnavailable},
 		{errors.New("failed to format members"), fiber.StatusInternalServerError, codeInternalError},
 	}

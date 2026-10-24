@@ -30,6 +30,15 @@ func TestGetHypixelBodyClassifiesFailures(t *testing.T) {
 		t.Fatalf("a Hypixel 503 must be ErrUpstream, got %v", err)
 	}
 
+	missing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer missing.Close()
+	// A garden fetch turns this into ErrGardenNotFound; everywhere else it stays an upstream failure.
+	if _, err := getHypixelBody(context.Background(), missing.URL, nil); !errors.Is(err, ErrUpstream) || !errors.Is(err, errHypixelNotFound) {
+		t.Fatalf("a Hypixel 404 must be ErrUpstream and errHypixelNotFound, got %v", err)
+	}
+
 	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():

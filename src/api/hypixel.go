@@ -392,6 +392,9 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
 	})
+	if errors.Is(err, errHypixelNotFound) {
+		return nil, fmt.Errorf("%w: profile %s has no garden", ErrGardenNotFound, profileId)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -463,6 +466,9 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 				_ = resp.Body.Close()
 			}()
 
+			if resp.StatusCode == http.StatusNotFound {
+				return nil, fmt.Errorf("%w: %w", ErrUpstream, errHypixelNotFound)
+			}
 			if resp.StatusCode != http.StatusOK {
 				return nil, fmt.Errorf("%w: Hypixel returned status code %d", ErrUpstream, resp.StatusCode)
 			}
