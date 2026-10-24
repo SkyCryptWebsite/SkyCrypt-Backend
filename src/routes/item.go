@@ -5,7 +5,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type itemTextureResolution struct {
@@ -25,7 +25,7 @@ type itemTextureResolution struct {
 //	@Failure  400  {object} models.ProcessingError
 //	@Failure  500  {object} models.ProcessingError
 //	@Router   /api/item/{itemId}/resolve [get]
-func ItemResolveHandler(c *fiber.Ctx) error {
+func ItemResolveHandler(c fiber.Ctx) error {
 	textureID := c.Params("itemId")
 	if textureID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(constants.InvalidItemProvidedError)
@@ -54,7 +54,7 @@ func ItemResolveHandler(c *fiber.Ctx) error {
 //	@Failure		400		{object}	models.ProcessingError	"Item identifier is missing or invalid."
 //	@Failure		500		{object}	models.ProcessingError	"Item image could not be rendered."
 //	@Router			/api/item/{itemId} [get]
-func ItemHandlers(c *fiber.Ctx) error {
+func ItemHandlers(c fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("itemId")
 	if textureId == "" {
@@ -71,7 +71,7 @@ func ItemHandlers(c *fiber.Ctx) error {
 	}
 	if err != nil {
 		if redirectErr, ok := err.(lib.RedirectError); ok {
-			return c.Redirect(redirectErr.URL, 302)
+			return c.Redirect().Status(302).To(redirectErr.URL)
 		}
 
 		c.Status(500)

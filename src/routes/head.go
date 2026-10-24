@@ -5,7 +5,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // notFoundImageCacheControl lets clients and the CDN absorb repeats of a bad image URL without pinning the miss for long.
@@ -24,7 +24,7 @@ const notFoundImageCacheControl = "public, max-age=300"
 //	@Failure		404			{string}	string					"Texture identifier is malformed or unknown."
 //	@Failure		500			{string}	string					"Head image could not be rendered."
 //	@Router			/api/head/{textureId} [get]
-func HeadHandlers(c *fiber.Ctx) error {
+func HeadHandlers(c fiber.Ctx) error {
 	// timeNow := time.Now()
 	textureId := c.Params("textureId")
 	if textureId == "" {

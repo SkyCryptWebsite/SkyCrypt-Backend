@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func TestParseEnabledPacksFormats(t *testing.T) {
@@ -28,7 +28,7 @@ func TestParseEnabledPacksFormats(t *testing.T) {
 func TestEncodedEnabledPacksCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=%5B%22HYPIXEL_PACK%22%2C%22HYPIXEL_PLUS%22%2C%22FSR%22%5D")
@@ -59,7 +59,7 @@ func TestEncodedEnabledPacksCookie(t *testing.T) {
 func TestEncodedEmptyEnabledPacksCookieUsesVanillaOnly(t *testing.T) {
 	t.Setenv("DEV", "false")
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=%5B%5D")
@@ -85,7 +85,7 @@ func TestEnabledPacksFromRequestDefaultsAndIgnoresLegacyCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
 	want := enabledPacksCachePart(nil)
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "disabledPacks=[\"FSR\"]")
@@ -110,7 +110,7 @@ func TestEnabledPacksFromRequestDefaultsAndIgnoresLegacyCookie(t *testing.T) {
 func TestEnabledPacksFromDevelopmentQuery(t *testing.T) {
 	t.Setenv("DEV", "true")
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
 
 	request := httptest.NewRequest("GET", "/?enabledPacks=FSR,HPLUS", nil)
 	response, err := app.Test(request)
@@ -134,7 +134,7 @@ func TestEnabledPacksFromDevelopmentQuery(t *testing.T) {
 func TestEnabledPacksCookiePreservesPriorityOrder(t *testing.T) {
 	t.Setenv("DEV", "false")
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c))) })
 
 	request := httptest.NewRequest("GET", "/", nil)
 	request.Header.Set("Cookie", "enabledPacks=['FSR','HPLUS','HYPIXEL_PACK']")
@@ -159,7 +159,7 @@ func TestEnabledPacksCookiePreservesPriorityOrder(t *testing.T) {
 func TestResolverEnabledPacksQueryOverridesCookie(t *testing.T) {
 	t.Setenv("DEV", "false")
 	app := fiber.New()
-	app.Get("/api/item/:itemId/resolve", func(c *fiber.Ctx) error {
+	app.Get("/api/item/:itemId/resolve", func(c fiber.Ctx) error {
 		return c.SendString(enabledPacksCachePart(enabledPacksFromRequest(c)))
 	})
 

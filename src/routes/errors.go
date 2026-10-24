@@ -7,7 +7,7 @@ import (
 	"skycrypt/src/models"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // Codes sent with failed loads, so clients can tell "doesn't exist" from "try again later" without parsing text.
@@ -42,7 +42,7 @@ func loadErrorStatus(err error) (int, string) {
 }
 
 // sendLoadError answers a failed load with its mapped status and code.
-func sendLoadError(c *fiber.Ctx, message string, err error) error {
+func sendLoadError(c fiber.Ctx, message string, err error) error {
 	status, code := loadErrorStatus(err)
 	return c.Status(status).JSON(models.APIError{
 		Error: fmt.Sprintf("%s: %v", message, err),
@@ -69,7 +69,7 @@ func failedTo(message string, err error) error {
 }
 
 // sendBuildError answers a failed shared build like sendLoadError, with the message from failedTo.
-func sendBuildError(c *fiber.Ctx, err error) error {
+func sendBuildError(c fiber.Ctx, err error) error {
 	var built buildError
 	if errors.As(err, &built) {
 		return sendLoadError(c, built.message, built.err)

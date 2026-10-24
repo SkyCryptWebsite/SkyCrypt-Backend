@@ -12,8 +12,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/gofiber/fiber/v3"
+
 	"github.com/klauspost/compress/zstd"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -62,18 +64,20 @@ func InitRedis(addr string, password string, db int) error {
 	poolTimeoutSeconds := redisOptionInt("REDIS_POOL_TIMEOUT_SECONDS", 2)
 
 	redisClient = redis.NewClient(&redis.Options{
-		Addr:         addr,
-		Password:     password,
-		DB:           db,
-		PoolSize:     poolSize,
-		MinIdleConns: minIdleConns,
-		MaxRetries:   3,
-		PoolTimeout:  time.Duration(poolTimeoutSeconds) * time.Second,
-		IdleTimeout:  time.Minute * 5,
-		DialTimeout:  time.Second * 5,
-		ReadTimeout:  time.Second * 3,
-		WriteTimeout: time.Second * 3,
-		PoolFIFO:     false,
+		Addr:            addr,
+		Password:        password,
+		DB:              db,
+		PoolSize:        poolSize,
+		MinIdleConns:    minIdleConns,
+		MaxRetries:      3,
+		PoolTimeout:     time.Duration(poolTimeoutSeconds) * time.Second,
+		ConnMaxIdleTime: time.Minute * 5,
+		DialTimeout:     time.Second * 5,
+		ReadTimeout:     time.Second * 3,
+		WriteTimeout:    time.Second * 3,
+		PoolFIFO:        false,
+		// v9 ignores context deadlines unless this is set; v8 always honored them.
+		ContextTimeoutEnabled: true,
 	})
 
 	// Retry ping in case Redis is still loading its dataset
@@ -90,13 +94,13 @@ func InitRedis(addr string, password string, db int) error {
 			redisClient = nil
 			return fmt.Errorf("could not connect to Redis: %v", err)
 		}
-		if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+		if !fiber.IsChild() {
 			fmt.Printf("[REDIS] Waiting for Redis to be ready (attempt %d/%d): %v\n", i+1, maxRetries, err)
 		}
 		time.Sleep(time.Second * 2)
 	}
 
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+	if !fiber.IsChild() {
 		fmt.Print("[REDIS] Redis connected successfully\n")
 	}
 	if utility.IsForensicsEnabled() {

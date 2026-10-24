@@ -5,22 +5,22 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 func RequestTracingMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		requestID := uuid.New().String()
 		c.Locals("request_id", requestID)
 		requestMetrics := NewRequestMetrics(requestID, c.Method(), c.Path())
-		baseCtx := c.UserContext()
+		baseCtx := c.Context()
 		if baseCtx == nil {
 			baseCtx = context.Background()
 		}
 		metricsCtx := WithRequestMetrics(baseCtx, requestMetrics)
-		c.SetUserContext(metricsCtx)
+		c.SetContext(metricsCtx)
 
 		start := time.Now()
 		startAlloc := GetAllocBytes()
@@ -32,7 +32,7 @@ func RequestTracingMiddleware() fiber.Handler {
 			zap.String("ip", c.IP()),
 			zap.String("user_agent", c.Get("User-Agent")),
 			zap.Int("content_length", len(c.Body())),
-			zap.String("query", string(c.Context().QueryArgs().QueryString())),
+			zap.String("query", string(c.RequestCtx().QueryArgs().QueryString())),
 		)
 
 		err := c.Next()
@@ -44,7 +44,7 @@ func RequestTracingMiddleware() fiber.Handler {
 		if c.Route() != nil && c.Route().Path != "" {
 			route = c.Route().Path
 		}
-		SetRequestRoute(c.UserContext(), route)
+		SetRequestRoute(c.Context(), route)
 
 		logLevel := zap.InfoLevel
 		if statusCode >= 500 {
@@ -82,7 +82,7 @@ func RequestTracingMiddleware() fiber.Handler {
 		}
 
 		Logger.Log(logLevel, "request_completed", fields...)
-		FinalizeRequestMetrics(c.UserContext(), statusCode, duration, len(c.Response().Body()), allocDelta)
+		FinalizeRequestMetrics(c.Context(), statusCode, duration, len(c.Response().Body()), allocDelta)
 
 		return err
 	}

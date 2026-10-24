@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 var startTime = time.Now()
@@ -23,14 +23,14 @@ const (
 )
 
 func DashboardHandler() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		report := generateDashboardReport(dashboardOptionsFromCtx(c))
 		return c.JSON(report)
 	}
 }
 
 func DashboardHTMLHandler() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		if profile := c.Query("download"); profile != "" {
 			return writeMemoryProfile(c, profile)
 		}
@@ -295,7 +295,7 @@ type responseCacheAgg struct {
 	Cold      int
 }
 
-func dashboardOptionsFromCtx(c *fiber.Ctx) dashboardOptions {
+func dashboardOptionsFromCtx(c fiber.Ctx) dashboardOptions {
 	opts := dashboardOptions{Window: defaultDashboardWindow, Limit: defaultDashboardLimit}
 	if windowRaw := c.Query("window"); windowRaw != "" {
 		if window, err := time.ParseDuration(windowRaw); err == nil && window > 0 {

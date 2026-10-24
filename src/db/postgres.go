@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
 	"sync"
 	"time"
+
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/jackc/pgx/v5"
@@ -63,7 +64,7 @@ func InitPostgres(url string) error {
 	}
 
 	// The parent process runs before the prefork children start, so the schema exists by the time they connect.
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+	if !fiber.IsChild() {
 		if _, err := pool.Exec(ctx, schema); err != nil {
 			pool.Close()
 			return fmt.Errorf("could not create Postgres schema: %v", err)

@@ -9,7 +9,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // PlayerStatsHandler godoc
@@ -32,7 +32,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/playerStats/{uuid}/{profileId} [get]
-func PlayerStatsHandler(c *fiber.Ctx) error {
+func PlayerStatsHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.PlayerStats")()
 	}
@@ -41,7 +41,7 @@ func PlayerStatsHandler(c *fiber.Ctx) error {
 
 	uuid := c.Params("uuid")
 	profileId := c.Params("profileId")
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.

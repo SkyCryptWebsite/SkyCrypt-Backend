@@ -12,7 +12,7 @@ import (
 	"time"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 )
@@ -37,7 +37,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/networth/{uuid}/{profileId} [get]
-func NetworthHandler(c *fiber.Ctx) error {
+func NetworthHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Networth")()
 	}
@@ -49,7 +49,7 @@ func NetworthHandler(c *fiber.Ctx) error {
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.

@@ -3,7 +3,7 @@ package routes
 import (
 	"skycrypt/src/constants"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // EnchantmentsConstantsHandler godoc
@@ -15,6 +15,6 @@ import (
 //	@Produce		json
 //	@Success		200	{array}		string	"Max-level enchantments returned successfully."
 //	@Router			/api/constants/enchantments [get]
-func EnchantmentsConstantsHandler(c *fiber.Ctx) error {
+func EnchantmentsConstantsHandler(c fiber.Ctx) error {
 	return c.JSON(constants.MAX_ENCHANTS)
 }

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type memoryAnalysis struct {
@@ -207,7 +207,7 @@ func profileStackName(line string) string {
 	return strings.Join(fields[2:], " ")
 }
 
-func writeMemoryProfile(c *fiber.Ctx, profileName string) error {
+func writeMemoryProfile(c fiber.Ctx, profileName string) error {
 	if profileName != "heap" && profileName != "allocs" && profileName != "goroutine" {
 		return c.Status(400).SendString("unsupported profile; use heap, allocs, or goroutine")
 	}

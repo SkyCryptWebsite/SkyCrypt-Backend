@@ -17,9 +17,10 @@ import (
 	"time"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/etag"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/compress"
+	"github.com/gofiber/fiber/v3/middleware/etag"
+	"github.com/gofiber/fiber/v3/middleware/static"
 	"go.uber.org/zap"
 )
 
@@ -54,7 +55,7 @@ func SetupApplication() error {
 
 	// Main process: fetch all remote data, init/update repos, then parse
 	// Prefork children: only parse local data and read from Redis cache
-	if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+	if !fiber.IsChild() {
 		err := notenoughupdates.InitializeNEURepository()
 		if err != nil {
 			return fmt.Errorf("failed to initialize NEU repository: %v", err)
@@ -147,19 +148,20 @@ func SetupRoutes(app *fiber.App) {
 	// Assets folder
 	// Without MaxAge Fiber sends no Cache-Control, and every icon on a page went back to the origin. Rendered files
 	// are content-hashed or named after what they show, and are written atomically.
-	app.Static("/assets", "assets", fiber.Static{MaxAge: 24 * 60 * 60})
-	app.Static("/cache", "cache", fiber.Static{MaxAge: 7 * 24 * 60 * 60, ModifyResponse: cacheStaticResponse})
+	app.Get("/assets*", static.New("assets", static.Config{MaxAge: 24 * 60 * 60}))
+	app.Get("/cache*", static.New("cache", static.Config{MaxAge: 7 * 24 * 60 * 60, ModifyResponse: cacheStaticResponse}))
 
 	if os.Getenv("DEV") != "true" {
-		if os.Getenv("FIBER_PREFORK_CHILD") == "" {
+		if !fiber.IsChild() {
 			fmt.Println("[ENVIROMENT] Running in production mode.")
 		}
 
-		app.Use(etag.New())
+		// Weak tags survive the compress middleware, which replaces strong ones with a hash of the compressed body.
+		app.Use(etag.New(etag.Config{Weak: true}))
 		/*
 			app.Use("/api", cache.New(cache.Config{
 				Expiration:   5 * time.Minute,
-				CacheControl: true,
+				DisableCacheControl: false,
 			})
 		*/
 	}
@@ -179,10 +181,10 @@ func SetupRoutes(app *fiber.App) {
 
 	// Documentation - serve openapi files directly
 	// The spec changes on every deploy, so browsers must revalidate it instead of guessing a cache lifetime.
-	api.Static("/openapi/doc.json", "./docs/swagger.json", fiber.Static{ModifyResponse: func(c *fiber.Ctx) error {
+	api.Get("/openapi/doc.json", static.New("./docs/swagger.json", static.Config{ModifyResponse: func(c fiber.Ctx) error {
 		c.Set(fiber.HeaderCacheControl, "no-cache")
 		return nil
-	}})
+	}}))
 	api.Get("/openapi/", apiReferenceHandler)
 	api.Get("/openapi/reference.js", apiReferenceScriptHandler)
 
@@ -222,7 +224,7 @@ func SetupRoutes(app *fiber.App) {
 // cacheStaticResponse keeps the week-long max-age for files whose URL fixes their bytes: hash= renders, and heads,
 // potions and leather named after what they show. Other files in rendered/ and derived/ (the pack manifest) change
 // in place, so clients revalidate them.
-func cacheStaticResponse(c *fiber.Ctx) error {
+func cacheStaticResponse(c fiber.Ctx) error {
 	path := c.Path()
 	if !strings.Contains(path, "hash=") && (strings.HasPrefix(path, "/cache/rendered/") || strings.HasPrefix(path, "/cache/derived/")) {
 		c.Set(fiber.HeaderCacheControl, "public, no-cache")
@@ -236,12 +238,12 @@ var apiReferenceHTML []byte
 //go:embed api-reference/index.js
 var apiReferenceJS []byte
 
-func apiReferenceHandler(c *fiber.Ctx) error {
+func apiReferenceHandler(c fiber.Ctx) error {
 	c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
 	return c.Send(apiReferenceHTML)
 }
 
-func apiReferenceScriptHandler(c *fiber.Ctx) error {
+func apiReferenceScriptHandler(c fiber.Ctx) error {
 	c.Set(fiber.HeaderContentType, fiber.MIMETextJavaScriptCharsetUTF8)
 	return c.Send(apiReferenceJS)
 }

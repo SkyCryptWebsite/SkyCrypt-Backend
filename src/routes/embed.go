@@ -9,7 +9,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // EmbedHandler godoc
@@ -32,7 +32,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/embed/{uuid}/{profileId} [get]
-func EmbedHandler(c *fiber.Ctx) error {
+func EmbedHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Embed")()
 	}
@@ -44,7 +44,7 @@ func EmbedHandler(c *fiber.Ctx) error {
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.
@@ -114,6 +114,6 @@ func EmbedHandler(c *fiber.Ctx) error {
 //	@Failure		503		{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
 //	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/embed/{uuid} [get]
-func SelectedProfileEmbedHandler(c *fiber.Ctx) error {
+func SelectedProfileEmbedHandler(c fiber.Ctx) error {
 	return EmbedHandler(c)
 }

@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // APIKeyMiddleware lets the frontend in with its shared X-API-Token and everyone else with a SkyCrypt API key in
 // x-api-key. Keys without the cache-bypass scope only get cached data.
-func APIKeyMiddleware(c *fiber.Ctx) error {
+func APIKeyMiddleware(c fiber.Ctx) error {
 	if os.Getenv("DISABLE_SERVER_API_AUTH") == "true" {
-		c.SetUserContext(api.WithRequestState(c.UserContext(), &api.RequestState{}))
+		c.SetContext(api.WithRequestState(c.Context(), &api.RequestState{}))
 		return c.Next()
 	}
 
@@ -26,7 +26,7 @@ func APIKeyMiddleware(c *fiber.Ctx) error {
 		if expected == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
 			return apiKeyError(c, fiber.StatusUnauthorized, "INVALID_API_TOKEN", "Invalid X-API-Token.")
 		}
-		c.SetUserContext(api.WithRequestState(c.UserContext(), &api.RequestState{}))
+		c.SetContext(api.WithRequestState(c.Context(), &api.RequestState{}))
 		return c.Next()
 	}
 
@@ -35,7 +35,7 @@ func APIKeyMiddleware(c *fiber.Ctx) error {
 		return apiKeyError(c, fiber.StatusUnauthorized, "MISSING_API_KEY", "Send your SkyCrypt API key in the x-api-key header.")
 	}
 
-	verification, err := apikeys.Verify(c.UserContext(), rawKey)
+	verification, err := apikeys.Verify(c.Context(), rawKey)
 	if err != nil {
 		fmt.Printf("[APIKEYS] could not verify API key: %v\n", err)
 		return apiKeyError(c, fiber.StatusServiceUnavailable, "API_KEY_VERIFICATION_UNAVAILABLE", "API keys can't be verified right now. Try again shortly.")
@@ -48,7 +48,7 @@ func APIKeyMiddleware(c *fiber.Ctx) error {
 		return apiKeyError(c, fiber.StatusUnauthorized, code, message)
 	}
 
-	usage, err := apikeys.Consume(c.UserContext(), verification.Key)
+	usage, err := apikeys.Consume(c.Context(), verification.Key)
 	if err != nil {
 		fmt.Printf("[APIKEYS] %v\n", err)
 		return apiKeyError(c, fiber.StatusServiceUnavailable, "RATE_LIMIT_UNAVAILABLE", "API keys can't be checked right now. Try again shortly.")
@@ -63,8 +63,8 @@ func APIKeyMiddleware(c *fiber.Ctx) error {
 		return apiKeyError(c, fiber.StatusTooManyRequests, "RATE_LIMITED", "Rate limit exceeded.")
 	}
 
-	ctx := api.WithRequestState(c.UserContext(), &api.RequestState{CacheOnly: !verification.Key.HasScope("cache-bypass")})
-	c.SetUserContext(ctx)
+	ctx := api.WithRequestState(c.Context(), &api.RequestState{CacheOnly: !verification.Key.HasScope("cache-bypass")})
+	c.SetContext(ctx)
 	if err := c.Next(); err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func APIKeyMiddleware(c *fiber.Ctx) error {
 	return nil
 }
 
-func apiKeyError(c *fiber.Ctx, status int, code string, message string) error {
+func apiKeyError(c fiber.Ctx, status int, code string, message string) error {
 	return c.Status(status).JSON(fiber.Map{
 		"error": message,
 		"code":  code,

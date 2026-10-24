@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
+
 	"go.uber.org/zap"
 )
 
@@ -35,7 +37,7 @@ type resourceUsage struct {
 
 func currentProcessMetadata() (string, string) {
 	role := "main"
-	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+	if fiber.IsChild() {
 		role = "prefork-child"
 	}
 

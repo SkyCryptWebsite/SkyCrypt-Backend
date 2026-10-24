@@ -10,7 +10,7 @@ import (
 
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -33,7 +33,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Cached inventory data is missing or could not be parsed."
 //	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
-func InventorySearchHandler(c *fiber.Ctx) error {
+func InventorySearchHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Inventory")()
 	}
@@ -47,7 +47,7 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 	profileId := c.Params("profileId")
 	searchParam := c.Params("searchParam")
 
-	cache, err := db.GetContext(c.UserContext(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
+	cache, err := db.GetContext(c.Context(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get items: %v", err),

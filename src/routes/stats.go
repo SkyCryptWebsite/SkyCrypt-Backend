@@ -10,7 +10,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // StatsHandler godoc
@@ -33,7 +33,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/stats/{uuid}/{profileId} [get]
-func StatsHandler(c *fiber.Ctx) error {
+func StatsHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Stats")()
 	}
@@ -45,7 +45,7 @@ func StatsHandler(c *fiber.Ctx) error {
 	if len(profileId) > 0 && profileId[0] == '/' {
 		profileId = profileId[1:]
 	}
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.
 	rawCacheKey := responseCacheKey("stats", uuid, profileId)
@@ -104,7 +104,7 @@ func StatsHandler(c *fiber.Ctx) error {
 //	@Failure		503		{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/stats/{uuid} [get]
-func SelectedProfileStatsHandler(c *fiber.Ctx) error {
+func SelectedProfileStatsHandler(c fiber.Ctx) error {
 	return StatsHandler(c)
 }
 

@@ -7,10 +7,10 @@ import (
 	"skycrypt/src/lib"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
-func enabledPacksFromRequest(c *fiber.Ctx) []string {
+func enabledPacksFromRequest(c fiber.Ctx) []string {
 	value := ""
 	if strings.HasSuffix(c.Path(), "/resolve") {
 		value = c.Query("enabledPacks", "")

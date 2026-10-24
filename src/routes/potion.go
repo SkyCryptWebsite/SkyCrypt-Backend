@@ -5,7 +5,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // PotionHandlers godoc
@@ -22,7 +22,7 @@ import (
 //	@Failure		404		{object}	models.ProcessingError	"Potion type is not normal or splash, or color is not 6-digit hex."
 //	@Failure		500		{object}	models.ProcessingError	"Potion image could not be rendered."
 //	@Router			/api/potion/{type}/{color} [get]
-func PotionHandlers(c *fiber.Ctx) error {
+func PotionHandlers(c fiber.Ctx) error {
 	// timeNow := time.Now()
 	potionType := c.Params("type")
 	potionColor := c.Params("color")
