@@ -181,7 +181,7 @@ func SetupRoutes(app *fiber.App) {
 	humaAPI := routes.NewAPI(app, string(apiReferenceIntro))
 	// Marshaled once, on the first request.
 	spec := sync.OnceValues(humaAPI.OpenAPI().MarshalJSON)
-	api.Get("/openapi/doc.json", func(c fiber.Ctx) error {
+	app.Get("/openapi.json", func(c fiber.Ctx) error {
 		body, err := spec()
 		if err != nil {
 			return err
@@ -190,6 +190,10 @@ func SetupRoutes(app *fiber.App) {
 		c.Set(fiber.HeaderCacheControl, "no-cache")
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 		return c.Send(body)
+	})
+	// The spec's old address, which existing client generators still point at.
+	api.Get("/openapi/doc.json", func(c fiber.Ctx) error {
+		return c.Redirect().Status(fiber.StatusMovedPermanently).To("/openapi.json")
 	})
 	api.Get("/openapi/", apiReferenceHandler)
 	api.Get("/openapi/reference.js", apiReferenceScriptHandler)

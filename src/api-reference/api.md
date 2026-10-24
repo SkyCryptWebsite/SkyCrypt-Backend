@@ -17,7 +17,7 @@ We update our API as we see fit and that it fits with our own needs. Breaking ch
 If you need a stable API, you should use the [official Hypixel API](https://api.hypixel.net) instead.
 
 ## Specification
-The API is documented using the OpenAPI specification. You can find the full raw specification at [/api/openapi/doc.json](/api/openapi/doc.json).
+The API is documented using the OpenAPI specification. You can find the full raw specification at [/openapi.json](/openapi.json).
 
 ## Usage
 To use our API, you must read and agree to our [API Policy](https://sky.shiiyu.moe/api-policy). By using the API, you agree to comply with these terms.

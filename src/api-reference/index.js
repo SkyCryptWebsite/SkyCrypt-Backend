@@ -5,7 +5,7 @@ const title = "SkyCrypt API Reference";
 const description = "The SkyCrypt API provides access to player profiles and other data. It is intended for use by developers who want to integrate SkyCrypt data into their own applications or services.";
 
 createApiReference("#app", {
-  url: "/api/openapi/doc.json",
+  url: "/openapi.json",
   defaultHttpClient: { targetKey: "node", clientKey: 'fetch', },
   featuredClients: ['node/fetch', 'java/nethttp'],
   favicon: "/assets/static/favicon.ico",
