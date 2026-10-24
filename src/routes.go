@@ -242,6 +242,6 @@ func apiReferenceHandler(c *fiber.Ctx) error {
 }
 
 func apiReferenceScriptHandler(c *fiber.Ctx) error {
-	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJavaScriptCharsetUTF8)
+	c.Set(fiber.HeaderContentType, fiber.MIMETextJavaScriptCharsetUTF8)
 	return c.Send(apiReferenceJS)
 }
