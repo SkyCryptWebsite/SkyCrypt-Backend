@@ -276,6 +276,12 @@
       "sourceType": "github",
       "skillPath": "skills/golang-uber-fx/SKILL.md",
       "computedHash": "e08067cdc0bb745483dafe455d71b9f3172d5ef488be829bbce34b0526d3c541"
+    },
+    "scalar-api-reference": {
+      "source": "scalar/scalar",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/scalar-api-reference/SKILL.md",
+      "computedHash": "83d877315a45d4d75ad1292007d4481a8237ec2b9976c566d14e15f260e79c44"
     }
   }
 }

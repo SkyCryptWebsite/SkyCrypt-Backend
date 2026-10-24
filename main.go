@@ -1,5 +1,7 @@
 package main
 
+//go:generate go tool swag init -g main.go --v3.1 --parseDependency --parseInternal --markdownFiles docs/markdown
+
 import (
 	"context"
 	"fmt"
@@ -27,11 +29,7 @@ import (
 
 // @title			SkyCrypt API
 // @version		3.0
-// @description	SkyCrypt API provides Hypixel SkyBlock profile data, player statistics, networth calculations, inventory views, rendered Minecraft item assets, resource pack metadata, and source/license information used by SkyCrypt clients.
-// @description
-// @description	Profile endpoints need a SkyCrypt API key in the `x-api-key` header. Request one from the developer page in your SkyCrypt dashboard.
-// @description	Each key has its own rate limit; responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers.
-// @description	Keys only get players that SkyCrypt has already cached, as Hypixel's API policy doesn't allow proxying it. Other players return `404` with code `NOT_CACHED`.
+// @description.markdown
 // @servers.url		https://api.shiiyu.moe
 // @servers.description	Production
 // @servers.url		https://beta-api.shiiyu.moe

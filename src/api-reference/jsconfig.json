@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "checkJs": true,
+    "noEmit": true
+  },
+  "include": ["index.js", "scalar.d.ts"]
+}

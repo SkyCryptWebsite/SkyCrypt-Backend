@@ -1,6 +1,7 @@
 package src
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -177,8 +178,13 @@ func SetupRoutes(app *fiber.App) {
 	}
 
 	// Documentation - serve openapi files directly
-	api.Static("/openapi/doc.json", "./docs/swagger.json")
+	// The spec changes on every deploy, so browsers must revalidate it instead of guessing a cache lifetime.
+	api.Static("/openapi/doc.json", "./docs/swagger.json", fiber.Static{ModifyResponse: func(c *fiber.Ctx) error {
+		c.Set(fiber.HeaderCacheControl, "no-cache")
+		return nil
+	}})
 	api.Get("/openapi/", apiReferenceHandler)
+	api.Get("/openapi/reference.js", apiReferenceScriptHandler)
 
 	// USERNAME AND UUID RESOLVING
 	api.Get("/uuid/:username", routes.APIKeyMiddleware, routes.UUIDHandler)
@@ -224,18 +230,18 @@ func cacheStaticResponse(c *fiber.Ctx) error {
 	return nil
 }
 
+//go:embed api-reference/index.html
+var apiReferenceHTML []byte
+
+//go:embed api-reference/index.js
+var apiReferenceJS []byte
+
 func apiReferenceHandler(c *fiber.Ctx) error {
-	c.Set("Content-Type", "text/html")
-	return c.SendString(`<!DOCTYPE html>
-<html>
-<head>
-	<title>SkyCrypt API Reference</title>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body>
-	<script id="api-reference" data-url="/api/openapi/doc.json"></script>
-	<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.75.1"></script>
-</body>
-</html>`)
+	c.Set(fiber.HeaderContentType, fiber.MIMETextHTMLCharsetUTF8)
+	return c.Send(apiReferenceHTML)
+}
+
+func apiReferenceScriptHandler(c *fiber.Ctx) error {
+	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJavaScriptCharsetUTF8)
+	return c.Send(apiReferenceJS)
 }

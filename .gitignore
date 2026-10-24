@@ -150,3 +150,5 @@ cache/
 
 # Logs
 logs/
+### Node ###
+node_modules/

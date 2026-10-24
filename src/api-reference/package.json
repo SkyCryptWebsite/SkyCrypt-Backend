@@ -1,0 +1,8 @@
+{
+  "name": "skycrypt-api-reference",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@scalar/types": "^0.25.0"
+  }
+}
