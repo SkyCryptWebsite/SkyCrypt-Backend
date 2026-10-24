@@ -2,12 +2,8 @@ package routes
 
 import (
 	"context"
-	"io"
-	"net/http/httptest"
 	"os"
 	"testing"
-
-	"github.com/gofiber/fiber/v3"
 )
 
 func TestProcessedResponseCacheDisabledInDevelopment(t *testing.T) {
@@ -44,80 +40,30 @@ func TestProcessedResponseCacheEnabledOutsideDevelopment(t *testing.T) {
 	})
 }
 
-func TestSendCachedJSONIgnoresRAMCacheInDevelopment(t *testing.T) {
+func TestCachedJSONIgnoresRAMCacheInDevelopment(t *testing.T) {
 	t.Setenv("DEV", "true")
-	cacheKey := responseCacheKey("stats", "development-ram-read")
-
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error {
-		hit, err := sendCachedJSON(c, cacheKey)
-		if err != nil {
-			return err
-		}
-		if hit {
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	response, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-	if response.StatusCode != fiber.StatusNoContent {
-		t.Fatalf("status = %d, want %d", response.StatusCode, fiber.StatusNoContent)
+	if cached := cachedJSON(context.Background(), responseCacheKey("stats", "development-ram-read")); cached != nil {
+		t.Fatalf("cachedJSON() = %+v, want nil", cached)
 	}
 }
 
-func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
+func TestCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 	t.Setenv("DEV", "true")
-	cacheKey := responseCacheKey("stats", "development-ram-write")
-
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error {
-		return sendAndCacheJSON(c, context.Background(), cacheKey, map[string]bool{"computed": true}, 60)
-	})
-
-	response, err := app.Test(httptest.NewRequest("GET", "/", nil))
+	out, err := cacheJSON(context.Background(), responseCacheKey("stats", "development-ram-write"), map[string]bool{"computed": true}, 60)
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
+		t.Fatal(err)
 	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		t.Fatalf("failed to read response: %v", err)
+	if string(out.Body) != `{"computed":true}` {
+		t.Fatalf("body = %q, want computed JSON response", out.Body)
 	}
-	if string(body) != `{"computed":true}` {
-		t.Fatalf("body = %q, want computed JSON response", body)
-	}
-	if got := response.Header.Get("X-SkyCrypt-Backend-Cache"); got != "bypass" {
-		t.Fatalf("cache header = %q, want %q", got, "bypass")
+	if out.Cache != "bypass" {
+		t.Fatalf("cache header = %q, want %q", out.Cache, "bypass")
 	}
 }
 
 func TestEmbedResponseCacheHeaders(t *testing.T) {
-	app := fiber.New()
-	app.Get("/", func(c fiber.Ctx) error {
-		setResponseCacheHeaders(c, "embed")
-		return c.SendStatus(fiber.StatusNoContent)
-	})
-
-	response, err := app.Test(httptest.NewRequest("GET", "/", nil))
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
-
 	want := "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60"
-	if got := response.Header.Get(fiber.HeaderCacheControl); got != want {
+	if got := responseCacheControl("embed"); got != want {
 		t.Fatalf("Cache-Control = %q, want %q", got, want)
 	}
 }

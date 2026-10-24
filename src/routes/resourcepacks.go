@@ -1,35 +1,35 @@
 package routes
 
 import (
+	"context"
 	"skycrypt/src/lib"
+	"skycrypt/src/models"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
-// ResourcePacksConstantsHandler godoc
-//
-//	@Summary		List resource packs
-//	@Description	Returns toggleable resource packs sorted by descending priority for the recommended default order.
-//	@Description	The enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.
-//	@Description	A missing preference uses the default order, while an explicit empty array uses vanilla textures only.
-//	@Description	The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.
-//	@ID				listResourcePacks
-//	@Tags			Rendering
-//	@Produce		json
-//	@Success		200	{array}		models.ResourcePackConfig	"Resource packs returned successfully."
-//	@Failure		500	{object}	models.ProcessingError		"Resource pack metadata could not be read."
-//	@Router			/api/constants/packs [get]
-func ResourcePacksConstantsHandler(c fiber.Ctx) error {
-	// timeNow := time.Now()
-
-	configs, err := lib.ResourcePackConfigs()
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to read resource packs directory",
-		})
-	}
-
-	// utility.LogVerbose("Returning /api/resourcepacks in %s", time.Since(timeNow))
-
-	return c.JSON(configs)
+func registerResourcePacks(humaAPI huma.API) {
+	responses := errorResponses(humaAPI, map[int]string{
+		fiber.StatusInternalServerError: "Resource pack metadata could not be read.",
+	})
+	responses["200"] = &huma.Response{Description: "Resource packs returned successfully."}
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "listResourcePacks",
+		Method:      fiber.MethodGet,
+		Path:        "/api/constants/packs",
+		Summary:     "List resource packs",
+		Description: "Returns toggleable resource packs sorted by descending priority for the recommended default order.\n" +
+			"The enabledPacks cookie controls per-request rendering from highest to lowest priority and does not change this response order.\n" +
+			"A missing preference uses the default order, while an explicit empty array uses vanilla textures only.\n" +
+			"The vanilla resource pack is intentionally omitted because it is the default and cannot be disabled.",
+		Tags:      []string{"Rendering"},
+		Responses: responses,
+	}, func(context.Context, *struct{}) (*bodyOutput[[]models.ResourcePackConfig], error) {
+		configs, err := lib.ResourcePackConfigs()
+		if err != nil {
+			return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, "Failed to read resource packs directory")
+		}
+		return &bodyOutput[[]models.ResourcePackConfig]{Body: configs}, nil
+	})
 }

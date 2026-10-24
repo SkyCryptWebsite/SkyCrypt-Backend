@@ -1,10 +1,11 @@
 package routes
 
 import (
+	"context"
 	"net/http"
-	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -13,80 +14,82 @@ type itemTextureResolution struct {
 	TexturePack string `json:"texture_pack,omitempty"`
 }
 
-// ItemResolveHandler godoc
-//
-//	@Summary  Resolve an item texture
-//	@Description Returns the final texture URL and the resource pack that supplied it.
-//	@ID   resolveItemImage
-//	@Tags   Rendering
-//	@Produce  json
-//	@Param   itemId path  string true "SkyBlock item ID or Minecraft item identifier"
-//	@Success  200  {object} itemTextureResolution
-//	@Failure  400  {object} models.ProcessingError
-//	@Failure  500  {object} models.ProcessingError
-//	@Router   /api/item/{itemId}/resolve [get]
-func ItemResolveHandler(c fiber.Ctx) error {
-	textureID := c.Params("itemId")
-	if textureID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(constants.InvalidItemProvidedError)
-	}
-
-	texture, err := lib.ResolveItemTexture(textureID, enabledPacksFromRequest(c), false)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(constants.InvalidItemProvidedError)
-	}
-
-	return c.JSON(itemTextureResolution{Texture: texture.Texture, TexturePack: texture.TexturePack})
+type ItemInput struct {
+	ItemID string `path:"itemId" doc:"SkyBlock item ID or Minecraft item identifier" example:"ASPECT_OF_THE_END"`
+	PacksInput
 }
 
-// ItemHandlers godoc
-//
-//	@Summary		Render an item
-//	@Description	Renders a SkyBlock or Minecraft item as PNG bytes.
-//	@Description	Resource pack preferences supplied by cookie can affect which texture is rendered. Some renderer results redirect to a canonical asset URL.
-//	@ID				renderItemImage
-//	@Tags			Rendering
-//	@Produce		png
-//	@Param			itemId	path		string	true	"SkyBlock item ID or Minecraft item identifier"	example(ASPECT_OF_THE_END)
-//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
-//	@Success		302		{string}	string					"Redirects to a canonical rendered asset URL."
-//	@Header			302		{string}	Location				"Redirect target URL."
-//	@Failure		400		{object}	models.ProcessingError	"Item identifier is missing or invalid."
-//	@Failure		500		{object}	models.ProcessingError	"Item image could not be rendered."
-//	@Router			/api/item/{itemId} [get]
-func ItemHandlers(c fiber.Ctx) error {
-	// timeNow := time.Now()
-	textureId := c.Params("itemId")
-	if textureId == "" {
-		c.Status(400)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
+type ResolveInput struct {
+	ItemInput
+	EnabledPacksQuery string `query:"enabledPacks" doc:"Resource packs to resolve with, in place of the enabledPacks cookie."`
+}
 
-	enabledPacks := enabledPacksFromRequest(c)
-
-	texture, err := lib.ResolveItemTexture(textureId, enabledPacks, false)
-	var textureBytes []byte
-	if err == nil {
-		textureBytes, err = lib.RenderResolvedItemTexture(texture, false)
+func (in *ResolveInput) packs() []string {
+	if in.EnabledPacksQuery != "" {
+		return lib.NormalizeEnabledPacks(parseEnabledPacks(in.EnabledPacksQuery))
 	}
-	if err != nil {
-		if redirectErr, ok := err.(lib.RedirectError); ok {
-			return c.Redirect().Status(302).To(redirectErr.URL)
+	return in.enabledPacks
+}
+
+func registerItem(humaAPI huma.API) {
+	responses := errorResponses(humaAPI, map[int]string{
+		fiber.StatusInternalServerError: "Item texture could not be resolved.",
+	})
+	responses["200"] = &huma.Response{Description: "Texture resolved successfully."}
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "resolveItemImage",
+		Method:      fiber.MethodGet,
+		Path:        "/api/item/{itemId}/resolve",
+		Summary:     "Resolve an item texture",
+		Description: "Returns the final texture URL and the resource pack that supplied it.",
+		Tags:        []string{"Rendering"},
+		Responses:   responses,
+	}, func(_ context.Context, in *ResolveInput) (*bodyOutput[itemTextureResolution], error) {
+		texture, err := lib.ResolveItemTexture(in.ItemID, in.packs(), false)
+		if err != nil {
+			return nil, NewAPIError(fiber.StatusInternalServerError, codeRenderFailed, "The item texture could not be resolved or rendered.")
 		}
 
-		c.Status(500)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
+		return &bodyOutput[itemTextureResolution]{Body: itemTextureResolution{Texture: texture.Texture, TexturePack: texture.TexturePack}}, nil
+	})
 
-	// Depends on the pack cookie, so browsers may keep it but shared caches may not (Vary: Cookie is set).
-	// A fallback is kept briefly so the real render replaces it once it exists.
-	if lib.IsRenderedItemTexture(texture) {
-		c.Set(fiber.HeaderCacheControl, "private, max-age=3600")
-	} else {
-		c.Set(fiber.HeaderCacheControl, "private, max-age=60")
+	responses = errorResponses(humaAPI, map[int]string{
+		fiber.StatusInternalServerError: "Item image could not be rendered.",
+	})
+	responses["200"] = imageResponse("Image bytes returned successfully.", "image/png", "image/webp")
+	responses["302"] = &huma.Response{
+		Description: "Redirects to a canonical rendered asset URL.",
+		Headers:     map[string]*huma.Header{"Location": {Description: "The rendered asset URL.", Schema: &huma.Schema{Type: huma.TypeString}}},
 	}
-	// Rendered textures are mostly WebP; send the type the bytes actually have.
-	c.Set(fiber.HeaderContentType, http.DetectContentType(textureBytes))
-	// fmt.Printf("Returning /api/item/%s in %s\n", textureId, time.Since(timeNow))
-	return c.Send(textureBytes)
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "renderItemImage",
+		Method:      fiber.MethodGet,
+		Path:        "/api/item/{itemId}",
+		Summary:     "Render an item",
+		Description: "Renders a SkyBlock or Minecraft item as image bytes.\n" +
+			"Resource pack preferences supplied by cookie can affect which texture is rendered. Some renderer results redirect to a canonical asset URL.",
+		Tags:      []string{"Rendering"},
+		Responses: responses,
+	}, func(_ context.Context, in *ItemInput) (*imageOutput, error) {
+		texture, err := lib.ResolveItemTexture(in.ItemID, in.enabledPacks, false)
+		var textureBytes []byte
+		if err == nil {
+			textureBytes, err = lib.RenderResolvedItemTexture(texture, false)
+		}
+		if err != nil {
+			if redirectErr, ok := err.(lib.RedirectError); ok {
+				return &imageOutput{Status: fiber.StatusFound, Location: redirectErr.URL}, nil
+			}
+			return nil, NewAPIError(fiber.StatusInternalServerError, codeRenderFailed, "The item texture could not be resolved or rendered.")
+		}
+
+		// Depends on the pack cookie, so browsers may keep it but shared caches may not (Vary: Cookie is set).
+		// A fallback is kept briefly so the real render replaces it once it exists.
+		cacheControl := "private, max-age=60"
+		if lib.IsRenderedItemTexture(texture) {
+			cacheControl = "private, max-age=3600"
+		}
+		// Rendered textures are mostly WebP; send the type the bytes actually have.
+		return &imageOutput{Status: fiber.StatusOK, ContentType: http.DetectContentType(textureBytes), CacheControl: cacheControl, Body: textureBytes}, nil
+	})
 }

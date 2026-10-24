@@ -71,7 +71,6 @@ WORKDIR /app
 COPY --from=builder /app/main                    ./main
 COPY --from=builder /app/assets                  ./assets
 COPY --from=builder /app/NotEnoughUpdates-REPO   ./NotEnoughUpdates-REPO
-COPY --from=builder /app/docs                    ./docs
 
 RUN mkdir -p logs cache
 

@@ -1,20 +1,23 @@
 package routes
 
 import (
+	"context"
 	"skycrypt/src/constants"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
-// EnchantmentsConstantsHandler godoc
-//
-//	@Summary		List max-level enchantments
-//	@Description	Returns the lore strings for enchantments at their maximum level.
-//	@ID				listEnchantments
-//	@Tags			Constants
-//	@Produce		json
-//	@Success		200	{array}		string	"Max-level enchantments returned successfully."
-//	@Router			/api/constants/enchantments [get]
-func EnchantmentsConstantsHandler(c fiber.Ctx) error {
-	return c.JSON(constants.MAX_ENCHANTS)
+func registerEnchantments(humaAPI huma.API) {
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "listEnchantments",
+		Method:      fiber.MethodGet,
+		Path:        "/api/constants/enchantments",
+		Summary:     "List max-level enchantments",
+		Description: "Returns the lore strings for enchantments at their maximum level.",
+		Tags:        []string{"Constants"},
+		Responses:   map[string]*huma.Response{"200": {Description: "Max-level enchantments returned successfully."}},
+	}, func(context.Context, *struct{}) (*bodyOutput[[]string], error) {
+		return &bodyOutput[[]string]{Body: constants.MAX_ENCHANTS}, nil
+	})
 }

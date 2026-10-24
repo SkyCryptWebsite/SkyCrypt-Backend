@@ -1,48 +1,31 @@
 package routes
 
 import (
-	"errors"
-	"skycrypt/src/constants"
+	"context"
 	"skycrypt/src/lib"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
-// PotionHandlers godoc
-//
-//	@Summary		Render a potion
-//	@Description	Renders a potion image for the requested potion type and color.
-//	@ID				renderPotionImage
-//	@Tags			Rendering
-//	@Produce		png
-//	@Param			type	path		string	true	"Potion type identifier"	example(splash)
-//	@Param			color	path		string	true	"Potion color value"		example(ff0000)
-//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
-//	@Failure		400		{object}	models.ProcessingError	"Potion type or color is missing or invalid."
-//	@Failure		404		{object}	models.ProcessingError	"Potion type is not normal or splash, or color is not 6-digit hex."
-//	@Failure		500		{object}	models.ProcessingError	"Potion image could not be rendered."
-//	@Router			/api/potion/{type}/{color} [get]
-func PotionHandlers(c fiber.Ctx) error {
-	// timeNow := time.Now()
-	potionType := c.Params("type")
-	potionColor := c.Params("color")
-	if potionType == "" || potionColor == "" {
-		c.Status(400)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
-
-	imageBytes, err := lib.RenderPotion(potionType, potionColor)
-	if errors.Is(err, lib.ErrTextureNotFound) {
-		c.Set(fiber.HeaderCacheControl, notFoundImageCacheControl)
-		return c.Status(fiber.StatusNotFound).JSON(constants.InvalidItemProvidedError)
-	}
-	if err != nil {
-		c.Status(500)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
-
-	c.Type("png")
-	c.Set(fiber.HeaderCacheControl, renderedImageCacheControl)
-	// fmt.Printf("Returning /api/potion/%s/%s in %s\n", potionType, potionColor, time.Since(timeNow))
-	return c.Send(imageBytes)
+func registerPotion(humaAPI huma.API) {
+	responses := errorResponses(humaAPI, map[int]string{
+		fiber.StatusNotFound:            "Potion type is not normal or splash, or color is not 6-digit hex.",
+		fiber.StatusInternalServerError: "Potion image could not be rendered.",
+	})
+	responses["200"] = imageResponse("PNG image bytes returned successfully.", "image/png")
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "renderPotionImage",
+		Method:      fiber.MethodGet,
+		Path:        "/api/potion/{type}/{color}",
+		Summary:     "Render a potion",
+		Description: "Renders a potion image for the requested potion type and color.",
+		Tags:        []string{"Rendering"},
+		Responses:   responses,
+	}, func(_ context.Context, in *struct {
+		Type  string `path:"type" doc:"Potion type identifier" example:"splash"`
+		Color string `path:"color" doc:"Potion color value" example:"ff0000"`
+	}) (*imageOutput, error) {
+		return renderedImage(lib.RenderPotion(in.Type, in.Color))
+	})
 }

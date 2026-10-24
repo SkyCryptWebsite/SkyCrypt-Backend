@@ -9,48 +9,56 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
-// EmbedHandler godoc
-//
-//	@Summary		Get profile embed data
-//	@Description	Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.
-//	@Description	The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.
-//	@ID				getProfileEmbed
-//	@Tags			Discord Embed
-//	@Produce		json
-//	@Security		ApiKeyHeader
-//	@Param			uuid		path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
-//	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
-//	@Success		200			{object}	models.EmbedData		"Profile embed data returned successfully."
-//	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404			{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
-//	@Failure		429			{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
-//	@Failure		500			{object}	models.APIError	"INTERNAL_ERROR: Networth calculation failed."
-//	@Failure		502			{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
-//	@Failure		503			{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
-//	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
-//	@Router			/api/embed/{uuid}/{profileId} [get]
-func EmbedHandler(c fiber.Ctx) error {
+func registerEmbed(humaAPI huma.API) {
+	responses := profileErrors(humaAPI, "Networth calculation failed.")
+	responses["200"] = jsonResponse[models.EmbedData](humaAPI, "Profile embed data returned successfully.")
+	responses["503"] = errorResponse(humaAPI, pricesUnavailableDescription)
+	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
+		OperationID: "getProfileEmbed",
+		Method:      fiber.MethodGet,
+		Path:        "/api/embed/{uuid}/{profileId}",
+		Summary:     "Get profile embed data",
+		Description: "Returns compact profile data intended for embeds and previews, including rank, SkyBlock level, skills, dungeons, slayers, purse, bank, and networth summary.\n" +
+			"The player identifier can be a Minecraft UUID or username. The profile identifier can be a Hypixel profile UUID or profile cute name.",
+		Tags:      []string{"Discord Embed"},
+		Responses: responses,
+	}), func(ctx context.Context, in *ProfileInput) (*jsonOutput, error) {
+		return embedResponse(ctx, in.UUID, in.ProfileID)
+	})
+
+	responses = profileErrors(humaAPI, "Networth calculation failed.")
+	responses["200"] = jsonResponse[models.EmbedData](humaAPI, "Selected profile embed data returned successfully.")
+	responses["503"] = errorResponse(humaAPI, pricesUnavailableDescription)
+	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
+		OperationID: "getSelectedProfileEmbed",
+		Method:      fiber.MethodGet,
+		Path:        "/api/embed/{uuid}",
+		Summary:     "Get selected profile embed data",
+		Description: "Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.\n" +
+			"If Hypixel does not mark a selected profile, the first available profile is used.",
+		Tags:      []string{"Discord Embed"},
+		Responses: responses,
+	}), func(ctx context.Context, in *PlayerInput) (*jsonOutput, error) {
+		return embedResponse(ctx, in.UUID, "")
+	})
+}
+
+func embedResponse(reqCtx context.Context, uuid string, profileId string) (*jsonOutput, error) {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Embed")()
 	}
 
 	timeNow := time.Now()
 
-	uuid := c.Params("uuid")
-	profileId := c.Params("profileId")
-	if len(profileId) > 0 && profileId[0] == '/' {
-		profileId = profileId[1:]
-	}
-	reqCtx := c.Context()
-
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.
 	rawCacheKey := responseCacheKey("embed", uuid, profileId)
-	if ok, err := sendCachedJSON(c, rawCacheKey); ok || err != nil {
-		return err
+	if cached := cachedJSON(reqCtx, rawCacheKey); cached != nil {
+		return cached, nil
 	}
 
 	// A UUID is all the cache key and the profile fetch need, so its Mojang lookup runs alongside the fetch instead.
@@ -58,15 +66,15 @@ func EmbedHandler(c fiber.Ctx) error {
 	if !utility.IsUUID(uuid) {
 		resolved, err := api.ResolvePlayerContext(reqCtx, uuid)
 		if err != nil {
-			return sendLoadError(c, "Failed to resolve player", err)
+			return nil, loadError("Failed to resolve player", err)
 		}
 		mowojang = resolved
 	}
 
 	cacheKey := responseCacheKey("embed", mowojang.UUID, profileId)
 	if cacheKey.key != rawCacheKey.key {
-		if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
-			return err
+		if cached := cachedJSON(reqCtx, cacheKey); cached != nil {
+			return cached, nil
 		}
 	}
 
@@ -88,32 +96,9 @@ func EmbedHandler(c fiber.Ctx) error {
 		return marshalBody(stats.GetEmbedData(data.Mowojang, data.Player, data.Member(), data.Profile, formattedNetworth))
 	})
 	if err != nil {
-		return sendBuildError(c, err)
+		return nil, buildFailure(err)
 	}
 
 	utility.LogVerbose("Returning /api/embed/%s/%s in %s", uuid, profileId, time.Since(timeNow))
-	return sendBody(c, reqCtx, cacheKey, body)
-}
-
-// SelectedProfileEmbedHandler godoc
-//
-//	@Summary		Get selected profile embed data
-//	@Description	Returns compact profile data intended for embeds and previews for a player's selected SkyBlock profile.
-//	@Description	If Hypixel does not mark a selected profile, the first available profile is used.
-//	@ID				getSelectedProfileEmbed
-//	@Tags			Discord Embed
-//	@Produce		json
-//	@Security		ApiKeyHeader
-//	@Param			uuid	path		string	true	"Minecraft UUID or username"	example(4855c53ee4fb4100997600a92fc50984)
-//	@Success		200		{object}	models.EmbedData		"Selected profile embed data returned successfully."
-//	@Failure		401		{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
-//	@Failure		404		{object}	models.APIError	"PLAYER_NOT_FOUND or PROFILE_NOT_FOUND: no such player or profile. NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
-//	@Failure		429		{object}	models.APIError	"RATE_LIMITED: the key's rate limit is used up. See the Retry-After header."
-//	@Failure		500		{object}	models.APIError	"INTERNAL_ERROR: Networth calculation failed."
-//	@Failure		502		{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
-//	@Failure		503		{object}	models.APIError	"API keys can't be verified right now, or PRICES_UNAVAILABLE: item prices haven't loaded yet."
-//	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
-//	@Router			/api/embed/{uuid} [get]
-func SelectedProfileEmbedHandler(c fiber.Ctx) error {
-	return EmbedHandler(c)
+	return jsonBody(reqCtx, cacheKey, body), nil
 }

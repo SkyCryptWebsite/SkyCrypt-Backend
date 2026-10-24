@@ -1,50 +1,37 @@
 package routes
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
 
-// LeatherHandlers godoc
-//
-//	@Summary		Render leather armor
-//	@Description	Renders a dyed leather armor piece as PNG bytes for the requested armor piece and color.
-//	@ID				renderLeatherArmorImage
-//	@Tags			Rendering
-//	@Produce		png
-//	@Param			type	path		string	true	"Leather armor piece identifier"	example(helmet)
-//	@Param			color	path		string	true	"Armor color value"				example(ff0000)
-//	@Success		200		{file}		binary					"PNG image bytes returned successfully."
-//	@Failure		400		{object}	models.ProcessingError	"Armor type or color is missing or invalid."
-//	@Failure		404		{object}	models.ProcessingError	"Armor piece is unknown or color is not 6-digit hex."
-//	@Failure		500		{object}	models.ProcessingError	"Leather armor image could not be rendered."
-//	@Router			/api/leather/{type}/{color} [get]
-func LeatherHandlers(c fiber.Ctx) error {
-	// timeNow := time.Now()
-	armorType := c.Params("type")
-	armorColor := c.Params("color")
-	if armorType == "" || armorColor == "" {
-		c.Status(400)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
-
-	imageBytes, err := lib.RenderArmor(armorType, armorColor)
-	if errors.Is(err, lib.ErrTextureNotFound) {
-		c.Set(fiber.HeaderCacheControl, notFoundImageCacheControl)
-		return c.Status(fiber.StatusNotFound).JSON(constants.InvalidItemProvidedError)
-	}
-	if err != nil {
-		fmt.Printf("Error rendering armor: %v\n", err)
-		c.Status(500)
-		return c.JSON(constants.InvalidItemProvidedError)
-	}
-
-	c.Type("png")
-	c.Set(fiber.HeaderCacheControl, renderedImageCacheControl)
-	// fmt.Printf("Returning /api/leather/%s/%s in %s\n", armorType, armorColor, time.Since(timeNow))
-	return c.Send(imageBytes)
+func registerLeather(humaAPI huma.API) {
+	responses := errorResponses(humaAPI, map[int]string{
+		fiber.StatusNotFound:            "Armor piece is unknown or color is not 6-digit hex.",
+		fiber.StatusInternalServerError: "Leather armor image could not be rendered.",
+	})
+	responses["200"] = imageResponse("PNG image bytes returned successfully.", "image/png")
+	huma.Register(humaAPI, huma.Operation{
+		OperationID: "renderLeatherArmorImage",
+		Method:      fiber.MethodGet,
+		Path:        "/api/leather/{type}/{color}",
+		Summary:     "Render leather armor",
+		Description: "Renders a dyed leather armor piece as PNG bytes for the requested armor piece and color.",
+		Tags:        []string{"Rendering"},
+		Responses:   responses,
+	}, func(_ context.Context, in *struct {
+		Type  string `path:"type" doc:"Leather armor piece identifier" example:"helmet"`
+		Color string `path:"color" doc:"Armor color value" example:"ff0000"`
+	}) (*imageOutput, error) {
+		imageBytes, err := lib.RenderArmor(in.Type, in.Color)
+		if err != nil && !errors.Is(err, lib.ErrTextureNotFound) {
+			fmt.Printf("Error rendering armor: %v\n", err)
+		}
+		return renderedImage(imageBytes, err)
+	})
 }

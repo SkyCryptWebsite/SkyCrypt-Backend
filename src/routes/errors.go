@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"skycrypt/src/api"
-	"skycrypt/src/models"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/gofiber/fiber/v3"
@@ -19,6 +18,9 @@ const (
 	codeUpstreamTimeout   = "UPSTREAM_TIMEOUT"
 	codePricesUnavailable = "PRICES_UNAVAILABLE"
 	codeInternalError     = "INTERNAL_ERROR"
+	codeInvalidRequest    = "INVALID_REQUEST"
+	codeTextureNotFound   = "TEXTURE_NOT_FOUND"
+	codeRenderFailed      = "RENDER_FAILED"
 )
 
 // loadErrorStatus maps a failed load to the status that says whose fault it was.
@@ -41,13 +43,10 @@ func loadErrorStatus(err error) (int, string) {
 	}
 }
 
-// sendLoadError answers a failed load with its mapped status and code.
-func sendLoadError(c fiber.Ctx, message string, err error) error {
+// loadError answers a failed load with its mapped status and code.
+func loadError(message string, err error) error {
 	status, code := loadErrorStatus(err)
-	return c.Status(status).JSON(models.APIError{
-		Error: fmt.Sprintf("%s: %v", message, err),
-		Code:  code,
-	})
+	return NewAPIError(status, code, fmt.Sprintf("%s: %v", message, err))
 }
 
 // buildError is a failure inside a shared response build, with the message its handler answers with.
@@ -68,11 +67,11 @@ func failedTo(message string, err error) error {
 	return buildError{message: message, err: err}
 }
 
-// sendBuildError answers a failed shared build like sendLoadError, with the message from failedTo.
-func sendBuildError(c fiber.Ctx, err error) error {
+// buildFailure answers a failed shared build like loadError, with the message from failedTo.
+func buildFailure(err error) error {
 	var built buildError
 	if errors.As(err, &built) {
-		return sendLoadError(c, built.message, built.err)
+		return loadError(built.message, built.err)
 	}
-	return sendLoadError(c, "Failed to build response", err)
+	return loadError("Failed to build response", err)
 }

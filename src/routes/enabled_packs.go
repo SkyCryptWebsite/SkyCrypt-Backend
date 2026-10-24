@@ -7,25 +7,30 @@ import (
 	"skycrypt/src/lib"
 	"strings"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/gofiber/fiber/v3"
 )
 
-func enabledPacksFromRequest(c fiber.Ctx) []string {
-	value := ""
-	if strings.HasSuffix(c.Path(), "/resolve") {
-		value = c.Query("enabledPacks", "")
-	}
-	if value == "" {
-		value = c.Cookies("enabledPacks", "")
-	}
-	if value == "" && os.Getenv("DEV") == "true" {
-		value = c.Query("enabledPacks", "")
-	}
+// PacksInput reads the resource packs a request renders items with, from the enabledPacks cookie the frontend sets.
+type PacksInput struct {
+	// Documents the cookie only: Resolve reads it through Fiber, which picks the first of duplicate cookies where
+	// Huma would pick the last.
+	EnabledPacksCookie string `cookie:"enabledPacks" doc:"Resource packs to render items with, as a JSON array or comma-separated list of pack IDs."`
+	enabledPacks       []string
+}
 
-	enabledPacks := lib.NormalizeEnabledPacks(parseEnabledPacks(value))
+// Resolve also marks the response as depending on the cookie, errors included, so shared caches don't keep it.
+func (p *PacksInput) Resolve(ctx huma.Context) []error {
+	c := humafiber.Unwrap(ctx)
+	value := c.Cookies("enabledPacks")
+	if value == "" && os.Getenv("DEV") == "true" {
+		value = ctx.Query("enabledPacks")
+	}
+	p.enabledPacks = lib.NormalizeEnabledPacks(parseEnabledPacks(value))
 	c.Vary(fiber.HeaderCookie)
-	c.Set(fiber.HeaderCacheControl, "private, no-cache")
-	return enabledPacks
+	ctx.SetHeader(fiber.HeaderCacheControl, "private, no-cache")
+	return nil
 }
 
 func parseEnabledPacks(value string) []string {
