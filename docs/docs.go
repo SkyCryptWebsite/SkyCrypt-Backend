@@ -4193,7 +4193,7 @@ const docTemplate = `{
                         }
                     },
                     {
-                        "description": "Case-sensitive search text matched against item display names and lore",
+                        "description": "Search text matched against item display names and lore, ignoring case",
                         "example": "hyperion",
                         "in": "path",
                         "name": "searchParam",
