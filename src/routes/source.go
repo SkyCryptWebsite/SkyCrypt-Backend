@@ -4,7 +4,7 @@ import (
 	"os"
 	"skycrypt/src/models"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 const sourceRepository = "https://github.com/SkyCryptWebsite/SkyCrypt-Backend"
@@ -18,7 +18,7 @@ const sourceRepository = "https://github.com/SkyCryptWebsite/SkyCrypt-Backend"
 //	@Produce		json
 //	@Success		200	{object}	models.SourceInfo	"Source and license information returned successfully."
 //	@Router			/api/source [get]
-func SourceHandler(c *fiber.Ctx) error {
+func SourceHandler(c fiber.Ctx) error {
 	commit := os.Getenv("SOURCE_COMMIT")
 	sourceURL := sourceRepository
 	if commit != "" {

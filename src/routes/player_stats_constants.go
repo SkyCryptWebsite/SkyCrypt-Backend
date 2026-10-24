@@ -3,7 +3,7 @@ package routes
 import (
 	"skycrypt/src/constants"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // StatsConstantsHandler godoc
@@ -15,6 +15,6 @@ import (
 //	@Produce		json
 //	@Success		200	{array}		models.StatData	"Player stats constants returned successfully."
 //	@Router			/api/constants/stats [get]
-func StatsConstantsHandler(c *fiber.Ctx) error {
+func StatsConstantsHandler(c fiber.Ctx) error {
 	return c.JSON(constants.STATS_DATA)
 }

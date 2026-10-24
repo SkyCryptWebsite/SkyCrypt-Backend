@@ -3,7 +3,7 @@ package routes
 import (
 	"skycrypt/src/lib"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // ResourcePacksConstantsHandler godoc
@@ -19,7 +19,7 @@ import (
 //	@Success		200	{array}		models.ResourcePackConfig	"Resource packs returned successfully."
 //	@Failure		500	{object}	models.ProcessingError		"Resource pack metadata could not be read."
 //	@Router			/api/constants/packs [get]
-func ResourcePacksConstantsHandler(c *fiber.Ctx) error {
+func ResourcePacksConstantsHandler(c fiber.Ctx) error {
 	// timeNow := time.Now()
 
 	configs, err := lib.ResourcePackConfigs()

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func TestLoadErrorStatus(t *testing.T) {

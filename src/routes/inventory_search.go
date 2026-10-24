@@ -10,7 +10,7 @@ import (
 
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -25,7 +25,7 @@ import (
 //	@Security		ApiKeyHeader
 //	@Param			uuid		path		string	true	"Minecraft UUID of the profile member"	example(4855c53ee4fb4100997600a92fc50984)
 //	@Param			profileId	path		string	true	"Hypixel SkyBlock profile UUID or cute name"	example(00912956-3fd6-42ee-a166-3f649ceaf559)
-//	@Param			searchParam	path		string	true	"Case-sensitive search text matched against item display names and lore"	example(hyperion)
+//	@Param			searchParam	path		string	true	"Search text matched against item display names and lore, ignoring case"	example(hyperion)
 //	@Success		200			{array}		models.StrippedItem		"Matching inventory items returned successfully."
 //	@Failure		401			{object}	models.APIError	"The x-api-key header is missing, or the key is invalid, disabled, or expired."
 //	@Failure		404			{object}	models.APIError	"NOT_CACHED: the player isn't cached, and the key lacks the cache-bypass scope."
@@ -33,7 +33,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		500			{object}	models.ProcessingError	"Cached inventory data is missing or could not be parsed."
 //	@Router			/api/inventory/search/{uuid}/{profileId}/{searchParam} [get]
-func InventorySearchHandler(c *fiber.Ctx) error {
+func InventorySearchHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Inventory")()
 	}
@@ -45,9 +45,9 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 	// Members is keyed by the lowercase UUID, and the cache key is lowercased too.
 	uuid := strings.ToLower(c.Params("uuid"))
 	profileId := c.Params("profileId")
-	searchParam := c.Params("searchParam")
+	searchParam := strings.ToLower(c.Params("searchParam"))
 
-	cache, err := db.GetContext(c.UserContext(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
+	cache, err := db.GetContext(c.Context(), inventoryCacheKey(uuid, profileId, enabledPacks).key)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to get items: %v", err),
@@ -76,7 +76,7 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 		}
 
 		for _, item := range inventory.Items {
-			if item.DisplayName == "" || (!strings.Contains(strings.ToLower(item.DisplayName), searchParam) && !strings.Contains(strings.Join(item.Lore, " "), searchParam)) {
+			if item.DisplayName == "" || !itemMatchesSearch(item.DisplayName, item.Lore, searchParam) {
 				continue
 			}
 
@@ -96,4 +96,8 @@ func InventorySearchHandler(c *fiber.Ctx) error {
 	utility.LogVerbose("Returning /api/inventory/search/%s/%s/%s in %s", uuid, profileId, searchParam, time.Since(timeNow))
 
 	return c.JSON(output)
+}
+// itemMatchesSearch reports whether the name or lore contains query, ignoring case. query must already be lowercase.
+func itemMatchesSearch(displayName string, lore []string, query string) bool {
+	return strings.Contains(strings.ToLower(displayName), query) || strings.Contains(strings.ToLower(strings.Join(lore, " ")), query)
 }

@@ -11,7 +11,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // CombinedHandler godoc
@@ -34,7 +34,7 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/combined/{uuid}/{profileId} [get]
-func CombinedHandler(c *fiber.Ctx) error {
+func CombinedHandler(c fiber.Ctx) error {
 	if utility.IsForensicsEnabled() {
 		defer forensics.TrackSpan("handler.Combined")()
 	}
@@ -49,7 +49,7 @@ func CombinedHandler(c *fiber.Ctx) error {
 
 	enabledPacks := enabledPacksFromRequest(c)
 
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 	// Check the cache under the request as given before resolving the player: a hit then needs no identity lookup,
 	// so a cached response still loads when Mojang is down.
 	rawCacheKey := responseCacheKey("combined", uuid, profileId, enabledPacksCachePart(enabledPacks))

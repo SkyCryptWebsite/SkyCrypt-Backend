@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // UUIDHandler godoc
@@ -28,14 +28,14 @@ import (
 //	@Failure		503			{object}	models.APIError	"API keys can't be verified right now."
 //	@Failure		504			{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/uuid/{username} [get]
-func UUIDHandler(c *fiber.Ctx) error {
+func UUIDHandler(c fiber.Ctx) error {
 	timeNow := time.Now()
 	username := c.Params("username")
 	if username == "" || len(username) < 3 || len(username) > 16 {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
 	}
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 	cacheKey := responseCacheKey("uuid", username)
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err

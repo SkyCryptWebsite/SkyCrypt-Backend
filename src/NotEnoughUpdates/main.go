@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/gofiber/fiber/v3"
 )
 
 func InitializeNEURepository() error {
@@ -38,7 +40,7 @@ func InitializeNEURepository() error {
 }
 
 func UpdateNEURepository() error {
-	if os.Getenv("FIBER_PREFORK_CHILD") != "" {
+	if fiber.IsChild() {
 		return nil // Prefork children should not update the repository
 	}
 

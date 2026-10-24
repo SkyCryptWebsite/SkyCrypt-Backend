@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/static"
 )
 
 func TestCacheStaticCacheControl(t *testing.T) {
@@ -27,7 +28,7 @@ func TestCacheStaticCacheControl(t *testing.T) {
 	}
 
 	app := fiber.New()
-	app.Static("/cache", dir, fiber.Static{MaxAge: 7 * 24 * 60 * 60, ModifyResponse: cacheStaticResponse})
+	app.Get("/cache*", static.New(dir, static.Config{MaxAge: 7 * 24 * 60 * 60, ModifyResponse: cacheStaticResponse}))
 
 	for name, want := range files {
 		response, err := app.Test(httptest.NewRequest("GET", "/cache/"+name, nil))

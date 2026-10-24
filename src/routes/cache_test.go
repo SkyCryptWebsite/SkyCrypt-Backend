@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func TestProcessedResponseCacheDisabledInDevelopment(t *testing.T) {
@@ -49,7 +49,7 @@ func TestSendCachedJSONIgnoresRAMCacheInDevelopment(t *testing.T) {
 	cacheKey := responseCacheKey("stats", "development-ram-read")
 
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", func(c fiber.Ctx) error {
 		hit, err := sendCachedJSON(c, cacheKey)
 		if err != nil {
 			return err
@@ -77,7 +77,7 @@ func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 	cacheKey := responseCacheKey("stats", "development-ram-write")
 
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", func(c fiber.Ctx) error {
 		return sendAndCacheJSON(c, context.Background(), cacheKey, map[string]bool{"computed": true}, 60)
 	})
 
@@ -103,7 +103,7 @@ func TestSendAndCacheJSONBypassesRAMCacheInDevelopment(t *testing.T) {
 
 func TestEmbedResponseCacheHeaders(t *testing.T) {
 	app := fiber.New()
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", func(c fiber.Ctx) error {
 		setResponseCacheHeaders(c, "embed")
 		return c.SendStatus(fiber.StatusNoContent)
 	})

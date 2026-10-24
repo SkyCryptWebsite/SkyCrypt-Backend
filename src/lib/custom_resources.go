@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofiber/fiber/v3"
+
 	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	"golang.org/x/sync/singleflight"
@@ -183,7 +185,7 @@ func debugFilenameIdentifier(value string) string {
 }
 
 func isPreforkChildProcess() bool {
-	return os.Getenv("FIBER_PREFORK_CHILD") != ""
+	return fiber.IsChild()
 }
 
 func logCustomResourceRoutine(format string, args ...any) {

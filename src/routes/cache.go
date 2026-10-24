@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/singleflight"
 )
@@ -54,24 +54,24 @@ func enabledPacksCachePart(enabledPacks []string) string {
 	return "enabled-v7:" + strings.Join(normalized, ",")
 }
 
-func sendCachedJSON(c *fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
+func sendCachedJSON(c fiber.Ctx, cacheKey responseCacheHandle) (bool, error) {
 	if !processedResponseCacheEnabled() {
 		return false, nil
 	}
 
-	cached, err := db.GetContext(c.UserContext(), cacheKey.key)
+	cached, err := db.GetContext(c.Context(), cacheKey.key)
 	if err != nil || cached == "" {
 		return false, nil
 	}
 
-	recordResponseCache(c.UserContext(), cacheKey.endpoint, "redis")
+	recordResponseCache(c.Context(), cacheKey.endpoint, "redis")
 	setResponseCacheHeaders(c, cacheKey.endpoint)
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	c.Set("X-SkyCrypt-Backend-Cache", "redis")
 	return true, c.SendString(cached)
 }
 
-func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) error {
+func sendAndCacheJSON(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) error {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	payload, err := json.Marshal(value)
 	if err != nil {
@@ -82,7 +82,7 @@ func sendAndCacheJSON(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheH
 }
 
 // sendAndCacheBody is sendAndCacheJSON for a body that is already JSON.
-func sendAndCacheBody(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body string, ttlSeconds int) error {
+func sendAndCacheBody(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body string, ttlSeconds int) error {
 	cacheBody(ctx, cacheKey, []byte(body), ttlSeconds)
 	return sendBody(c, ctx, cacheKey, []byte(body))
 }
@@ -99,7 +99,7 @@ func cacheBody(ctx context.Context, cacheKey responseCacheHandle, body []byte, t
 }
 
 // sendBody sends a freshly built response. ctx decides the cache header, so pass the request's own context.
-func sendBody(c *fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body []byte) error {
+func sendBody(c fiber.Ctx, ctx context.Context, cacheKey responseCacheHandle, body []byte) error {
 	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSONCharsetUTF8)
 	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
 		c.Set("X-SkyCrypt-Backend-Cache", "bypass")
@@ -147,7 +147,7 @@ func marshalBody(value interface{}) ([]byte, error) {
 // and the CDN may keep them; a week rather than forever so a renderer fix still reaches everyone.
 const renderedImageCacheControl = "public, max-age=604800"
 
-func setResponseCacheHeaders(c *fiber.Ctx, endpoint string) {
+func setResponseCacheHeaders(c fiber.Ctx, endpoint string) {
 	if endpoint == "embed" {
 		c.Set(fiber.HeaderCacheControl, "public, max-age=3600, s-maxage=3600, stale-while-revalidate=30, stale-if-error=60")
 	}

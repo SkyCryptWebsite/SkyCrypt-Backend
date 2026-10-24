@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/utility"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // UsernameHandler godoc
@@ -24,7 +24,7 @@ import (
 //	@Failure		502		{object}	models.APIError	"UPSTREAM_ERROR: Hypixel or Mojang failed or sent an unusable response."
 //	@Failure		504		{object}	models.APIError	"UPSTREAM_TIMEOUT: Hypixel or Mojang didn't answer in time."
 //	@Router			/api/username/{uuid} [get]
-func UsernameHandler(c *fiber.Ctx) error {
+func UsernameHandler(c fiber.Ctx) error {
 	timeNow := time.Now()
 
 	uuid := c.Params("uuid")
@@ -32,7 +32,7 @@ func UsernameHandler(c *fiber.Ctx) error {
 		c.Status(400)
 		return c.JSON(constants.InvalidUserError)
 	}
-	reqCtx := c.UserContext()
+	reqCtx := c.Context()
 	cacheKey := responseCacheKey("username", uuid)
 	if ok, err := sendCachedJSON(c, cacheKey); ok || err != nil {
 		return err

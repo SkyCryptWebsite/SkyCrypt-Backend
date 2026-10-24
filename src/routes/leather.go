@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // LeatherHandlers godoc
@@ -23,7 +23,7 @@ import (
 //	@Failure		404		{object}	models.ProcessingError	"Armor piece is unknown or color is not 6-digit hex."
 //	@Failure		500		{object}	models.ProcessingError	"Leather armor image could not be rendered."
 //	@Router			/api/leather/{type}/{color} [get]
-func LeatherHandlers(c *fiber.Ctx) error {
+func LeatherHandlers(c fiber.Ctx) error {
 	// timeNow := time.Now()
 	armorType := c.Params("type")
 	armorColor := c.Params("color")

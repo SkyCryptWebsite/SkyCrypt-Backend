@@ -9,7 +9,7 @@ import (
 
 	"skycrypt/src/constants"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 func TestEnchantmentsConstantsHandler(t *testing.T) {

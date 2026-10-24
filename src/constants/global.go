@@ -1,6 +1,6 @@
 package constants
 
-import "github.com/gofiber/fiber/v2"
+import "github.com/gofiber/fiber/v3"
 
 var InvalidUserError = fiber.Map{
 	"error":   "User not found",
