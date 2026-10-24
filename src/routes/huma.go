@@ -33,6 +33,8 @@ func NewAPI(app *fiber.App, description string) huma.API {
 	config.OpenAPIPath, config.DocsPath, config.SchemasPath = "", "", ""
 	// No $schema field and Link header added to bodies.
 	config.CreateHooks = nil
+	// Responses may leave out any field, so none is documented as required (path parameters still are).
+	config.FieldsOptionalByDefault = true
 
 	api := humafiber.New(app, config)
 	registerSource(api)
