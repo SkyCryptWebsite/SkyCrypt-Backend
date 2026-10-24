@@ -596,21 +596,11 @@ func getErrorCount(errorHash string) int {
 	return 1
 }
 
+// GetHexColor turns Hypixel's "r,g,b" into hex, or "" when there is no usable color.
 func GetHexColor(color string) string {
-	parts := strings.Split(color, ",")
-	if len(parts) == 3 {
-		var r, g, b int
-		if _, err := fmt.Sscanf(parts[0], "%d", &r); err != nil {
-			return "FFFFFF"
-		}
-		if _, err := fmt.Sscanf(parts[1], "%d", &g); err != nil {
-			return "FFFFFF"
-		}
-		if _, err := fmt.Sscanf(parts[2], "%d", &b); err != nil {
-			return "FFFFFF"
-		}
-		return fmt.Sprintf("%02X%02X%02X", r, g, b)
+	var r, g, b int
+	if _, err := fmt.Sscanf(color, "%d,%d,%d", &r, &g, &b); err != nil {
+		return ""
 	}
-
-	return "FFFFFF"
+	return fmt.Sprintf("%02X%02X%02X", r, g, b)
 }

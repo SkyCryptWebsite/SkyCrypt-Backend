@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
+	"skycrypt/src/constants"
 	"skycrypt/src/lib"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -316,6 +317,36 @@ func BenchmarkProcessItemsSkullMisses_1600Items(b *testing.B) {
 		}
 		if textureCtx.Stats.RenderAttempts != 0 {
 			b.Fatalf("profile processing attempted %d runtime renders", textureCtx.Stats.RenderAttempts)
+		}
+	}
+}
+
+func TestArmorColorHidesExotics(t *testing.T) {
+	previous := constants.ItemsSnapshot()
+	constants.SetItems(map[string]models.ProcessedHypixelItem{"FARM_ARMOR_CHESTPLATE": {Color: "FEFF06"}})
+	t.Cleanup(func() { constants.SetItems(previous) })
+
+	tests := []struct {
+		name         string
+		displayColor int
+		leather      bool
+		dyeItem      string
+		id           string
+		hexEnabled   bool
+		want         string
+	}{
+		{"exotic shows the default", 0x123456, true, "", "FARM_ARMOR_CHESTPLATE", false, "#FEFF06"},
+		{"bleached shows the default", 0, true, "", "FARM_ARMOR_CHESTPLATE", false, "#FEFF06"},
+		{"dyed shows its dye", 0x123456, true, "DYE_AQUAMARINE", "FARM_ARMOR_CHESTPLATE", false, "#123456"},
+		{"hex enabled shows its own", 0x123456, true, "", "FARM_ARMOR_CHESTPLATE", true, "#123456"},
+		{"bleached with hex enabled has none", 0, true, "", "FARM_ARMOR_CHESTPLATE", true, ""},
+		{"no default says hidden", 0x123456, true, "", "LEATHER_CHESTPLATE", false, "§8Hidden (no default color)"},
+		{"no default with hex enabled shows its own", 0x123456, true, "", "LEATHER_CHESTPLATE", true, "#123456"},
+		{"undyed item with a default color has none", 0, false, "", "FARM_ARMOR_CHESTPLATE", false, ""},
+	}
+	for _, test := range tests {
+		if got := armorColor(test.displayColor, test.leather, test.dyeItem, test.id, test.hexEnabled); got != test.want {
+			t.Errorf("%s: armorColor() = %q, want %q", test.name, got, test.want)
 		}
 	}
 }

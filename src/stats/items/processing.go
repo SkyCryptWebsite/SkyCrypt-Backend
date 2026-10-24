@@ -115,20 +115,10 @@ func processItemWithStats(item *skycrypttypes.Item, source string, neuItemCache 
 		}
 
 		// Hex color
-		if item.Tag.Display.Color != 0 {
-			color := fmt.Sprintf("%06X", item.Tag.Display.Color)
-			if item.Tag.ExtraAttributes.DyeItem == "" {
-				if !utility.IsArmorHexColorsEnabled() {
-					if itemData, ok := constants.GetItem(item.Tag.ExtraAttributes.Id); ok && itemData.Color != "" {
-						defaultHexColor := itemData.Color
-						color = defaultHexColor
-					}
-				}
-			}
-
-			if !slices.Contains(constants.BLACKLISTED_HEX_ARMOR_PIECES, item.Tag.ExtraAttributes.Id) {
-				processedItem.Lore = append(processedItem.Lore, "", fmt.Sprintf("§7Color: #%s", color))
-			}
+		leather := item.ID != nil && *item.ID >= 298 && *item.ID <= 301
+		color := armorColor(item.Tag.Display.Color, leather, item.Tag.ExtraAttributes.DyeItem, item.Tag.ExtraAttributes.Id, utility.IsArmorHexColorsEnabled())
+		if color != "" && !slices.Contains(constants.BLACKLISTED_HEX_ARMOR_PIECES, item.Tag.ExtraAttributes.Id) {
+			processedItem.Lore = append(processedItem.Lore, "", "§7Color: "+color)
 		}
 
 		// Timestamps
@@ -468,4 +458,25 @@ func ProcessSacks(items []models.ProcessedItem, sackContents map[string]int) []m
 	}
 
 	return items
+}
+
+// armorColor is the color shown in a leather piece's lore, or "" for none. Unless armor hex colors are enabled, an
+// undyed piece never shows its own color, so exotics can't be found by scraping: it shows its item's default color, or
+// says the color is hidden when the item has none. Either way every undyed piece of an item looks the same, bleached
+// exotics (which have no color tag) included.
+func armorColor(displayColor int, leather bool, dyeItem string, id string, hexEnabled bool) string {
+	// Other items have no color tag to hide, though some (chainmail, hay blocks) have a default color.
+	if displayColor == 0 && !leather {
+		return ""
+	}
+	if !hexEnabled && dyeItem == "" {
+		if itemData, ok := constants.GetItem(id); ok && itemData.Color != "" {
+			return "#" + itemData.Color
+		}
+		return "§8Hidden (no default color)"
+	}
+	if displayColor == 0 {
+		return ""
+	}
+	return fmt.Sprintf("#%06X", displayColor)
 }
