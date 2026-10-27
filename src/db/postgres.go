@@ -20,6 +20,10 @@ const (
 	// The fallback only has to be as fresh as the last time it saved anyone from an outage.
 	fallbackWriteInterval = time.Hour
 	fallbackRetention     = 30 * 24 * time.Hour
+	// A profiles body is ~460 KB even zstd'd, because its inventories are already gzip, and a few hours of new players
+	// add tens of GB. Past this many stored bytes, the least recently fetched rows go first.
+	fallbackMaxBytes      = 40 << 30
+	fallbackPruneInterval = 10 * time.Minute
 	fallbackWriteTimeout  = 5 * time.Second
 
 	fallbackWriteGatePrefix = "fallback:written:"
@@ -169,8 +173,16 @@ func GetFallback(ctx context.Context, key string) ([]byte, bool) {
 func pruneFallbackLoop() {
 	for {
 		if pool := getPostgres(); pool != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			tag, err := pool.Exec(ctx, `DELETE FROM fallback_cache WHERE fetched_at < now() - make_interval(secs => $1)`, fallbackRetention.Seconds())
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			// octet_length reads a body's size from its TOAST pointer, so this never loads the bodies themselves.
+			tag, err := pool.Exec(ctx, `
+				DELETE FROM fallback_cache WHERE key IN (
+					SELECT key FROM (
+						SELECT key, fetched_at, sum(octet_length(body)) OVER (ORDER BY fetched_at DESC, key) AS newer_bytes
+						FROM fallback_cache
+					) ranked
+					WHERE newer_bytes > $2 OR fetched_at < now() - make_interval(secs => $1)
+				)`, fallbackRetention.Seconds(), int64(fallbackMaxBytes))
 			cancel()
 			if err != nil {
 				fmt.Printf("[POSTGRES] could not prune fallback cache: %v\n", err)
@@ -178,7 +190,7 @@ func pruneFallbackLoop() {
 				fmt.Printf("[POSTGRES] pruned %d fallback cache rows\n", tag.RowsAffected())
 			}
 		}
-		time.Sleep(24 * time.Hour)
+		time.Sleep(fallbackPruneInterval)
 	}
 }
 
