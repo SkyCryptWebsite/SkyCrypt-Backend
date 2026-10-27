@@ -1,5 +1,7 @@
 github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.8 h1:0Q7S9viQPjKAOb4zhErWy0F10pndyZCA3jhSFqkt6fw=
 github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.8/go.mod h1:DkqQZcyVWE8GnMNgGekkVGwWe/xWTIohHMfP5LWa9AA=
+github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.9 h1:08WMJzb7yY8bAyOA05K8ZhyT2KUDbDNHswqENwRyaII=
+github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.9/go.mod h1:DkqQZcyVWE8GnMNgGekkVGwWe/xWTIohHMfP5LWa9AA=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.26 h1:oBgmkpMG31xYDhW5OcCfPgiDY/7O790rQ+5h32SNaoY=
 github.com/DuckySoLucky/SkyCrypt-Types v0.1.26/go.mod h1:ov9gN5iaP8MegxFL0ZXrJsWs9GicXY97vzIwrG8HFtk=
 github.com/HugoSmits86/nativewebp v1.3.0 h1:n1egtEzSV4KwFtealr7dzdYq1wI/uj/bOQ/QcTcIyVE=

@@ -579,20 +579,22 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 		if texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
 			continue
 		}
-		if itemId != "" && texturePack != "" {
+		// A SkyBlock render only stands for that SkyBlock item. Indexing it under the generic itemmodel/mc keys made
+		// plain vanilla lookups (GOLDEN_HOE, GHAST_SPAWN_EGG) return whichever SkyBlock item shared the base item.
+		if itemId != "" {
 			batch.set(texturePack, "skyblock:"+itemId, texture)
 			if itemModel != "" {
 				batch.set(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
 			}
 			loaded++
+			continue
 		}
-		if texturePack != "" {
-			if itemModel != "" {
-				batch.set(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
-			}
-			if minecraftID != "" {
-				batch.set(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
-			}
+		if itemModel != "" {
+			batch.set(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+		}
+		// Likewise an item-model render (itemmodel=hypixel_...__mc=minecraft_golden_hoe) is not the plain base item.
+		if minecraftID != "" && inputItemModel == "" {
+			batch.set(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
 		}
 	}
 

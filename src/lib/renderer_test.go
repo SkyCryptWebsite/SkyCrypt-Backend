@@ -700,11 +700,16 @@ func TestLoadRenderedTextureIndexSupportsCurrentAndLegacyModelSegments(t *testin
 		t.Fatalf("loaded texture count = %d, want 3 valid model entries", loaded)
 	}
 	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
-	if texture, ok := cachedTextureForStableKey("itemmodel:minecraft:player_head", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "CURRENT_MODEL") {
+	if texture, ok := cachedTextureForStableKey("skyblock:CURRENT_MODEL|itemmodel:minecraft:player_head", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "CURRENT_MODEL") {
 		t.Fatalf("current model metadata was not indexed: %#v", texture)
 	}
-	if texture, ok := cachedTextureForStableKey("itemmodel:minecraft:diamond_sword", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "LEGACY_MODEL") {
+	if texture, ok := cachedTextureForStableKey("skyblock:LEGACY_MODEL|itemmodel:minecraft:diamond_sword", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "LEGACY_MODEL") {
 		t.Fatalf("legacy model metadata was not indexed: %#v", texture)
+	}
+	for _, genericKey := range []string{"itemmodel:minecraft:player_head", "itemmodel:minecraft:diamond_sword"} {
+		if texture, ok := cachedTextureForStableKey(genericKey, context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); ok {
+			t.Fatalf("skyblock render was indexed under generic key %q: %#v", genericKey, texture)
+		}
 	}
 	vanillaContext := NewTextureApplyContext([]string{})
 	if texture, ok := cachedTextureForStableKey("skyblock:INPUT_AND_RESOLVED_MODEL|itemmodel:minecraft:player_head", vanillaContext.PackSignature, vanillaContext.EnabledPackIDs, vanillaContext.EnabledPackSet); !ok || !strings.Contains(texture.Texture, "INPUT_AND_RESOLVED_MODEL") {
@@ -712,6 +717,46 @@ func TestLoadRenderedTextureIndexSupportsCurrentAndLegacyModelSegments(t *testin
 	}
 	if _, ok := cachedStableSkyBlockTexture("CONFLICTING_MODEL", context); ok {
 		t.Fatal("conflicting model metadata was indexed")
+	}
+}
+
+func TestLoadRenderedTextureIndexKeepsSkyBlockRendersOffVanillaKeys(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{
+		"mc=minecraft_golden_hoe__pack=FSR__model=minecraft_item_golden_hoe__hash=plain.webp",
+		"skyblock=HOE_OF_NO_TILLING__pack=FSR__mc=minecraft_golden_hoe__itemmodel=minecraft_golden_hoe__hash=skyblock.webp",
+		"itemmodel=hypixel_skyblock_item_wand_of_farming__pack=FSR__mc=minecraft_golden_hoe__hash=itemmodel.webp",
+		"skyblock=OMEGA_EGG__pack=FSR__mc=minecraft_ghast_spawn_egg__itemmodel=minecraft_ghast_spawn_egg__hash=egg.webp",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(renderedDir, name), []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := reloadRenderedTextureIndex(cacheDir); err != nil {
+		t.Fatal(err)
+	}
+	context := NewTextureApplyContext([]string{"FSR"})
+	lookup := func(key string) (AppliedItemTexture, bool) {
+		return cachedTextureForStableKey(key, context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet)
+	}
+	if texture, ok := lookup("mc:minecraft:golden_hoe|damage:0|color:0"); !ok || !strings.Contains(texture.Texture, "plain") {
+		t.Fatalf("golden hoe resolved to %#v, want the plain render", texture)
+	}
+	for _, key := range []string{"mc:minecraft:ghast_spawn_egg|damage:0|color:0", "itemmodel:minecraft:golden_hoe", "itemmodel:minecraft:ghast_spawn_egg"} {
+		if texture, ok := lookup(key); ok {
+			t.Fatalf("%s resolved to SkyBlock render %#v", key, texture)
+		}
+	}
+	if texture, ok := lookup("skyblock:HOE_OF_NO_TILLING|itemmodel:minecraft:golden_hoe"); !ok || !strings.Contains(texture.Texture, "skyblock") {
+		t.Fatalf("skyblock render was not indexed under its own key: %#v", texture)
 	}
 }
 
