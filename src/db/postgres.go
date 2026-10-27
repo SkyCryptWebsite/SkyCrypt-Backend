@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"skycrypt/src/forensics"
 	"skycrypt/src/utility"
@@ -11,45 +10,28 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/cespare/xxhash/v2"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-const (
-	// The fallback only has to be as fresh as the last time it saved anyone from an outage.
-	fallbackWriteInterval = time.Hour
-	fallbackRetention     = 30 * 24 * time.Hour
-	fallbackWriteTimeout  = 5 * time.Second
-
-	fallbackWriteGatePrefix = "fallback:written:"
 )
 
 var pgPool *pgxpool.Pool
 var pgMutex sync.RWMutex
 
-// Bounds in-flight fallback writes so a slow Postgres drops writes instead of piling up goroutines.
-var fallbackWriteSlots = make(chan struct{}, 32)
-
-const schema = `
-CREATE TABLE IF NOT EXISTS fallback_cache (
-	key        text PRIMARY KEY,
-	body       bytea NOT NULL,
-	hash       bigint NOT NULL,
-	fetched_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE fallback_cache ALTER COLUMN body SET STORAGE EXTERNAL;
-ALTER TABLE fallback_cache SET (autovacuum_vacuum_scale_factor = 0.02);
-CREATE INDEX IF NOT EXISTS fallback_cache_fetched_at ON fallback_cache (fetched_at);
-`
-
+// InitPostgres opens the pool. The tables live in src/store, which creates them.
 func InitPostgres(url string) error {
 	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return fmt.Errorf("invalid DATABASE_URL: %v", err)
 	}
 	// Every prefork process opens its own pool, and the instance is shared with the frontend, CMS and Umami.
-	config.MaxConns = 4
+	// Children only read stored data when Hypixel fails or a key may only read cached data, so they keep few
+	// connections and let idle ones go. The parent does all the writing.
+	if fiber.IsChild() {
+		config.MaxConns = 2
+		config.MinConns = 0
+		config.MaxConnIdleTime = time.Minute
+	} else {
+		config.MaxConns = 8
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -63,126 +45,30 @@ func InitPostgres(url string) error {
 		return fmt.Errorf("could not ping Postgres: %v", err)
 	}
 
-	// The parent process runs before the prefork children start, so the schema exists by the time they connect.
-	if !fiber.IsChild() {
-		if _, err := pool.Exec(ctx, schema); err != nil {
-			pool.Close()
-			return fmt.Errorf("could not create Postgres schema: %v", err)
-		}
-		go pruneFallbackLoop()
-		fmt.Print("[POSTGRES] Postgres connected successfully\n")
-	}
-
 	pgMutex.Lock()
 	pgPool = pool
 	pgMutex.Unlock()
 
+	if !fiber.IsChild() {
+		fmt.Print("[POSTGRES] Postgres connected successfully\n")
+	}
 	return nil
 }
 
-func getPostgres() *pgxpool.Pool {
+// Postgres returns the pool, or nil when Postgres isn't configured.
+func Postgres() *pgxpool.Pool {
 	pgMutex.RLock()
 	defer pgMutex.RUnlock()
 	return pgPool
 }
 
 func ClosePostgres() {
-	if pool := getPostgres(); pool != nil {
+	if pool := Postgres(); pool != nil {
 		pool.Close()
 	}
 }
 
-// SaveFallback stores the last good upstream response for key in the background.
-// Rows are rewritten at most once per fallbackWriteInterval, and an unchanged body keeps its stored copy.
-func SaveFallback(key string, body []byte) {
-	pool := getPostgres()
-	if pool == nil || len(body) == 0 {
-		return
-	}
-
-	select {
-	case fallbackWriteSlots <- struct{}{}:
-	default:
-		return
-	}
-
-	go func() {
-		defer func() { <-fallbackWriteSlots }()
-
-		ctx, cancel := context.WithTimeout(context.Background(), fallbackWriteTimeout)
-		defer cancel()
-
-		// The upsert below ignores rows written in the last hour, so check that first and skip compressing and
-		// sending a multi-MB body the database would throw away. The gate is shared by every prefork process.
-		gate := fallbackWriteGatePrefix + key
-		if client, err := getRedisClient(); err == nil {
-			if acquired, err := client.SetNX(ctx, gate, 1, fallbackWriteInterval).Result(); err == nil && !acquired {
-				return
-			}
-		}
-
-		start := time.Now()
-		_, err := pool.Exec(ctx, `
-			INSERT INTO fallback_cache (key, body, hash) VALUES ($1, $2, $3)
-			ON CONFLICT (key) DO UPDATE SET
-				body = CASE WHEN fallback_cache.hash = excluded.hash THEN fallback_cache.body ELSE excluded.body END,
-				hash = excluded.hash,
-				fetched_at = now()
-			WHERE fallback_cache.fetched_at < now() - make_interval(secs => $4)`,
-			key, zstdEncoder.EncodeAll(body, nil), int64(xxhash.Sum64(body)), fallbackWriteInterval.Seconds())
-		recordPostgresDependency(ctx, "fallback_cache", "upsert", time.Since(start), err)
-		if err != nil {
-			// Let the next fetch try again instead of waiting out the gate.
-			if client, clientErr := getRedisClient(); clientErr == nil {
-				_ = client.Del(context.Background(), gate).Err()
-			}
-		}
-	}()
-}
-
-// GetFallback returns the last good upstream response stored for key.
-func GetFallback(ctx context.Context, key string) ([]byte, bool) {
-	pool := getPostgres()
-	if pool == nil {
-		return nil, false
-	}
-
-	start := time.Now()
-	var compressed []byte
-	err := pool.QueryRow(ctx, `SELECT body FROM fallback_cache WHERE key = $1`, key).Scan(&compressed)
-	if errors.Is(err, pgx.ErrNoRows) {
-		recordPostgresDependency(ctx, "fallback_cache", "select", time.Since(start), nil)
-		return nil, false
-	}
-	recordPostgresDependency(ctx, "fallback_cache", "select", time.Since(start), err)
-	if err != nil {
-		return nil, false
-	}
-
-	body, err := zstdDecoder.DecodeAll(compressed, nil)
-	if err != nil {
-		return nil, false
-	}
-	return body, true
-}
-
-func pruneFallbackLoop() {
-	for {
-		if pool := getPostgres(); pool != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			tag, err := pool.Exec(ctx, `DELETE FROM fallback_cache WHERE fetched_at < now() - make_interval(secs => $1)`, fallbackRetention.Seconds())
-			cancel()
-			if err != nil {
-				fmt.Printf("[POSTGRES] could not prune fallback cache: %v\n", err)
-			} else if tag.RowsAffected() > 0 {
-				fmt.Printf("[POSTGRES] pruned %d fallback cache rows\n", tag.RowsAffected())
-			}
-		}
-		time.Sleep(24 * time.Hour)
-	}
-}
-
-func recordPostgresDependency(ctx context.Context, table, operation string, duration time.Duration, err error) {
+func RecordPostgresDependency(ctx context.Context, table, operation string, duration time.Duration, err error) {
 	if utility.IsForensicsEnabled() {
 		forensics.RecordPostgresDependency(ctx, table, operation, duration, err)
 	}

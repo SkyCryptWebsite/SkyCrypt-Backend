@@ -1,6 +1,7 @@
 package src
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"log"
@@ -12,6 +13,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
 	"skycrypt/src/routes"
+	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"strings"
 	"sync"
@@ -49,6 +51,8 @@ func SetupApplication() error {
 	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
 		if err := db.InitPostgres(databaseURL); err != nil {
 			log.Printf("Postgres unavailable, fallback cache disabled: %v", err)
+		} else if err := store.Init(context.Background()); err != nil {
+			log.Printf("Postgres store unavailable, fallback cache disabled: %v", err)
 		}
 	} else {
 		log.Println("DATABASE_URL not set, fallback cache disabled")

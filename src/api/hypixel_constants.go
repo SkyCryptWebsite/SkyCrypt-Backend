@@ -8,6 +8,7 @@ import (
 	"skycrypt/src/constants"
 	redis "skycrypt/src/db"
 	"skycrypt/src/models"
+	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"strings"
 	"time"
@@ -27,8 +28,10 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 	}
 
 	// Stale items still go to Redis: prefork children load them from there at startup.
-	body, _, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
+	body, fresh, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/items")
+	}, func(ctx context.Context) ([]byte, bool) {
+		return store.LoadResource(ctx, "skyblock_items")
 	})
 	if err != nil {
 		return nil, err
@@ -42,6 +45,9 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 	}
 
 	_ = redis.Set("skyblock_items", string(body), 12*60*60) // Cache for 12 hours
+	if fresh {
+		store.SaveResource(context.Background(), "skyblock_items", body)
+	}
 
 	return data.Items, nil
 }
@@ -105,8 +111,10 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 		}
 	}
 
-	body, _, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
+	body, fresh, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/collections")
+	}, func(ctx context.Context) ([]byte, bool) {
+		return store.LoadResource(ctx, "skyblock_collections")
 	})
 	if err != nil {
 		return nil, err
@@ -120,6 +128,9 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 	}
 
 	_ = redis.Set("skyblock_collections", string(body), 12*60*60) // Cache for 12 hours
+	if fresh {
+		store.SaveResource(context.Background(), "skyblock_collections", body)
+	}
 
 	return data.Collections, nil
 }

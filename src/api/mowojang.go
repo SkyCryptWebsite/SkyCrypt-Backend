@@ -8,6 +8,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
 	"skycrypt/src/models"
+	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"sync"
 
@@ -422,7 +423,8 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
-		if uuid, ok := staleIdentity(ctx, fmt.Sprintf("uuid:%s", strings.ToLower(username))); ok {
+		// Both mowojang and Mojang failed: the last known identity is better than none.
+		if uuid, _, ok := store.LookupUUID(ctx, username); ok {
 			return uuid, nil
 		}
 		if err == nil {
@@ -488,7 +490,7 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
-		if name, ok := staleIdentity(ctx, fmt.Sprintf("username:%s", uuid)); ok {
+		if name, ok := store.LookupName(ctx, uuid); ok {
 			return name, nil
 		}
 		if err == nil {
@@ -547,12 +549,8 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 		if resp != nil {
 			_ = resp.Body.Close()
 		}
-		if body, ok := staleIdentity(ctx, fmt.Sprintf("mowojangUUID:%s", uuid)); ok {
-			var post models.MowojangResponse
-			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			if json.Unmarshal([]byte(body), &post) == nil && post.UUID != "" {
-				return &post, nil
-			}
+		if name, ok := store.LookupName(ctx, uuid); ok {
+			return &models.MowojangResponse{UUID: uuid, Name: name}, nil
 		}
 		if err == nil {
 			err = fmt.Errorf("status code %d", resp.StatusCode)
@@ -633,15 +631,5 @@ func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body s
 	}
 	_ = redis.SetManyContext(ctx, values, 24*60*60)
 
-	redis.SaveFallback(fmt.Sprintf("uuid:%s", strings.ToLower(name)), []byte(uuid))
-	redis.SaveFallback(fmt.Sprintf("username:%s", uuid), []byte(name))
-	if body != "" && includeFullResponse {
-		redis.SaveFallback(fmt.Sprintf("mowojangUUID:%s", uuid), []byte(body))
-	}
-}
-
-// staleIdentity returns the last known identity value once both mowojang and Mojang have failed.
-func staleIdentity(ctx context.Context, key string) (string, bool) {
-	value, ok := redis.GetFallback(ctx, key)
-	return string(value), ok && len(value) > 0
+	store.EnqueueIdentity(ctx, uuid, name)
 }

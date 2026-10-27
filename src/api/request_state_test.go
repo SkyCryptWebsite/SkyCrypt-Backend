@@ -14,7 +14,7 @@ func TestWithFallbackCacheOnlyNeverFetches(t *testing.T) {
 	_, fresh, err := withFallback(ctx, "profiles:uncached", func() ([]byte, error) {
 		t.Fatal("cache-only requests must not reach Hypixel")
 		return nil, nil
-	})
+	}, func(context.Context) ([]byte, bool) { return nil, false })
 	if !errors.Is(err, ErrNotCached) || fresh {
 		t.Fatalf("got fresh=%v err=%v, want ErrNotCached", fresh, err)
 	}
@@ -26,7 +26,11 @@ func TestWithFallbackCacheOnlyNeverFetches(t *testing.T) {
 func TestWithFallbackFetchesForFullAccess(t *testing.T) {
 	ctx := WithRequestState(context.Background(), &RequestState{})
 
-	body, fresh, err := withFallback(ctx, "profiles:x", func() ([]byte, error) { return []byte(`{}`), nil })
+	body, fresh, err := withFallback(ctx, "profiles:x", func() ([]byte, error) { return []byte(`{}`), nil },
+		func(context.Context) ([]byte, bool) {
+			t.Fatal("a successful fetch must not read the store")
+			return nil, false
+		})
 	if err != nil || !fresh || string(body) != `{}` {
 		t.Fatalf("got body=%q fresh=%v err=%v", body, fresh, err)
 	}

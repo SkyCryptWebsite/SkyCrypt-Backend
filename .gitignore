@@ -152,3 +152,6 @@ cache/
 logs/
 ### Node ###
 node_modules/
+
+# storagebench samples (real player data, never commit)
+benchdata/

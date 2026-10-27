@@ -13,6 +13,7 @@ import (
 	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/security"
+	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"strings"
 	"time"
@@ -132,6 +133,9 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	key := fmt.Sprintf(`player:%s`, uuid)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/player", url.Values{"uuid": {uuid}})
+	}, func(ctx context.Context) ([]byte, bool) {
+		body, _, ok := store.LoadPlayer(ctx, uuid)
+		return body, ok
 	})
 	if err != nil {
 		return &response, err
@@ -143,7 +147,7 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, body, int(playerCacheTTL.Seconds()))
+		cacheFresh(ctx, key, body, playerCacheTTL)
 		parsedPlayers.Set(key, &rawReponse.Player, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
@@ -213,6 +217,9 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 	key := fmt.Sprintf(`profiles:%s`, uuid)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/profiles", url.Values{"uuid": {uuid}})
+	}, func(ctx context.Context) ([]byte, bool) {
+		body, _, ok := store.LoadProfiles(ctx, uuid)
+		return body, ok
 	})
 	if err != nil {
 		return &response, err
@@ -228,7 +235,7 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, body, int(profilesCacheTTL.Seconds()))
+		cacheFresh(ctx, key, body, profilesCacheTTL)
 		parsedProfiles.Set(key, &response, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
@@ -328,6 +335,9 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 	key := fmt.Sprintf(`museum:%s`, profileId)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/museum", url.Values{"profile": {profileId}})
+	}, func(ctx context.Context) ([]byte, bool) {
+		body, _, ok := store.LoadMuseum(ctx, profileId)
+		return body, ok
 	})
 	if err != nil {
 		return nil, err
@@ -339,7 +349,7 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, body, int(museumCacheTTL.Seconds()))
+		cacheFresh(ctx, key, body, museumCacheTTL)
 		parsedMuseums.Set(key, rawReponse.Members, parsedCacheTTL, 0)
 	}
 	return rawReponse.Members, nil
@@ -391,12 +401,20 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 	key := fmt.Sprintf(`garden:%s`, profileId)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
+	}, func(ctx context.Context) ([]byte, bool) {
+		body, _, ok := store.LoadGarden(ctx, profileId)
+		return body, ok
 	})
 	if errors.Is(err, errHypixelNotFound) {
+		store.EnqueueNoGarden(ctx, profileId)
 		return nil, fmt.Errorf("%w: profile %s has no garden", ErrGardenNotFound, profileId)
 	}
 	if err != nil {
 		return nil, err
+	}
+	// The store keeps an empty body for a profile Hypixel had no garden for.
+	if len(body) == 0 {
+		return nil, fmt.Errorf("%w: profile %s has no garden", ErrGardenNotFound, profileId)
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -405,26 +423,28 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 	}
 
 	if fresh {
-		_ = redis.SetContext(ctx, key, body, int(gardenCacheTTL.Seconds()))
+		cacheFresh(ctx, key, body, gardenCacheTTL)
 		parsedGardens.Set(key, &rawReponse.Garden, parsedCacheTTL, 0)
 	}
 	return &rawReponse.Garden, nil
 }
 
-// withFallback stores every good upstream body and serves the last one stored when the upstream fails.
-// Cache-only requests never reach the upstream and only get the stored body. fresh is false for stored bodies,
-// which callers must not cache as current data.
-func withFallback(ctx context.Context, key string, fetch func() ([]byte, error)) (body []byte, fresh bool, err error) {
+// withFallback fetches from upstream and, when that fails, serves the last stored copy from load. Cache-only requests
+// never reach the upstream and only get the stored copy. fresh is false for stored bodies, which callers must not
+// cache as current data. A definite "not found" from upstream is passed on, never answered with old data.
+func withFallback(ctx context.Context, key string, fetch func() ([]byte, error), load func(context.Context) ([]byte, bool)) (body []byte, fresh bool, err error) {
 	state := requestState(ctx)
 	if state == nil || !state.CacheOnly {
 		body, err = fetch()
 		if err == nil {
-			redis.SaveFallback(key, body)
 			return body, true, nil
+		}
+		if errors.Is(err, errHypixelNotFound) {
+			return nil, false, err
 		}
 	}
 
-	stale, ok := redis.GetFallback(ctx, key)
+	stale, ok := load(ctx)
 	if !ok {
 		if state != nil && state.CacheOnly {
 			state.notCached.Store(true)
@@ -442,6 +462,14 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error))
 		)
 	}
 	return stale, false, nil
+}
+
+// cacheFresh caches a good upstream body in Redis and queues it for the long-term store, which reads it back from
+// Redis, so a body that didn't make it into Redis isn't queued.
+func cacheFresh(ctx context.Context, key string, body []byte, ttl time.Duration) {
+	if err := redis.SetContext(ctx, key, body, int(ttl.Seconds())); err == nil {
+		store.Enqueue(ctx, key)
+	}
 }
 
 // getHypixelBody retries once on a transport error. The transport drops a connection that failed, so the retry
