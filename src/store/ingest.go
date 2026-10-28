@@ -119,7 +119,12 @@ func ingestWorker() {
 			err := withRetry(func() error { return ingest(jobCtx, member, fetchedAt, busy) })
 			db.RecordPostgresDependency(jobCtx, "store", "ingest", time.Since(start), err)
 			cancel()
-			if err != nil {
+			switch {
+			case isMissingSchema(err):
+				// The database or its tables were dropped; the health check recreates them.
+				requestSchemaCheck()
+				LogUnavailable("storing data")
+			case err != nil:
 				fmt.Printf("[STORE] could not store %s: %v\n", member, err)
 			}
 		}
@@ -406,6 +411,9 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 	}
 
 	if err := updateLeaderboardValues(ctx, uuid, profiles, blobs, fetchedAt); err != nil {
+		if isMissingSchema(err) {
+			return err
+		}
 		fmt.Printf("[STORE] could not update leaderboards for %s: %v\n", uuidText, err)
 	}
 	return nil

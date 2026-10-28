@@ -35,13 +35,16 @@ func Init(ctx context.Context) error {
 	defer cancel()
 
 	if fiber.IsChild() {
-		version, err := schemaVersion(ctx, pool)
+		// The watch turns the store on later if the parent's schema isn't ready yet, and follows schema resets.
+		watchOnce.Do(func() { go runChildWatch() })
+		version, epoch, err := schemaState(ctx, pool)
 		if err != nil {
 			return fmt.Errorf("could not read the store schema version: %w", err)
 		}
 		if want := latestVersion(); version != want {
 			return fmt.Errorf("store schema is at version %d, this build needs %d", version, want)
 		}
+		recordEpoch(epoch)
 		enabled.Store(true)
 		return nil
 	}
@@ -52,17 +55,22 @@ func Init(ctx context.Context) error {
 	if err := loadDicts(ctx, pool); err != nil {
 		return err
 	}
+	if _, epoch, err := schemaState(ctx, pool); err == nil {
+		recordEpoch(epoch)
+	}
 	enabled.Store(true)
 	logStarted(latestVersion())
 
-	go runIngest()
-	go runLegacyImport()
-	go runEviction()
-	go runDictTraining()
-	warnAboutEviction(ctx)
-	go runStatsBackfill()
-	go runLeaderboards()
-	go runHealthCheck()
+	workersOnce.Do(func() {
+		go runIngest()
+		go runLegacyImport()
+		go runEviction()
+		go runDictTraining()
+		warnAboutEviction(ctx)
+		go runStatsBackfill()
+		go runLeaderboards()
+		go runHealthCheck()
+	})
 	return nil
 }
 

@@ -1,7 +1,6 @@
 package src
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"log"
@@ -13,7 +12,6 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
 	"skycrypt/src/routes"
-	"skycrypt/src/security"
 	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"strings"
@@ -50,12 +48,7 @@ func SetupApplication() error {
 	}
 
 	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
-		if err := db.InitPostgres(databaseURL); err != nil {
-			store.Disable(fmt.Sprintf("could not connect to Postgres: %v", security.RedactError(err)), false)
-		} else if err := store.Init(context.Background()); err != nil {
-			// A child that disagrees with the parent's schema says so itself.
-			store.Disable(fmt.Sprintf("could not start the store: %v", err), fiber.IsChild())
-		}
+		store.Start(databaseURL)
 	} else {
 		store.Disable("DATABASE_URL is not set", false)
 	}

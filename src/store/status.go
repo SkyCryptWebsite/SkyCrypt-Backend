@@ -83,17 +83,27 @@ func logStarted(version int) {
 
 // runHealthCheck pings Postgres and logs when it goes away and comes back. Writes fail and reads miss meanwhile;
 // nothing else changes, so the backend keeps answering from Hypixel and Redis.
+// It also brings the schema back when the database or its tables were dropped (see recovery.go). Parent only.
 func runHealthCheck() {
 	var downSince time.Time
 	for {
-		time.Sleep(healthCheckEvery)
+		select {
+		case <-time.After(healthCheckEvery):
+		case <-checkSchema:
+		}
 		pool := db.Postgres()
 		if pool == nil {
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), recoverTimeout)
 		err := pool.Ping(ctx)
-		cancel()
+		if db.IsMissingDatabase(err) {
+			if _, createErr := db.EnsureDatabase(ctx, databaseURL); createErr != nil {
+				err = fmt.Errorf("%w; creating it failed: %v", err, createErr)
+			} else {
+				err = pool.Ping(ctx)
+			}
+		}
 
 		switch {
 		case err != nil && downSince.IsZero():
@@ -103,5 +113,11 @@ func runHealthCheck() {
 			fmt.Printf("[STORE] Postgres is back after %v\n", time.Since(downSince).Round(time.Second))
 			downSince = time.Time{}
 		}
+		if err == nil {
+			if err := ensureSchema(ctx, pool); err != nil {
+				fmt.Printf("[STORE] could not recreate the schema: %s\n", oneLine(err.Error()))
+			}
+		}
+		cancel()
 	}
 }
