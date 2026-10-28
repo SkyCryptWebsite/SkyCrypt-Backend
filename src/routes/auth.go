@@ -20,7 +20,7 @@ const apiKeyScheme = "ApiKeyHeader"
 // requireAPIKey puts op behind apiKeyMiddleware and documents that in the spec, so the two can't disagree.
 func requireAPIKey(humaAPI huma.API, op huma.Operation) huma.Operation {
 	op.Security = []map[string][]string{{apiKeyScheme: {}}}
-	op.Middlewares = append(op.Middlewares, apiKeyMiddleware)
+	op.Middlewares = append(op.Middlewares, apiKeyMiddleware, encodingMiddleware)
 	documented := errorResponses(humaAPI, map[int]string{
 		fiber.StatusUnauthorized:       "MISSING_API_KEY, INVALID_API_KEY, or INVALID_API_TOKEN: the x-api-key header is missing, or the key is invalid, disabled, or expired.",
 		fiber.StatusTooManyRequests:    "RATE_LIMITED: the key's rate limit is used up. See the Retry-After header.",

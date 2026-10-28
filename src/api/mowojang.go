@@ -451,7 +451,8 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 		if shouldThrowError {
 			return "", fmt.Errorf("%w: invalid username or UUID provided", ErrPlayerNotFound)
 		}
-		return "Player not Found", nil
+		// Not a placeholder name: callers use what this returns as the player's UUID.
+		return "", nil
 	}
 
 	if len(body) == 0 {
@@ -514,7 +515,10 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 	}
 
 	if mojangNotFound(resp.StatusCode) {
-		return "Player not Found", nil
+		if shouldThrowError {
+			return "", fmt.Errorf("%w: no Minecraft player has UUID %s", ErrPlayerNotFound, uuid)
+		}
+		return "", nil
 	}
 
 	if len(body) == 0 {
@@ -567,10 +571,7 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 	}
 
 	if mojangNotFound(resp.StatusCode) {
-		return &models.MowojangResponse{
-			Name: "Player not Found",
-			UUID: uuid,
-		}, nil
+		return &models.MowojangResponse{}, fmt.Errorf("%w: no Minecraft player has UUID %s", ErrPlayerNotFound, uuid)
 	}
 
 	if len(body) == 0 {

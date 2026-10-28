@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getGame(gameData *skycrypttypes.ExperimentationGame, gameId string) []models.EnchantingGame {

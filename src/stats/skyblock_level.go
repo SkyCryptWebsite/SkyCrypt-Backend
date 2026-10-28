@@ -4,7 +4,7 @@ import (
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats/leveling"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func GetSkyBlockLevel(userProfile *skycrypttypes.Member) models.Skill {

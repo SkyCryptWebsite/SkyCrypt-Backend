@@ -3,7 +3,7 @@ package stats
 import (
 	"skycrypt/src/models"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func GetStats(mowojang *models.MowojangResponse, profiles *models.HypixelProfilesResponse, profile *skycrypttypes.Profile, player *skycrypttypes.Player, userProfile *skycrypttypes.Member, museum *skycrypttypes.Museum, members []*models.MemberStats) (*models.StatsOutput, error) {

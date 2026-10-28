@@ -30,8 +30,10 @@ func getSkyBlockItems() ([]models.HypixelItem, error) {
 	// Stale items still go to Redis: prefork children load them from there at startup.
 	body, fresh, err := withFallback(context.Background(), "skyblock_items", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/items")
-	}, func(ctx context.Context) ([]byte, bool) {
-		return store.LoadResource(ctx, "skyblock_items")
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		// Resources aren't tied to a request, so their age isn't reported.
+		body, ok := store.LoadResource(ctx, "skyblock_items")
+		return body, time.Time{}, ok
 	})
 	if err != nil {
 		return nil, err
@@ -113,8 +115,9 @@ func GetSkyBlockCollections() (map[string]models.HypixelCollection, error) {
 
 	body, fresh, err := withFallback(context.Background(), "skyblock_collections", func() ([]byte, error) {
 		return getResourceBody("https://api.hypixel.net/v2/resources/skyblock/collections")
-	}, func(ctx context.Context) ([]byte, bool) {
-		return store.LoadResource(ctx, "skyblock_collections")
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		body, ok := store.LoadResource(ctx, "skyblock_collections")
+		return body, time.Time{}, ok
 	})
 	if err != nil {
 		return nil, err

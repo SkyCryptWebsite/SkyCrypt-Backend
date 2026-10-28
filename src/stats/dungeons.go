@@ -7,7 +7,7 @@ import (
 	stats "skycrypt/src/stats/leveling"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getSecrets(data *skycrypttypes.Dungeons) models.SecretsOutput {

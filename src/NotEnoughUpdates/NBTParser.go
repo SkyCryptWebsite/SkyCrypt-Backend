@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 type TagParsingException struct {

@@ -62,19 +62,38 @@ func cachedJSON(ctx context.Context, cacheKey responseCacheHandle) *jsonOutput {
 		return nil
 	}
 
-	// Bytes, not a string: GetContext copies a multi-MB body twice more on the way to the response.
-	cached, err := db.GetBytesContext(ctx, cacheKey.key)
-	if err != nil || len(cached) == 0 {
+	entry, err := db.GetBytesContext(ctx, cacheKey.key)
+	if err != nil || len(entry) == 0 {
+		return nil
+	}
+	cached, err := decodeCachedResponse(entry)
+	if err != nil {
 		return nil
 	}
 
 	recordResponseCache(ctx, cacheKey.endpoint, "redis")
-	return &jsonOutput{
+	out := &jsonOutput{
+		Status:       fiber.StatusOK,
 		ContentType:  fiber.MIMEApplicationJSONCharsetUTF8,
 		CacheControl: responseCacheControl(cacheKey.endpoint),
 		Cache:        "redis",
-		Body:         cached,
+		ETag:         cached.etag,
 	}
+	encoding := requestEncodingFrom(ctx)
+	switch {
+	case etagMatches(encoding.ifNoneMatch, cached.etag):
+		out.Status = fiber.StatusNotModified
+	case cached.gzipped != nil && encoding.acceptsGzip:
+		out.ContentEncoding = "gzip"
+		out.Body = cached.gzipped
+	default:
+		body, err := cached.body()
+		if err != nil {
+			return nil
+		}
+		out.Body = body
+	}
+	return out
 }
 
 func cacheJSON(ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) (*jsonOutput, error) {
@@ -95,13 +114,16 @@ func cacheBody(ctx context.Context, cacheKey responseCacheHandle, body []byte, t
 	recordResponseCache(ctx, cacheKey.endpoint, "cold")
 	cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	_ = db.SetContext(cacheCtx, cacheKey.key, body, ttlSeconds)
+	_ = db.SetRawContext(cacheCtx, cacheKey.key, encodeCachedResponse(body), ttlSeconds)
 }
 
 // jsonBody is the output for a freshly built response. ctx decides the cache header, so pass the request's own
 // context.
 func jsonBody(ctx context.Context, cacheKey responseCacheHandle, body []byte) *jsonOutput {
-	out := &jsonOutput{ContentType: fiber.MIMEApplicationJSONCharsetUTF8, Body: body}
+	out := &jsonOutput{Status: fiber.StatusOK, ContentType: fiber.MIMEApplicationJSONCharsetUTF8, Body: body}
+	if fetchedAt := api.StaleFetchedAt(ctx); !fetchedAt.IsZero() {
+		out.Stale = fetchedAt.UTC().Format(time.RFC3339)
+	}
 	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
 		out.Cache = "bypass"
 		return out

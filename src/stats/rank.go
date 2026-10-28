@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/utility"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func GetRank(player *skycrypttypes.Player) *models.RankOutput {

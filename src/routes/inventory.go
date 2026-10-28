@@ -6,7 +6,6 @@ import (
 	"os"
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
-	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/stats"
@@ -16,7 +15,7 @@ import (
 
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
@@ -171,13 +170,5 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 		return nil, err
 	}
 
-	// Inventory search reads this key, so write it even when the response cache is off.
-	if !processedResponseCacheEnabled() {
-		cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		defer cancel()
-		if err := db.SetContext(cacheCtx, cacheKey.key, body, 5*60); err != nil {
-			return nil, fmt.Errorf("failed to cache inventory for search: %v", err)
-		}
-	}
 	return body, nil
 }

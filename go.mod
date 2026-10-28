@@ -3,9 +3,9 @@ module skycrypt
 go 1.26.4
 
 require (
-	github.com/DuckySoLucky/SkyCrypt-Backend-Renderer v0.2.9
-	github.com/DuckySoLucky/SkyCrypt-Types v0.1.26
-	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.22
+	github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer v0.3.1
+	github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.27
+	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.23
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/gofiber/fiber/v3 v3.6.1
@@ -17,10 +17,11 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
-// replace github.com/DuckySoLucky/SkyCrypt-Types => ../SkyCrypt-Types
+// replace github.com/SkyCryptWebsite/SkyCrypt-Types => ../SkyCrypt-Types
+
 // replace github.com/SkyCryptWebsite/SkyHelper-Networth-Go => ../SkyHelper-Networth-Go
 
-// replace github.com/DuckySoLucky/SkyCrypt-Backend-Renderer => ../SkyCrypt-Backend-Renderer
+// replace github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer => ../SkyCrypt-Assets-Renderer
 
 require (
 	github.com/HugoSmits86/nativewebp v1.3.0 // indirect

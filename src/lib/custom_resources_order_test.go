@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 
 	"skycrypt/src/models"
 )

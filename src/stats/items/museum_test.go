@@ -3,7 +3,7 @@ package stats
 import (
 	"testing"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func TestDecodeMuseumEntriesKeepsOrder(t *testing.T) {

@@ -16,8 +16,8 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	mr "github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -50,7 +50,7 @@ var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1
-	renderedResourcePackManifestRendererModule = "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer@v0.2.6|custom-model-pack-filter-v2"
+	renderedResourcePackManifestRendererModule = "github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer@v0.2.6|custom-model-pack-filter-v2"
 	renderedResourcePackManifestFileName       = "resourcepacks-manifest.json"
 )
 

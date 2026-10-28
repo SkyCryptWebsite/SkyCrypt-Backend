@@ -9,7 +9,7 @@ import (
 	statsLeveling "skycrypt/src/stats/leveling"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func GetPlayerStats(

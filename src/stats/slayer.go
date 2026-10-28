@@ -6,7 +6,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getSlayerKills(slayerData skycrypttypes.SlayerBoss) map[string]int {

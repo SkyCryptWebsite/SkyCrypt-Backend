@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	mr "github.com/DuckySoLucky/SkyCrypt-Backend-Renderer"
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	mr "github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 
 	"skycrypt/src/constants"
 	"skycrypt/src/utility"

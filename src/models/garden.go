@@ -1,7 +1,7 @@
 package models
 
 import (
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 type HypixelGardenResponse struct {

@@ -6,7 +6,7 @@ import (
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"testing"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 // Needs a NEU checkout (and fetches prices), so it only runs with NEU_REPO_ROOT set to the directory holding

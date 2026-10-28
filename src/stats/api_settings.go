@@ -1,6 +1,6 @@
 package stats
 
-import skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+import skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 
 func GetAPISettings(userProfile *skycrypttypes.Member, profile *skycrypttypes.Profile, museum *skycrypttypes.Museum) map[string]bool {
 	if profile.Banking == nil {

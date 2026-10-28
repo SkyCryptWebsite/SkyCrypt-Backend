@@ -7,7 +7,7 @@ import (
 	"skycrypt/src/utility"
 	"slices"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getMaxSyphon(shardRarity string) int {

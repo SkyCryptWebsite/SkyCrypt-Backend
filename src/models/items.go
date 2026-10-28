@@ -1,6 +1,6 @@
 package models
 
-import skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+import skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 
 type DecodedInventory struct {
 	Items []*skycrypttypes.Item `nbt:"i"`

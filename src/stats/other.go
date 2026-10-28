@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func GetProfile(profiles *models.HypixelProfilesResponse, profileId ...string) (*skycrypttypes.Profile, error) {
@@ -102,14 +102,15 @@ func FormatMembersContext(ctx context.Context, profile *skycrypttypes.Profile) (
 }
 
 func isMemberRemoved(memberData *skycrypttypes.Member) bool {
-	if memberData.CoopInvitation != nil && !memberData.CoopInvitation.Confirmed {
+	profile := memberData.Profile
+	if profile == nil {
+		return false
+	}
+	// Invited but not yet accepted: not a member yet.
+	if profile.CoopInvitation != nil && !profile.CoopInvitation.Confirmed {
 		return true
 	}
-
-	if memberData.Profile != nil && memberData.Profile.DeletionNotice != nil && memberData.Profile.DeletionNotice.Timestamp != 0 {
-		return true
-	}
-	return false
+	return profile.DeletionNotice != nil && profile.DeletionNotice.Timestamp != 0
 }
 
 func GetFairySouls(userProfile *skycrypttypes.Member, gamemode string) *models.FairySouls {

@@ -8,7 +8,7 @@ import (
 	"skycrypt/src/utility"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 var powderColors = map[string]string{

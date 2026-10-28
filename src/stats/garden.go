@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getVisitors(gardenData *skycrypttypes.Garden) models.Visitors {

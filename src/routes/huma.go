@@ -101,10 +101,15 @@ func newHumaError(status int, msg string, errs ...error) huma.StatusError {
 
 // jsonOutput is a response that is already JSON: a cached body, or one built by sharedResponse.
 type jsonOutput struct {
-	ContentType  string `header:"Content-Type" hidden:"true"`
-	CacheControl string `header:"Cache-Control"`
-	Cache        string `header:"X-SkyCrypt-Backend-Cache" doc:"redis: served from the response cache. miss: built now, then cached. bypass: built now and not cached."`
-	Body         []byte
+	// Status is 200, or 304 for a matching If-None-Match. Huma sends it as is, so it must never be left at 0.
+	Status          int    `hidden:"true"`
+	ContentType     string `header:"Content-Type" hidden:"true"`
+	ContentEncoding string `header:"Content-Encoding" hidden:"true"`
+	ETag            string `header:"ETag" hidden:"true"`
+	CacheControl    string `header:"Cache-Control"`
+	Cache           string `header:"X-SkyCrypt-Backend-Cache" doc:"redis: served from the response cache. miss: built now, then cached. bypass: built now and not cached."`
+	Stale           string `header:"X-SkyCrypt-Stale" doc:"Set when Hypixel couldn't be reached and the response was built from stored data: when the oldest of that data was fetched from Hypixel (RFC 3339). Missing when the data is current."`
+	Body            []byte
 }
 
 // jsonResponse documents the body of a jsonOutput, whose Go type ([]byte) says nothing about the JSON in it.

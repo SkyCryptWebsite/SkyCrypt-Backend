@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func loreContains(lore []string, text string) bool {

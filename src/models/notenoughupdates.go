@@ -3,7 +3,7 @@ package models
 import (
 	neu "skycrypt/src/models/NEU"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 type NEUItem struct {

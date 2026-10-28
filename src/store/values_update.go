@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
 	"github.com/jackc/pgx/v5"
 	jsoniter "github.com/json-iterator/go"

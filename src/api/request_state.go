@@ -18,6 +18,24 @@ type RequestState struct {
 	CacheOnly bool
 	stale     atomic.Bool
 	notCached atomic.Bool
+	// staleFetchedAt is when the oldest stored data the request fell back to was fetched (Unix ms), 0 for none.
+	staleFetchedAt atomic.Int64
+}
+
+// markStaleFetchedAt records stored data fetched at fetchedAt, keeping the oldest.
+func (s *RequestState) markStaleFetchedAt(fetchedAt int64) {
+	if fetchedAt <= 0 {
+		return
+	}
+	for {
+		current := s.staleFetchedAt.Load()
+		if current != 0 && current <= fetchedAt {
+			return
+		}
+		if s.staleFetchedAt.CompareAndSwap(current, fetchedAt) {
+			return
+		}
+	}
 }
 
 type requestStateKey struct{}
@@ -35,6 +53,16 @@ func requestState(ctx context.Context) *RequestState {
 func ServedStale(ctx context.Context) bool {
 	state := requestState(ctx)
 	return state != nil && state.stale.Load()
+}
+
+// StaleFetchedAt is when the oldest stored data the request was built from was fetched from Hypixel, because Hypixel
+// couldn't be reached. It is zero when every part was fresh.
+func StaleFetchedAt(ctx context.Context) time.Time {
+	state := requestState(ctx)
+	if state == nil || state.staleFetchedAt.Load() == 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(state.staleFetchedAt.Load())
 }
 
 // SkipCaching keeps a response that was built with a part missing out of the caches, like stale fallback data.
@@ -56,13 +84,14 @@ func isCacheOnly(ctx context.Context) bool {
 }
 
 type flightResult[T any] struct {
-	value     T
-	stale     bool
-	notCached bool
+	value          T
+	stale          bool
+	notCached      bool
+	staleFetchedAt int64
 }
 
 // Share runs fn once per key across concurrent callers in group. The shared call gets its own RequestState and a
-// context no single caller can cancel, bounded by timeout; its stale and notCached flags are copied onto every
+// context no single caller can cancel, bounded by timeout; its stale and notCached flags (and the stale data's age) are copied onto every
 // caller's state, not just the caller that happened to start it.
 func Share[T any](ctx context.Context, group *singleflight.Group, key string, timeout time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
 	result, err, _ := group.Do(flightKey(ctx, key), func() (interface{}, error) {
@@ -71,7 +100,10 @@ func Share[T any](ctx context.Context, group *singleflight.Group, key string, ti
 		defer cancel()
 
 		value, err := fn(flightCtx)
-		return flightResult[T]{value: value, stale: flightState.stale.Load(), notCached: flightState.notCached.Load()}, err
+		return flightResult[T]{
+			value: value, stale: flightState.stale.Load(), notCached: flightState.notCached.Load(),
+			staleFetchedAt: flightState.staleFetchedAt.Load(),
+		}, err
 	})
 
 	flight, _ := result.(flightResult[T])
@@ -82,6 +114,7 @@ func Share[T any](ctx context.Context, group *singleflight.Group, key string, ti
 		if flight.notCached {
 			state.notCached.Store(true)
 		}
+		state.markStaleFetchedAt(flight.staleFetchedAt)
 	}
 	if err != nil {
 		var zero T

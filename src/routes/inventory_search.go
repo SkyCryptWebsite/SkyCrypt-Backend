@@ -3,7 +3,6 @@ package routes
 import (
 	"context"
 	"fmt"
-	"skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
@@ -17,18 +16,15 @@ import (
 )
 
 func registerInventorySearch(humaAPI huma.API) {
-	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusNotFound:            "NOT_CACHED: No inventory is cached for this player, profile and packs; call the inventory endpoint first.",
-		fiber.StatusInternalServerError: "INTERNAL_ERROR: Cached inventory data could not be read or parsed.",
-	})
+	responses := profileErrors(humaAPI, "Unexpected failure.")
 	responses["200"] = &huma.Response{Description: "Matching inventory items returned successfully."}
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
 		OperationID: "searchProfileInventory",
 		Method:      fiber.MethodGet,
 		Path:        "/api/inventory/search/{uuid}/{profileId}/{searchParam}",
 		Summary:     "Search cached profile inventory",
-		Description: "Searches cached inventory tabs for items whose display name or lore contains the search parameter.\n" +
-			"Call GET /api/inventory/{uuid}/{profileId} first to refresh the short-lived cache for the same player, profile, and resource pack preferences. At most 45 matching items are returned.",
+		Description: "Searches the profile's inventory tabs for items whose display name or lore contains the search parameter.\n" +
+			"Uses the inventory GET /api/inventory/{uuid}/{profileId} returns for the same resource pack preferences, building it first when it isn't cached. At most 45 matching items are returned.",
 		Tags:      []string{"Stats"},
 		Responses: responses,
 	}), func(ctx context.Context, in *struct {
@@ -51,17 +47,17 @@ func searchInventory(ctx context.Context, uuid string, profileId string, searchP
 	uuid = strings.ToLower(uuid)
 	searchParam = strings.ToLower(searchParam)
 
-	cache, err := db.GetBytesContext(ctx, inventoryCacheKey(uuid, profileId, enabledPacks).key)
+	// The same body /api/inventory returns: cached, or built (and cached) now. Plain JSON, whatever this request
+	// accepts, since it is parsed here.
+	plainCtx := context.WithValue(ctx, requestEncodingKey{}, requestEncoding{})
+	inventory, err := inventoryResponse(plainCtx, uuid, profileId, enabledPacks)
 	if err != nil {
-		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to get items: %v", err))
-	}
-	if len(cache) == 0 {
-		return nil, NewAPIError(fiber.StatusNotFound, codeNotCached, "No cached items found for this player and profile. Load their inventory first.")
+		return nil, err
 	}
 
 	var inventories []models.Inventory
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(cache, &inventories); err != nil {
+	if err := json.Unmarshal(inventory.Body, &inventories); err != nil {
 		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to parse items: %v", err))
 	}
 

@@ -5,7 +5,7 @@ import (
 
 	"skycrypt/src/models"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 // The parsed profiles are shared between requests, and callers fill in fields (Banking, CommunityUpgrades), so

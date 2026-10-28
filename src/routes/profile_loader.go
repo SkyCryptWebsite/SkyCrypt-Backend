@@ -7,7 +7,7 @@ import (
 	"skycrypt/src/stats"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	"golang.org/x/sync/errgroup"
 )
 

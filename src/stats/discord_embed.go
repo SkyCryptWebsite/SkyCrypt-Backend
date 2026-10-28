@@ -4,7 +4,7 @@ import (
 	"math"
 	"skycrypt/src/models"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func RoundToOneDecimal(value float64) float64 {

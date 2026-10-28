@@ -8,7 +8,7 @@ import (
 	"skycrypt/src/models"
 	"skycrypt/src/utility"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getBossCollections(userProfile *skycrypttypes.Member) models.CollectionCategory {

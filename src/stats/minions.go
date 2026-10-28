@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getMinionSlots(profile *skycrypttypes.Profile, tiers int) *models.MinionSlotsOutput {

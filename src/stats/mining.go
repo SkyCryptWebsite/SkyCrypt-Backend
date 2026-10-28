@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getPeakOfTheMountain(userProfile *skycrypttypes.Member) models.PeakOfTheMountain {

@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func testSkinValue(hash string) string {

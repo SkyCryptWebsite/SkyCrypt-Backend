@@ -8,7 +8,7 @@ import (
 	"skycrypt/src/utility"
 	"strings"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 )
 
 func getMedalType(contest *skycrypttypes.JacobContestData) string {

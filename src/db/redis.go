@@ -399,6 +399,15 @@ func SetManyContext(ctx context.Context, values map[string]interface{}, expirati
 }
 
 func SetContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
+	return setContext(ctx, key, compressValue(value), expirationSeconds)
+}
+
+// SetRawContext stores value as is, for values already compressed in another format.
+func SetRawContext(ctx context.Context, key string, value []byte, expirationSeconds int) error {
+	return setContext(ctx, key, value, expirationSeconds)
+}
+
+func setContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
 	start := time.Now()
 
 	client, err := getRedisClient()
@@ -407,7 +416,7 @@ func SetContext(ctx context.Context, key string, value interface{}, expirationSe
 	}
 
 	expiration := time.Duration(expirationSeconds) * time.Second
-	err = client.Set(ctx, key, compressValue(value), expiration).Err()
+	err = client.Set(ctx, key, value, expiration).Err()
 	duration := time.Since(start)
 
 	if err != nil {

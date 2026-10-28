@@ -15,10 +15,12 @@ import (
 	"skycrypt/src/security"
 	"skycrypt/src/store"
 	"skycrypt/src/utility"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
+	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
@@ -149,9 +151,8 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 	key := fmt.Sprintf(`player:%s`, uuid)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/player", url.Values{"uuid": {uuid}})
-	}, func(ctx context.Context) ([]byte, bool) {
-		body, _, ok := store.LoadPlayer(ctx, uuid)
-		return body, ok
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		return store.LoadPlayer(ctx, uuid)
 	})
 	if err != nil {
 		return &response, err
@@ -232,9 +233,8 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 	key := fmt.Sprintf(`profiles:%s`, uuid)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/profiles", url.Values{"uuid": {uuid}})
-	}, func(ctx context.Context) ([]byte, bool) {
-		body, _, ok := store.LoadProfiles(ctx, uuid)
-		return body, ok
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		return store.LoadProfiles(ctx, uuid)
 	})
 	if err != nil {
 		return &response, err
@@ -353,9 +353,8 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 	key := fmt.Sprintf(`museum:%s`, profileId)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/museum", url.Values{"profile": {profileId}})
-	}, func(ctx context.Context) ([]byte, bool) {
-		body, _, ok := store.LoadMuseum(ctx, profileId)
-		return body, ok
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		return store.LoadMuseum(ctx, profileId)
 	})
 	if err != nil {
 		return nil, err
@@ -419,9 +418,8 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 	key := fmt.Sprintf(`garden:%s`, profileId)
 	body, fresh, err := withFallback(ctx, key, func() ([]byte, error) {
 		return getHypixelBody(ctx, "https://api.hypixel.net/v2/skyblock/garden", url.Values{"profile": {profileId}})
-	}, func(ctx context.Context) ([]byte, bool) {
-		body, _, ok := store.LoadGarden(ctx, profileId)
-		return body, ok
+	}, func(ctx context.Context) ([]byte, time.Time, bool) {
+		return store.LoadGarden(ctx, profileId)
 	})
 	if errors.Is(err, errHypixelNotFound) {
 		store.EnqueueNoGarden(ctx, profileId)
@@ -449,7 +447,7 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 // withFallback fetches from upstream and, when that fails, serves the last stored copy from load. Cache-only requests
 // never reach the upstream and only get the stored copy. fresh is false for stored bodies, which callers must not
 // cache as current data. A definite "not found" from upstream is passed on, never answered with old data.
-func withFallback(ctx context.Context, key string, fetch func() ([]byte, error), load func(context.Context) ([]byte, bool)) (body []byte, fresh bool, err error) {
+func withFallback(ctx context.Context, key string, fetch func() ([]byte, error), load func(context.Context) ([]byte, time.Time, bool)) (body []byte, fresh bool, err error) {
 	state := requestState(ctx)
 	if state == nil || !state.CacheOnly {
 		body, err = fetch()
@@ -461,7 +459,7 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error),
 		}
 	}
 
-	stale, ok := load(ctx)
+	stale, fetchedAt, ok := load(ctx)
 	if !ok {
 		if on, _ := store.Status(); !on {
 			if state != nil && state.CacheOnly {
@@ -478,6 +476,7 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error),
 	}
 	if state != nil {
 		state.stale.Store(true)
+		state.markStaleFetchedAt(fetchedAt.UnixMilli())
 	}
 	if err != nil && utility.IsForensicsEnabled() {
 		forensics.Logger.Warn("upstream_fallback_served",
@@ -498,7 +497,56 @@ func cacheFresh(ctx context.Context, key string, body []byte, ttl time.Duration)
 
 // getHypixelBody retries once on a transport error. The transport drops a connection that failed, so the retry
 // gets a working one without closing the idle connections every other upstream call shares.
+// After a 429 the API key is out of requests until Hypixel's window resets, and every request sent before then only
+// keeps it limited. Each process remembers the reset, and Redis shares it with the other prefork processes; until
+// then requests fail at once, so callers serve stored data instead.
+const hypixelCooldownKey = "hypixel:cooldown"
+
+var hypixelCooldownUntil atomic.Int64 // Unix ms
+
+// hypixelCooldown returns how long Hypixel asked to wait, or 0.
+func hypixelCooldown(ctx context.Context) time.Duration {
+	now := time.Now().UnixMilli()
+	if until := hypixelCooldownUntil.Load(); until > now {
+		return time.Duration(until-now) * time.Millisecond
+	}
+	value, err := redis.GetContext(ctx, hypixelCooldownKey)
+	if err != nil || value == "" {
+		return 0
+	}
+	until, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || until <= now {
+		return 0
+	}
+	hypixelCooldownUntil.Store(until)
+	return time.Duration(until-now) * time.Millisecond
+}
+
+// startHypixelCooldown records a 429 using Hypixel's Retry-After or RateLimit-Reset header (seconds).
+func startHypixelCooldown(ctx context.Context, header http.Header) time.Duration {
+	wait := 30 * time.Second
+	for _, name := range []string{"Retry-After", "RateLimit-Reset"} {
+		if seconds, err := strconv.Atoi(strings.TrimSpace(header.Get(name))); err == nil && seconds > 0 {
+			wait = time.Duration(seconds) * time.Second
+			break
+		}
+	}
+	wait = min(max(wait, time.Second), 5*time.Minute)
+	until := time.Now().Add(wait).UnixMilli()
+	hypixelCooldownUntil.Store(until)
+	_ = redis.SetContext(ctx, hypixelCooldownKey, strconv.FormatInt(until, 10), int(wait/time.Second)+1)
+	fmt.Printf("[HYPIXEL] rate limited; pausing requests for %s\n", wait)
+	return wait
+}
+
+func hypixelRateLimited(wait time.Duration) error {
+	return fmt.Errorf("%w: Hypixel is rate limiting this server; try again in %s", ErrUpstream, wait.Round(time.Second))
+}
+
 func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]byte, error) {
+	if wait := hypixelCooldown(ctx); wait > 0 {
+		return nil, hypixelRateLimited(wait)
+	}
 	for attempt := 0; attempt < hypixelRequestAttempts; attempt++ {
 		req, err := buildHypixelRequest(ctx, endpoint, query)
 		if err != nil {
@@ -520,6 +568,9 @@ func getHypixelBody(ctx context.Context, endpoint string, query url.Values) ([]b
 
 			if resp.StatusCode == http.StatusNotFound {
 				return nil, fmt.Errorf("%w: %w", ErrUpstream, errHypixelNotFound)
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				return nil, hypixelRateLimited(startHypixelCooldown(ctx, resp.Header))
 			}
 			if resp.StatusCode != http.StatusOK {
 				return nil, fmt.Errorf("%w: Hypixel returned status code %d", ErrUpstream, resp.StatusCode)
