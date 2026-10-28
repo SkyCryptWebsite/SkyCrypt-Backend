@@ -8,7 +8,7 @@ createApiReference("#app", {
   url: "/openapi.json",
   defaultHttpClient: { targetKey: "node", clientKey: 'fetch', },
   featuredClients: ['node/fetch', 'java/nethttp'],
-  favicon: "/assets/static/favicon.ico",
+  favicon: "/assets/static/favicon.ico?v=20261028",
   hideClientButton: true,
   metaData: {
     title: title,

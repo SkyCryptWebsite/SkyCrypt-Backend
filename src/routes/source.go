@@ -38,7 +38,7 @@ func registerSource(humaAPI huma.API) {
 			Repository:  sourceRepository,
 			Source:      sourceURL,
 			Commit:      commit,
-			Notice:      "This software is provided without warranty. Third-party assets and dependencies retain their own licenses.",
+			Notice:      "This software is provided without warranty. Third-party assets and dependencies retain their own licenses. SkyCrypt brand assets are proprietary to SkyCrypt LLC.",
 		}}, nil
 	})
 }

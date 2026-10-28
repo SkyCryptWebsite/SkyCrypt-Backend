@@ -6,7 +6,7 @@ path = [
   "**/*"
 ]
 precedence = "closest"
-SPDX-FileCopyrightText = "2025-present SkyCrypt Team"
+SPDX-FileCopyrightText = "2025-present SkyCrypt LLC"
 SPDX-License-Identifier = "AGPL-3.0-only"
 
 [[annotations]]
@@ -42,3 +42,12 @@ path = [
 precedence = "override"
 SPDX-FileCopyrightText = "Respective asset rights holders"
 SPDX-License-Identifier = "LicenseRef-Asset-Provenance-Review"
+
+[[annotations]]
+path = [
+  "assets/static/favicon.ico",
+  "assets/static/skycrypt-api.avif"
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026-present SkyCrypt LLC"
+SPDX-License-Identifier = "LicenseRef-SkyCrypt-Brand"
