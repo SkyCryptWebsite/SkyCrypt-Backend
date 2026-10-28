@@ -62,8 +62,9 @@ func cachedJSON(ctx context.Context, cacheKey responseCacheHandle) *jsonOutput {
 		return nil
 	}
 
-	cached, err := db.GetContext(ctx, cacheKey.key)
-	if err != nil || cached == "" {
+	// Bytes, not a string: GetContext copies a multi-MB body twice more on the way to the response.
+	cached, err := db.GetBytesContext(ctx, cacheKey.key)
+	if err != nil || len(cached) == 0 {
 		return nil
 	}
 
@@ -72,7 +73,7 @@ func cachedJSON(ctx context.Context, cacheKey responseCacheHandle) *jsonOutput {
 		ContentType:  fiber.MIMEApplicationJSONCharsetUTF8,
 		CacheControl: responseCacheControl(cacheKey.endpoint),
 		Cache:        "redis",
-		Body:         []byte(cached),
+		Body:         cached,
 	}
 }
 
