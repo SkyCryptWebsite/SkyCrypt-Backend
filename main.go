@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"skycrypt/src"
 	"skycrypt/src/db"
@@ -29,6 +30,7 @@ func main() {
 	if err != nil {
 		fmt.Println("[SKYCRYPT] No .env file found, relying on environment variables")
 	}
+	configureMemoryLimit(preforkEnabled())
 
 	if utility.IsForensicsEnabled() {
 		// ========== FORENSIC LOGGING INIT (MUST BE FIRST) ==========
@@ -107,6 +109,9 @@ func newAppConfig() fiber.Config {
 		ReadTimeout:               15 * time.Second,
 		WriteTimeout:              30 * time.Second,
 		IdleTimeout:               120 * time.Second,
+		// Fiber's default is 256K open connections per process. Keep-alive connections each hold their buffers, so
+		// a child stops accepting long before that would exhaust its memory share.
+		Concurrency: 16 << 10,
 		// Decode route parameters, so a search for "giant sword" doesn't reach the handler as "giant%20sword".
 		UnescapePath: true,
 	}
@@ -178,4 +183,72 @@ func listenPort() string {
 		return port
 	}
 	return "8080"
+}
+
+// configureMemoryLimit splits the container's memory budget between the prefork processes. GOMEMLIMIT applies to each
+// Go process on its own, so a container-sized limit lets every child believe it may use the whole container, and the
+// container is killed before any of them collects. The master sets its share and passes the rest to the children
+// through GOMEMLIMIT, which they read at start.
+func configureMemoryLimit(prefork bool) {
+	if fiber.IsChild() {
+		return
+	}
+	total := memoryBudget()
+	if total <= 0 {
+		return
+	}
+
+	processes := int64(1)
+	if prefork {
+		// fasthttp starts one child per GOMAXPROCS; GOMAXPROCS (or the container CPU limit) sets how many.
+		processes += int64(runtime.GOMAXPROCS(0))
+	}
+	share := total / processes
+	debug.SetMemoryLimit(share)
+	_ = os.Setenv("GOMEMLIMIT", strconv.FormatInt(share, 10))
+	fmt.Printf("[SKYCRYPT] memory limit %d MiB per process (%d processes, %d MiB in total)\n",
+		share>>20, processes, total>>20)
+}
+
+// memoryBudget is SKYCRYPT_MEMORY_LIMIT (such as "7GiB"), or else 90% of the container's cgroup limit, for all
+// processes together. 0 means no limit is known.
+func memoryBudget() int64 {
+	if value := strings.TrimSpace(os.Getenv("SKYCRYPT_MEMORY_LIMIT")); value != "" {
+		if limit, ok := parseBytes(value); ok {
+			return limit
+		}
+		fmt.Printf("[SKYCRYPT] invalid SKYCRYPT_MEMORY_LIMIT %q; ignoring it\n", value)
+	}
+	for _, path := range []string{"/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		limit, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+		// "max", or cgroup v1's near-int64 value, means no limit.
+		if err != nil || limit <= 0 || limit > 1<<50 {
+			return 0
+		}
+		return limit / 10 * 9
+	}
+	return 0
+}
+
+// parseBytes reads a size such as "7GiB", "512MiB" or a plain number of bytes.
+func parseBytes(value string) (int64, bool) {
+	units := []struct {
+		suffix string
+		size   int64
+	}{{"TiB", 1 << 40}, {"GiB", 1 << 30}, {"MiB", 1 << 20}, {"KiB", 1 << 10}, {"B", 1}}
+	for _, unit := range units {
+		if number, ok := strings.CutSuffix(value, unit.suffix); ok {
+			n, err := strconv.ParseFloat(strings.TrimSpace(number), 64)
+			if err != nil || n <= 0 {
+				return 0, false
+			}
+			return int64(n * float64(unit.size)), true
+		}
+	}
+	n, err := strconv.ParseInt(value, 10, 64)
+	return n, err == nil && n > 0
 }

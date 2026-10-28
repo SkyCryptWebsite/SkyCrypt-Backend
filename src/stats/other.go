@@ -35,7 +35,10 @@ func GetProfile(profiles *models.HypixelProfilesResponse, profileId ...string) (
 		}
 	}
 
-	return &profiles.Profiles[0], nil
+	// A copy, like the selected profile above: profiles is the parsed cache shared between requests, and callers
+	// fill in fields such as Banking.
+	first := profiles.Profiles[0]
+	return &first, nil
 }
 
 func FormatProfiles(profiles *models.HypixelProfilesResponse) []*models.ProfilesStats {

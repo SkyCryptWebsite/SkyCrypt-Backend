@@ -77,8 +77,12 @@ RUN mkdir -p logs cache
 
 # ── Go Runtime Tuning ─────────────────────────────────────────────────────────
 #
-# GOMEMLIMIT  Keep the Go heap below 5 GiB in the 8 GiB container so native
-#             allocations, stacks, buffers, and the runtime have headroom.
+# SKYCRYPT_MEMORY_LIMIT
+#             Go heap budget for the whole container (master and every prefork
+#             child together), leaving the rest of the 8 GiB for native memory,
+#             stacks and buffers. main.go splits it and sets each process's
+#             GOMEMLIMIT; GOMEMLIMIT itself is per process, so setting it here
+#             would give every process the whole budget.
 #
 # GOGC=100    Collect at the default target instead of allowing the heap to grow
 #             several times between collections. This keeps allocation spikes from
@@ -89,7 +93,7 @@ RUN mkdir -p logs cache
 #             promptly so RSS follows live heap more closely.
 #
 ENV SOURCE_COMMIT=$SOURCE_COMMIT \
-    GOMEMLIMIT=7GiB \
+    SKYCRYPT_MEMORY_LIMIT=7GiB \
     GOGC=100 \
     GODEBUG=netdns=go,madvdontneed=1
 

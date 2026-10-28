@@ -26,8 +26,21 @@ var clientMutex sync.RWMutex
 // Values at least this big are stored zstd-compressed; small identity keys aren't worth the frame overhead.
 const compressMinBytes = 1024
 
-var zstdEncoder, _ = zstd.NewWriter(nil)
-var zstdDecoder, _ = zstd.NewReader(nil)
+// Sized explicitly: the defaults follow GOMAXPROCS at package init, before a prefork child drops to one core, so
+// every child kept an encoder per CPU, each with a 16 MB window once it compressed a large body (about 140 MB per
+// child measured). Two encoders with a 4 MB window keep that to a few MB, and still find the repeats in a profile.
+var zstdEncoder, _ = zstd.NewWriter(nil,
+	zstd.WithEncoderConcurrency(2),
+	zstd.WithWindowSize(4<<20),
+	zstd.WithLowerEncoderMem(true),
+)
+
+// The memory cap also stops a corrupt value from making the decoder allocate up to its 64 GB default.
+var zstdDecoder, _ = zstd.NewReader(nil,
+	zstd.WithDecoderConcurrency(2),
+	zstd.WithDecoderLowmem(true),
+	zstd.WithDecoderMaxMemory(256<<20),
+)
 
 const zstdMagic = "\x28\xb5\x2f\xfd"
 

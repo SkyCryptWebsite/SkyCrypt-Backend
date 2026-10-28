@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	skycrypttypes "github.com/DuckySoLucky/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
+	"github.com/jackc/pgx/v5"
 	jsoniter "github.com/json-iterator/go"
 
 	"skycrypt/src/models"
@@ -34,6 +36,12 @@ type profileValueUpdate struct {
 // updateProfileValues stores the values of every member of a profile and the coop sums, and moves them on the
 // boards. Members missing from the response are handled by reconcileMembers.
 func updateProfileValues(ctx context.Context, update profileValueUpdate, seenAt time.Time) error {
+	return withProfileLock(ctx, update.id, func() error {
+		return updateProfileValuesLocked(ctx, update, seenAt)
+	})
+}
+
+func updateProfileValuesLocked(ctx context.Context, update profileValueUpdate, seenAt time.Time) error {
 	pool := postgres()
 	uuids := make([][16]byte, len(update.members))
 	for i, m := range update.members {
@@ -49,9 +57,10 @@ func updateProfileValues(ctx context.Context, update profileValueUpdate, seenAt 
 		return err
 	}
 	type stored struct {
-		id     int64
-		hidden bool
-		old    *boardState
+		id      int64
+		hidden  bool
+		old     *boardState
+		oldSeen time.Time
 	}
 	byUUID := map[[16]byte]stored{}
 	for rows.Next() {
@@ -66,8 +75,8 @@ func updateProfileValues(ctx context.Context, update profileValueUpdate, seenAt 
 			return err
 		}
 		if oldSeen != nil {
-			values, err := decodeValues(ctx, data, *oldSeen)
-			if err == nil {
+			s.oldSeen = *oldSeen
+			if values, err := decodeValues(ctx, data, *oldSeen); err == nil {
 				s.old = &boardState{values: values, mode: *oldMode, ranked: *oldRanked}
 			}
 		}
@@ -105,21 +114,22 @@ func updateProfileValues(ctx context.Context, update profileValueUpdate, seenAt 
 			// Not recomputed because the profile didn't change, not because it was hidden: still current.
 			for key, value := range merged {
 				if hiddenCategory(key) == hiddenInventory {
-					value.updatedAt = seenAt
+					value.updatedAt = latest(value.updatedAt, seenAt)
 					merged[key] = value
 				}
 			}
 		}
 		now := boardState{values: merged, mode: update.gameMode, ranked: !m.removed && !s.hidden}
 
-		if err := saveMemberValues(ctx, s.id, seenAt, now); err != nil {
+		if err := saveMemberValues(ctx, s.id, latest(s.oldSeen, seenAt), now); err != nil {
 			return err
 		}
 		if err := syncBoards(ctx, memberEntity(s.id), rankedOnly(s.old), now); err != nil {
 			fmt.Printf("[STORE] could not update leaderboards for member %d: %v\n", s.id, err)
 		}
 
-		if !m.removed {
+		// Hidden players don't count towards their coop's entries either.
+		if !m.removed && !s.hidden {
 			for key, value := range merged {
 				if item, ok := strings.CutPrefix(key, "collection:"); ok {
 					coop["coop_collection:"+item] += value.value
@@ -128,7 +138,7 @@ func updateProfileValues(ctx context.Context, update profileValueUpdate, seenAt 
 		}
 	}
 
-	return updateProfileRecord(ctx, update.id, seenAt, coop, nil, isCoopKey)
+	return updateProfileRecordLocked(ctx, update.id, seenAt, coop, isCoopKey)
 }
 
 func rankedOnly(state *boardState) *boardState {
@@ -138,6 +148,8 @@ func rankedOnly(state *boardState) *boardState {
 	return state
 }
 
+// saveMemberValues writes a member's record. Callers hold the profile lock and merged with what was stored, so the
+// write always wins; seenAt is the newest fetch the record reflects.
 func saveMemberValues(ctx context.Context, memberID int64, seenAt time.Time, state boardState) error {
 	data, err := encodeValues(ctx, state.values, seenAt)
 	if err != nil {
@@ -146,33 +158,41 @@ func saveMemberValues(ctx context.Context, memberID int64, seenAt time.Time, sta
 	_, err = postgres().Exec(ctx, `INSERT INTO member_values (member_id, seen_at, version, game_mode, ranked, data)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (member_id) DO UPDATE SET seen_at = excluded.seen_at, version = excluded.version,
-			game_mode = excluded.game_mode, ranked = excluded.ranked, data = excluded.data
-		WHERE member_values.seen_at <= excluded.seen_at OR member_values.version < excluded.version`,
+			game_mode = excluded.game_mode, ranked = excluded.ranked, data = excluded.data`,
 		memberID, seenAt, statsVersion, state.mode, state.ranked, data)
 	return err
 }
 
-// updateProfileRecord replaces the keys owns says belong to this update (coop collections or the garden) and keeps
-// the rest of the profile's record.
-func updateProfileRecord(ctx context.Context, profileID [16]byte, seenAt time.Time, fresh map[string]int64, hidden map[string]bool, owns func(string) bool) error {
+// updateProfileRecordLocked replaces the keys owns says belong to this update (coop collections or the garden) and
+// keeps the rest of the profile's record. The caller holds the profile lock.
+func updateProfileRecordLocked(ctx context.Context, profileID [16]byte, seenAt time.Time, fresh map[string]int64, owns func(string) bool) error {
 	pool := postgres()
 	var id int64
 	var mode int16
-	var deleted bool
+	var deleted, hidden bool
 	var oldSeen *time.Time
 	var oldMode *int16
 	var oldRanked *bool
 	var data []byte
-	err := pool.QueryRow(ctx, `SELECT p.id, p.game_mode, p.deleted_at IS NOT NULL, v.seen_at, v.game_mode, v.ranked, v.data
+	err := pool.QueryRow(ctx, `SELECT p.id, p.game_mode, p.deleted_at IS NOT NULL,
+			-- A profile whose every active member is hidden is off the profile boards too.
+			NOT EXISTS (SELECT 1 FROM profile_members m LEFT JOIN lb_hidden h ON h.uuid = m.player_uuid
+				WHERE m.profile_id = p.profile_id AND m.removed_at IS NULL AND h.uuid IS NULL),
+			v.seen_at, v.game_mode, v.ranked, v.data
 		FROM profiles p LEFT JOIN profile_values v USING (profile_id) WHERE p.profile_id = $1`, profileID).
-		Scan(&id, &mode, &deleted, &oldSeen, &oldMode, &oldRanked, &data)
-	if err != nil {
-		// A garden can arrive before the profile does; it is picked up by the backfill once the profile is stored.
+		Scan(&id, &mode, &deleted, &hidden, &oldSeen, &oldMode, &oldRanked, &data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// A garden fetched before its profile: the next garden fetch after the profile is stored ranks it.
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 
 	var old *boardState
+	recordSeen := seenAt
 	if oldSeen != nil {
+		recordSeen = latest(*oldSeen, seenAt)
 		if values, err := decodeValues(ctx, data, *oldSeen); err == nil {
 			old = &boardState{values: values, mode: *oldMode, ranked: *oldRanked}
 		}
@@ -181,9 +201,9 @@ func updateProfileRecord(ctx context.Context, profileID [16]byte, seenAt time.Ti
 	if old != nil {
 		oldValues = old.values
 	}
-	now := boardState{values: mergeValues(oldValues, fresh, hidden, seenAt, owns), mode: mode, ranked: !deleted}
+	now := boardState{values: mergeValues(oldValues, fresh, nil, seenAt, owns), mode: mode, ranked: !deleted && !hidden}
 
-	encoded, err := encodeValues(ctx, now.values, seenAt)
+	encoded, err := encodeValues(ctx, now.values, recordSeen)
 	if err != nil {
 		return err
 	}
@@ -191,7 +211,7 @@ func updateProfileRecord(ctx context.Context, profileID [16]byte, seenAt time.Ti
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (profile_id) DO UPDATE SET seen_at = excluded.seen_at, version = excluded.version,
 			game_mode = excluded.game_mode, ranked = excluded.ranked, data = excluded.data`,
-		profileID, seenAt, statsVersion, now.mode, now.ranked, encoded); err != nil {
+		profileID, recordSeen, statsVersion, now.mode, now.ranked, encoded); err != nil {
 		return err
 	}
 	return syncBoards(ctx, profileEntity(id), rankedOnly(old), now)
@@ -203,7 +223,10 @@ func updateGardenValues(ctx context.Context, profileID [16]byte, body []byte, se
 	if err := jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal(body, &garden); err != nil {
 		return err
 	}
-	return updateProfileRecord(ctx, profileID, seenAt, gardenStatValues(&garden), nil, isGardenKey)
+	values := gardenStatValues(&garden)
+	return withProfileLock(ctx, profileID, func() error {
+		return updateProfileRecordLocked(ctx, profileID, seenAt, values, isGardenKey)
+	})
 }
 
 // profileNetworth computes networth and non-cosmetic networth for every member of a raw profile object, with the

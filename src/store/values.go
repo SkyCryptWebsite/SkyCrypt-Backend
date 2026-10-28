@@ -20,20 +20,34 @@ type valueSet map[string]statValue
 // mergeValues builds the new record: fresh values as of seenAt, plus the old values of every category the player has
 // hidden since, which keep their old time so they show as outdated. replace limits which keys this update owns
 // (profile records get coop collections and the garden from different responses); nil means all of them.
+//
+// The newest value wins, whatever order responses are stored in: a value written by a response fetched after
+// seenAt is kept rather than replaced by an older one.
 func mergeValues(old valueSet, fresh map[string]int64, hidden map[string]bool, seenAt time.Time, replace func(string) bool) valueSet {
 	out := make(valueSet, len(fresh))
 	for key, value := range fresh {
+		if prev, ok := old[key]; ok && prev.updatedAt.After(seenAt) {
+			out[key] = prev
+			continue
+		}
 		out[key] = statValue{value: value, updatedAt: seenAt}
 	}
 	for key, value := range old {
 		if _, ok := out[key]; ok {
 			continue
 		}
-		if (replace != nil && !replace(key)) || hidden[hiddenCategory(key)] {
+		if (replace != nil && !replace(key)) || hidden[hiddenCategory(key)] || value.updatedAt.After(seenAt) {
 			out[key] = value
 		}
 	}
 	return out
+}
+
+func latest(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
 }
 
 // encodeValues packs a record: per value, uvarint stat id, zigzag varint value, uvarint seconds it is older than

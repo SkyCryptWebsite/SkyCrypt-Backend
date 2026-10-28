@@ -14,6 +14,7 @@ import (
 
 	"skycrypt/src/db"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -114,6 +115,7 @@ func syncBoards(ctx context.Context, entity string, old *boardState, now boardSt
 	if err != nil {
 		return nil
 	}
+	defer markRebuildDirty(entity)
 
 	size := BoardSize()
 	run := func() error {
@@ -130,8 +132,11 @@ func syncBoards(ctx context.Context, entity string, old *boardState, now boardSt
 				if _, still := now.values[key]; still && now.ranked && old.mode == now.mode {
 					continue
 				}
-				pipe.ZRem(ctx, boardKey(key, "all"), entity)
-				pipe.ZRem(ctx, boardKey(key, oldMode), entity)
+				for _, board := range []string{boardKey(key, "all"), boardKey(key, oldMode)} {
+					pipe.ZRem(ctx, board, entity)
+					// The board may no longer be full; its old lowest score would keep values off it.
+					thresholds.Delete(board)
+				}
 			}
 		}
 
@@ -188,6 +193,59 @@ func syncBoards(ctx context.Context, entity string, old *boardState, now boardSt
 		err = run()
 	}
 	return err
+}
+
+// forceSync puts an entity on exactly the boards its state says, without trusting what Redis holds: on every board
+// of its values when ranked, off all of them otherwise. Used after a rebuild, whose snapshot may be older.
+func forceSync(ctx context.Context, entity string, state boardState) error {
+	client, err := db.Redis()
+	if err != nil {
+		return nil
+	}
+	size := BoardSize()
+	run := func() error {
+		pipe := client.Pipeline()
+		own := modeNames[state.mode]
+		for key, value := range state.values {
+			for _, mode := range Modes {
+				board := boardKey(key, mode)
+				if state.ranked && (mode == "all" || mode == own) {
+					putScript.EvalSha(ctx, pipe, []string{board, boardsKey}, boardScore(key, value.value), entity, size)
+				} else {
+					pipe.ZRem(ctx, board, entity)
+				}
+			}
+		}
+		_, err := pipe.Exec(ctx)
+		if errors.Is(err, redis.Nil) {
+			return nil
+		}
+		return err
+	}
+	err = run()
+	if err != nil && strings.Contains(err.Error(), "NOSCRIPT") {
+		if err := putScript.Load(ctx, client).Err(); err != nil {
+			return err
+		}
+		err = run()
+	}
+	return err
+}
+
+// rebuildDirty collects the entities synced while a rebuild runs (parent only), so they can be put back after the
+// rebuild's older snapshot replaced the boards.
+var rebuildDirty = struct {
+	sync.Mutex
+	active   bool
+	entities map[string]struct{}
+}{}
+
+func markRebuildDirty(entity string) {
+	rebuildDirty.Lock()
+	if rebuildDirty.active {
+		rebuildDirty.entities[entity] = struct{}{}
+	}
+	rebuildDirty.Unlock()
 }
 
 func runLeaderboards() {
@@ -257,7 +315,7 @@ func (b *boardSet) addRecord(entity string, mode int16, values valueSet) {
 }
 
 // rebuildBoards recomputes every board from Postgres in one pass, writes each to a temporary key and renames it into
-// place, so readers never see a half-built board.
+// place, so readers never see a half-built board. Changes made while it scans are applied again afterwards.
 func rebuildBoards(ctx context.Context) error {
 	pool := postgres()
 	client, err := db.Redis()
@@ -268,6 +326,20 @@ func rebuildBoards(ctx context.Context) error {
 		return errNoRebuildLock
 	}
 	defer client.Del(context.Background(), "lb:rebuilding")
+
+	// Only boards that existed before the scan can be stale; boards created during it are new and stay.
+	before, err := client.SMembers(ctx, boardsKey).Result()
+	if err != nil {
+		return err
+	}
+	rebuildDirty.Lock()
+	rebuildDirty.active, rebuildDirty.entities = true, map[string]struct{}{}
+	rebuildDirty.Unlock()
+	defer func() {
+		rebuildDirty.Lock()
+		rebuildDirty.active, rebuildDirty.entities = false, nil
+		rebuildDirty.Unlock()
+	}()
 
 	start := time.Now()
 	set := &boardSet{size: int(BoardSize()), boards: map[string]*topEntries{}}
@@ -284,7 +356,7 @@ func rebuildBoards(ctx context.Context) error {
 		return err
 	}
 	if err := scanRecords(ctx, pool, `SELECT p.id, p.game_mode, v.seen_at, v.data FROM profile_values v
-			JOIN profiles p USING (profile_id) WHERE p.deleted_at IS NULL`,
+			JOIN profiles p USING (profile_id) WHERE p.deleted_at IS NULL AND v.ranked`,
 		func(id int64, mode int16, values valueSet) {
 			set.addRecord(profileEntity(id), mode, values)
 			records++
@@ -299,42 +371,110 @@ func rebuildBoards(ctx context.Context) error {
 		pipe.Del(ctx, temp)
 		pipe.ZAdd(ctx, temp, (*top)...)
 		pipe.Rename(ctx, temp, board)
+		pipe.SAdd(ctx, boardsKey, board)
 		written[board] = true
-		if pipe.Len() >= 300 {
+		if pipe.Len() >= 400 {
 			if _, err := pipe.Exec(ctx); err != nil {
 				return err
 			}
 		}
 	}
+	for _, board := range before {
+		if !written[board] {
+			pipe.Del(ctx, board)
+			pipe.SRem(ctx, boardsKey, board)
+		}
+	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return err
 	}
+	thresholds.Clear()
 
-	// Boards nobody is on anymore.
-	existing, err := client.SMembers(ctx, boardsKey).Result()
+	// The snapshot is older than whatever was synced while it was taken; put those entities back as they are now.
+	rebuildDirty.Lock()
+	dirty := rebuildDirty.entities
+	rebuildDirty.active, rebuildDirty.entities = false, nil
+	rebuildDirty.Unlock()
+	for entity := range dirty {
+		if err := resyncEntity(ctx, entity); err != nil {
+			fmt.Printf("[STORE] could not resync %s after the rebuild: %v\n", entity, err)
+		}
+	}
+	// A player hidden from a child during the scan may be back on the boards from the snapshot.
+	if err := sweepHidden(ctx); err != nil {
+		fmt.Printf("[STORE] could not take hidden players off the rebuilt boards: %v\n", err)
+	}
+
+	if err := client.Set(ctx, readyKey, readyValue(), 0).Err(); err != nil {
+		return err
+	}
+	fmt.Printf("[STORE] rebuilt %d leaderboards from %d records in %v (%d changed during it)\n",
+		len(written), records, time.Since(start).Round(time.Millisecond), len(dirty))
+	return nil
+}
+
+// resyncEntity puts one member or profile on the boards as Postgres has it now.
+func resyncEntity(ctx context.Context, entity string) error {
+	members, profiles := splitEntities([]string{entity})
+	var row pgx.Row
+	switch {
+	case len(members) == 1:
+		row = postgres().QueryRow(ctx, `SELECT v.seen_at, v.data, p.game_mode,
+				m.removed_at IS NULL AND p.deleted_at IS NULL AND h.uuid IS NULL
+			FROM member_values v
+			JOIN profile_members m ON m.id = v.member_id
+			JOIN profiles p USING (profile_id)
+			LEFT JOIN lb_hidden h ON h.uuid = m.player_uuid
+			WHERE v.member_id = $1`, members[0])
+	case len(profiles) == 1:
+		row = postgres().QueryRow(ctx, `SELECT v.seen_at, v.data, p.game_mode, v.ranked
+			FROM profile_values v JOIN profiles p USING (profile_id) WHERE p.id = $1`, profiles[0])
+	default:
+		return nil
+	}
+
+	var seenAt time.Time
+	var data []byte
+	var state boardState
+	if err := row.Scan(&seenAt, &data, &state.mode, &state.ranked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	values, err := decodeValues(ctx, data, seenAt)
 	if err != nil {
 		return err
 	}
-	for _, board := range existing {
-		if !written[board] {
-			pipe.Del(ctx, board)
-		}
-	}
-	pipe.Del(ctx, boardsKey)
-	members := make([]any, 0, len(written))
-	for board := range written {
-		members = append(members, board)
-	}
-	if len(members) > 0 {
-		pipe.SAdd(ctx, boardsKey, members...)
-	}
-	pipe.Set(ctx, readyKey, readyValue(), 0)
-	if _, err := pipe.Exec(ctx); err != nil {
+	state.values = values
+	return forceSync(ctx, entity, state)
+}
+
+// sweepHidden takes every hidden player's entries off the boards.
+func sweepHidden(ctx context.Context) error {
+	rows, err := postgres().Query(ctx, `SELECT v.member_id FROM member_values v
+		JOIN profile_members m ON m.id = v.member_id JOIN lb_hidden h ON h.uuid = m.player_uuid`)
+	if err != nil {
 		return err
 	}
-
-	thresholds.Clear()
-	fmt.Printf("[STORE] rebuilt %d leaderboards from %d records in %v\n", len(written), records, time.Since(start).Round(time.Millisecond))
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := resyncEntity(ctx, memberEntity(id)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -753,108 +893,112 @@ func setHidden(ctx context.Context, uuidText string, change func([16]byte) error
 }
 
 // reconcileMembers puts every member record matching where (over profile_members m) on exactly the boards it
-// belongs on now: off when the member left, the profile was deleted or the player is hidden, back on otherwise.
+// belongs on now: off when the member left, the profile was deleted or the player is hidden, back on otherwise. Only
+// records whose state changed are touched, each under its profile's lock.
 func reconcileMembers(ctx context.Context, where string, args ...any) error {
-	rows, err := postgres().Query(ctx, `SELECT v.member_id, v.seen_at, v.game_mode, v.ranked, v.data,
-			p.game_mode, m.removed_at IS NULL AND p.deleted_at IS NULL AND h.uuid IS NULL
+	rows, err := postgres().Query(ctx, `SELECT m.profile_id, v.member_id
 		FROM member_values v
 		JOIN profile_members m ON m.id = v.member_id
 		JOIN profiles p USING (profile_id)
 		LEFT JOIN lb_hidden h ON h.uuid = m.player_uuid
-		WHERE `+where, args...)
+		WHERE (`+where+`) AND (v.game_mode <> p.game_mode
+			OR v.ranked <> (m.removed_at IS NULL AND p.deleted_at IS NULL AND h.uuid IS NULL))`, args...)
 	if err != nil {
 		return err
 	}
-	type change struct {
-		id       int64
-		old, now boardState
-	}
-	var changes []change
+	byProfile := map[[16]byte][]int64{}
 	for rows.Next() {
-		var c change
-		var seenAt time.Time
-		var data []byte
-		if err := rows.Scan(&c.id, &seenAt, &c.old.mode, &c.old.ranked, &data, &c.now.mode, &c.now.ranked); err != nil {
+		var profile [16]byte
+		var id int64
+		if err := rows.Scan(&profile, &id); err != nil {
 			rows.Close()
 			return err
 		}
-		if c.old.ranked == c.now.ranked && c.old.mode == c.now.mode {
-			continue
-		}
-		values, err := decodeValues(ctx, data, seenAt)
-		if err != nil {
-			continue
-		}
-		c.old.values, c.now.values = values, values
-		changes = append(changes, c)
+		byProfile[profile] = append(byProfile[profile], id)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	for _, c := range changes {
-		var prev *boardState
-		if c.old.ranked {
-			prev = &c.old
-		}
-		if err := syncBoards(ctx, memberEntity(c.id), prev, c.now); err != nil {
-			return err
-		}
-		if _, err := postgres().Exec(ctx, `UPDATE member_values SET ranked = $2, game_mode = $3 WHERE member_id = $1`,
-			c.id, c.now.ranked, c.now.mode); err != nil {
+	for profile, ids := range byProfile {
+		err := withProfileLock(ctx, profile, func() error {
+			for _, id := range ids {
+				if err := reconcileMember(ctx, id); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// reconcileProfiles does the same for profile records: off the boards once the profile is deleted.
-func reconcileProfiles(ctx context.Context, profileIDs [][16]byte) error {
-	rows, err := postgres().Query(ctx, `SELECT p.id, v.profile_id, v.seen_at, v.game_mode, v.ranked, v.data, p.game_mode, p.deleted_at IS NULL
-		FROM profile_values v JOIN profiles p USING (profile_id) WHERE v.profile_id = ANY($1)`, profileIDs)
+// reconcileMember re-reads one record under its profile's lock and moves it if its state still differs.
+func reconcileMember(ctx context.Context, id int64) error {
+	var seenAt time.Time
+	var data []byte
+	var old, now boardState
+	err := postgres().QueryRow(ctx, `SELECT v.seen_at, v.game_mode, v.ranked, v.data,
+			p.game_mode, m.removed_at IS NULL AND p.deleted_at IS NULL AND h.uuid IS NULL
+		FROM member_values v
+		JOIN profile_members m ON m.id = v.member_id
+		JOIN profiles p USING (profile_id)
+		LEFT JOIN lb_hidden h ON h.uuid = m.player_uuid
+		WHERE v.member_id = $1`, id).Scan(&seenAt, &old.mode, &old.ranked, &data, &now.mode, &now.ranked)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	type change struct {
-		id       int64
-		profile  [16]byte
-		old, now boardState
+	if old.ranked == now.ranked && old.mode == now.mode {
+		return nil
 	}
-	var changes []change
+	values, err := decodeValues(ctx, data, seenAt)
+	if err != nil {
+		return err
+	}
+	old.values, now.values = values, values
+	if err := syncBoards(ctx, memberEntity(id), rankedOnly(&old), now); err != nil {
+		return err
+	}
+	_, err = postgres().Exec(ctx, `UPDATE member_values SET ranked = $2, game_mode = $3 WHERE member_id = $1`,
+		id, now.ranked, now.mode)
+	return err
+}
+
+// reconcileProfiles does the same for profile records: off the boards once the profile is deleted or every active
+// member is hidden.
+func reconcileProfiles(ctx context.Context, profileIDs [][16]byte) error {
+	rows, err := postgres().Query(ctx, `SELECT v.profile_id FROM profile_values v JOIN profiles p USING (profile_id)
+		WHERE v.profile_id = ANY($1) AND (v.game_mode <> p.game_mode OR v.ranked <> (p.deleted_at IS NULL))`, profileIDs)
+	if err != nil {
+		return err
+	}
+	var changed [][16]byte
 	for rows.Next() {
-		var c change
-		var seenAt time.Time
-		var data []byte
-		if err := rows.Scan(&c.id, &c.profile, &seenAt, &c.old.mode, &c.old.ranked, &data, &c.now.mode, &c.now.ranked); err != nil {
+		var id [16]byte
+		if err := rows.Scan(&id); err != nil {
 			rows.Close()
 			return err
 		}
-		if c.old.ranked == c.now.ranked && c.old.mode == c.now.mode {
-			continue
-		}
-		values, err := decodeValues(ctx, data, seenAt)
-		if err != nil {
-			continue
-		}
-		c.old.values, c.now.values = values, values
-		changes = append(changes, c)
+		changed = append(changed, id)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	for _, c := range changes {
-		var prev *boardState
-		if c.old.ranked {
-			prev = &c.old
-		}
-		if err := syncBoards(ctx, profileEntity(c.id), prev, c.now); err != nil {
-			return err
-		}
-		if _, err := postgres().Exec(ctx, `UPDATE profile_values SET ranked = $2, game_mode = $3 WHERE profile_id = $1`,
-			c.profile, c.now.ranked, c.now.mode); err != nil {
+	for _, profile := range changed {
+		err := withProfileLock(ctx, profile, func() error {
+			// An empty update re-reads the record and its state and moves it.
+			return updateProfileRecordLocked(ctx, profile, time.Time{}, nil, func(string) bool { return false })
+		})
+		if err != nil {
 			return err
 		}
 	}

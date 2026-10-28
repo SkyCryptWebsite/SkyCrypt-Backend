@@ -1,6 +1,7 @@
 package localcache
 
 import (
+	"container/list"
 	"os"
 	"runtime/metrics"
 	"strconv"
@@ -12,12 +13,15 @@ type entry[T any] struct {
 	value        T
 	expiresAt    time.Time
 	refreshAfter time.Time
+	// element is the key's place in the insertion order, so deleting an entry also drops it from the order.
+	element *list.Element
 }
 
 type LocalCache[T any] struct {
-	mu         sync.RWMutex
-	values     map[string]entry[T]
-	order      []string
+	mu     sync.RWMutex
+	values map[string]entry[T]
+	// order holds keys oldest first; a full cache evicts from the front.
+	order      *list.List
 	refreshing map[string]struct{}
 	maxEntries int
 	// lastPressurePrune spaces out halving the cache under memory pressure.
@@ -34,7 +38,7 @@ func NewLocalCache[T any](maxEntries ...int) *LocalCache[T] {
 	}
 	return &LocalCache[T]{
 		values:     make(map[string]entry[T]),
-		order:      make([]string, 0, max),
+		order:      list.New(),
 		refreshing: make(map[string]struct{}),
 		maxEntries: max,
 	}
@@ -54,7 +58,7 @@ func (c *LocalCache[T]) Get(key string) (T, bool, bool) {
 	if now.After(item.expiresAt) {
 		c.mu.Lock()
 		if latest, exists := c.values[key]; exists && now.After(latest.expiresAt) {
-			delete(c.values, key)
+			c.deleteLocked(key, latest)
 		}
 		c.mu.Unlock()
 		return zero, false, false
@@ -70,24 +74,28 @@ func (c *LocalCache[T]) Set(key string, value T, ttl time.Duration, refreshAfter
 	}
 
 	c.mu.Lock()
-	_, exists := c.values[key]
+	defer c.mu.Unlock()
+
+	existing, exists := c.values[key]
 	if !exists && now.Sub(c.lastPressurePrune) > pressurePruneInterval && memoryPressure() {
 		c.lastPressurePrune = now
 		c.dropExpiredLocked(now)
 		c.pruneToLocked(c.maxEntries / 2)
 	}
 	if !exists && c.maxEntries > 0 && len(c.values) >= c.maxEntries {
-		c.pruneLocked(now)
+		c.pruneToLocked(c.maxEntries - 1)
 	}
+
+	element := existing.element
 	if !exists {
-		c.order = append(c.order, key)
+		element = c.order.PushBack(key)
 	}
 	c.values[key] = entry[T]{
 		value:        value,
 		expiresAt:    now.Add(ttl),
 		refreshAfter: now.Add(refreshAfter),
+		element:      element,
 	}
-	c.mu.Unlock()
 }
 
 func (c *LocalCache[T]) StartRefresh(key string) bool {
@@ -106,15 +114,17 @@ func (c *LocalCache[T]) FinishRefresh(key string) {
 	c.mu.Unlock()
 }
 
-func (c *LocalCache[T]) pruneLocked(now time.Time) {
-	c.dropExpiredLocked(now)
-	c.pruneToLocked(c.maxEntries - 1)
+func (c *LocalCache[T]) deleteLocked(key string, item entry[T]) {
+	delete(c.values, key)
+	if item.element != nil {
+		c.order.Remove(item.element)
+	}
 }
 
 func (c *LocalCache[T]) dropExpiredLocked(now time.Time) {
 	for key, item := range c.values {
 		if now.After(item.expiresAt) {
-			delete(c.values, key)
+			c.deleteLocked(key, item)
 		}
 	}
 }
@@ -126,50 +136,24 @@ func (c *LocalCache[T]) SweepExpiredEvery(interval time.Duration) {
 		for range time.Tick(interval) {
 			c.mu.Lock()
 			c.dropExpiredLocked(time.Now())
-			c.compactOrderLocked()
 			c.mu.Unlock()
 		}
 	}()
 }
 
+// pruneToLocked evicts the oldest entries until at most target remain.
 func (c *LocalCache[T]) pruneToLocked(target int) {
 	if target < 0 {
 		target = 0
 	}
-	c.compactOrderLocked()
-	for len(c.values) > target && len(c.order) > 0 {
-		key := c.order[0]
-		c.order = c.order[1:]
-		delete(c.values, key)
-	}
-	if len(c.values) <= target {
-		return
-	}
-	for key := range c.values {
-		delete(c.values, key)
-		if len(c.values) <= target {
-			break
+	for len(c.values) > target {
+		oldest := c.order.Front()
+		if oldest == nil {
+			return
 		}
+		key := oldest.Value.(string)
+		c.deleteLocked(key, c.values[key])
 	}
-}
-
-func (c *LocalCache[T]) compactOrderLocked() {
-	if len(c.order) == 0 {
-		return
-	}
-	order := c.order[:0]
-	seen := make(map[string]struct{}, len(c.values))
-	for _, key := range c.order {
-		if _, exists := c.values[key]; !exists {
-			continue
-		}
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		order = append(order, key)
-	}
-	c.order = order
 }
 
 func memoryPressure() bool {

@@ -44,8 +44,9 @@ var (
 func Start(url string) {
 	databaseURL = url
 	if err := start(); err != nil {
-		// Children share the parent's connection problems; a schema mismatch is a child's own.
-		Disable(err.Error(), fiber.IsChild() && db.Postgres() != nil)
+		// Only the parent prints: children fail the same way (or wait on the parent's schema), and their watch turns
+		// them on once the parent's store is up.
+		Disable(err.Error(), false)
 		go retryStart()
 	}
 }
@@ -57,9 +58,23 @@ func start() error {
 		}
 	}
 	if err := Init(context.Background()); err != nil {
-		return fmt.Errorf("could not start the store: %v", err)
+		return fmt.Errorf("could not start the store: %v%s", err, permissionHint(err))
 	}
 	return nil
+}
+
+// permissionHint says how to fix the database user's rights when it may connect but not create tables, which is
+// the default for non-owners since Postgres 15.
+func permissionHint(err error) string {
+	var pgErr *pgconn.PgError
+	pool := db.Postgres()
+	if !errors.As(err, &pgErr) || pgErr.Code != "42501" || pool == nil {
+		return ""
+	}
+	config := pool.Config().ConnConfig
+	return fmt.Sprintf(". The user %q may not create tables in %q; as a superuser, run: ALTER DATABASE %q OWNER TO %q;"+
+		" The store retries every %v, so it starts once that is done", config.User, config.Database, config.Database,
+		config.User, retryStartEvery)
 }
 
 func retryStart() {

@@ -37,7 +37,9 @@ func newEncoderSet(dictID int32, dict []byte) (*encoderSet, error) {
 		encoder **zstd.Encoder
 		level   zstd.EncoderLevel
 	}{{&set.better, zstd.SpeedBetterCompression}, {&set.best, zstd.SpeedBestCompression}} {
-		options := []zstd.EOption{zstd.WithEncoderLevel(target.level), zstd.WithEncoderConcurrency(1)}
+		// One encoder per worker that compresses at once (ingest and the legacy import), so they don't queue
+		// behind each other. Encoders are only built when first used, which is in the parent alone.
+		options := []zstd.EOption{zstd.WithEncoderLevel(target.level), zstd.WithEncoderConcurrency(ingestWorkers + importWorkers)}
 		if dict != nil {
 			options = append(options, zstd.WithEncoderDict(dict))
 		}
@@ -52,7 +54,7 @@ func newEncoderSet(dictID int32, dict []byte) (*encoderSet, error) {
 
 var (
 	plainEncoders, _ = newEncoderSet(0, nil)
-	plainDecoder, _  = zstd.NewReader(nil)
+	plainDecoder, _  = newDecoder()
 
 	// Newest dictionary per kind, used for writing. Only the parent writes.
 	kindEncoders sync.Map // int16 -> *encoderSet
@@ -117,8 +119,19 @@ func decoderFor(ctx context.Context, id int32) (*zstd.Decoder, error) {
 
 var decodersMutex sync.Mutex
 
+// newDecoder sizes decoders for a prefork child: few at once, buffers allocated on use, and a cap on what a corrupt
+// frame can ask for (the biggest stored bundles unpack to a few tens of MB).
+func newDecoder(options ...zstd.DOption) (*zstd.Decoder, error) {
+	options = append([]zstd.DOption{
+		zstd.WithDecoderConcurrency(2),
+		zstd.WithDecoderLowmem(true),
+		zstd.WithDecoderMaxMemory(512 << 20),
+	}, options...)
+	return zstd.NewReader(nil, options...)
+}
+
 func addDecoder(id int32, dict []byte) (*zstd.Decoder, error) {
-	decoder, err := zstd.NewReader(nil, zstd.WithDecoderDicts(dict))
+	decoder, err := newDecoder(zstd.WithDecoderDicts(dict))
 	if err != nil {
 		return nil, err
 	}

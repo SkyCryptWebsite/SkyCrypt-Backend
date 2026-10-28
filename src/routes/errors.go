@@ -22,6 +22,7 @@ const (
 	codeInvalidRequest    = "INVALID_REQUEST"
 	codeTextureNotFound   = "TEXTURE_NOT_FOUND"
 	codeRenderFailed      = "RENDER_FAILED"
+	codeServerBusy        = "SERVER_BUSY"
 )
 
 // loadErrorStatus maps a failed load to the status that says whose fault it was.
@@ -41,6 +42,8 @@ func loadErrorStatus(err error) (int, string) {
 		return fiber.StatusBadGateway, codeUpstreamError
 	case errors.Is(err, skyhelpernetworthgo.ErrPricesUnavailable):
 		return fiber.StatusServiceUnavailable, codePricesUnavailable
+	case errors.Is(err, errServerBusy):
+		return fiber.StatusServiceUnavailable, codeServerBusy
 	default:
 		return fiber.StatusInternalServerError, codeInternalError
 	}

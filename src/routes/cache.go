@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"skycrypt/src/api"
@@ -11,6 +12,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
 	"skycrypt/src/utility"
+	"strconv"
 	"strings"
 	"time"
 
@@ -110,6 +112,21 @@ func jsonBody(ctx context.Context, cacheKey responseCacheHandle, body []byte) *j
 
 var responseGroup singleflight.Group
 
+// A build parses a multi-MB profile and decodes its inventories, allocating tens of MB. Prefork children run on one
+// core, so a burst of builds can't finish sooner, it only multiplies memory; extra builds wait for a slot.
+var buildSlots = make(chan struct{}, maxConcurrentBuilds())
+
+// errServerBusy is a build that waited for a slot until its deadline.
+var errServerBusy = errors.New("the server is busy; try again shortly")
+
+// maxConcurrentBuilds is SKYCRYPT_MAX_BUILDS (default 8): profile builds one process runs at once.
+func maxConcurrentBuilds() int {
+	if n, err := strconv.Atoi(os.Getenv("SKYCRYPT_MAX_BUILDS")); err == nil && n > 0 {
+		return n
+	}
+	return 8
+}
+
 // sharedResponseTimeout bounds a shared build, which no single caller can cancel.
 const sharedResponseTimeout = 60 * time.Second
 
@@ -119,6 +136,12 @@ const sharedResponseTimeout = 60 * time.Second
 // with jsonBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
 func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) ([]byte, error) {
 	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) ([]byte, error) {
+		select {
+		case buildSlots <- struct{}{}:
+			defer func() { <-buildSlots }()
+		case <-flightCtx.Done():
+			return nil, errServerBusy
+		}
 		body, err := build(flightCtx)
 		if err != nil {
 			return nil, err
