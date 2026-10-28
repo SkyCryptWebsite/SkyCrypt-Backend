@@ -50,8 +50,9 @@ func getMinionSlots(profile *skycrypttypes.Profile, tiers int) *models.MinionSlo
 func getCraftedMinions(profile *skycrypttypes.Profile) map[string][]int {
 	craftedMinions := make(map[string][]int)
 	for _, member := range profile.Members {
+		// One member without player data (API off, or just invited) mustn't hide the rest of the coop's minions.
 		if member.PlayerData == nil {
-			return craftedMinions
+			continue
 		}
 
 		for _, minion := range member.PlayerData.Minions {

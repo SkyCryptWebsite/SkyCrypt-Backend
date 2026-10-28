@@ -224,7 +224,7 @@ func SaveResource(ctx context.Context, name string, body []byte) {
 	if pool == nil || len(body) == 0 {
 		return
 	}
-	_, data := compress(0, body, false)
+	_, data := compress(0, body)
 	start := time.Now()
 	_, err := pool.Exec(ctx, `INSERT INTO resources (name, fetched_at, data) VALUES ($1, now(), $2)
 		ON CONFLICT (name) DO UPDATE SET fetched_at = excluded.fetched_at, data = excluded.data`, name, data)

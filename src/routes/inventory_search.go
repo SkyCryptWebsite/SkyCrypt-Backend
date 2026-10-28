@@ -18,7 +18,8 @@ import (
 
 func registerInventorySearch(humaAPI huma.API) {
 	responses := errorResponses(humaAPI, map[int]string{
-		fiber.StatusInternalServerError: "INTERNAL_ERROR: Cached inventory data is missing or could not be parsed.",
+		fiber.StatusNotFound:            "NOT_CACHED: No inventory is cached for this player, profile and packs; call the inventory endpoint first.",
+		fiber.StatusInternalServerError: "INTERNAL_ERROR: Cached inventory data could not be read or parsed.",
 	})
 	responses["200"] = &huma.Response{Description: "Matching inventory items returned successfully."}
 	huma.Register(humaAPI, requireAPIKey(humaAPI, huma.Operation{
@@ -50,23 +51,22 @@ func searchInventory(ctx context.Context, uuid string, profileId string, searchP
 	uuid = strings.ToLower(uuid)
 	searchParam = strings.ToLower(searchParam)
 
-	cache, err := db.GetContext(ctx, inventoryCacheKey(uuid, profileId, enabledPacks).key)
+	cache, err := db.GetBytesContext(ctx, inventoryCacheKey(uuid, profileId, enabledPacks).key)
 	if err != nil {
 		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to get items: %v", err))
 	}
+	if len(cache) == 0 {
+		return nil, NewAPIError(fiber.StatusNotFound, codeNotCached, "No cached items found for this player and profile. Load their inventory first.")
+	}
 
 	var inventories []models.Inventory
-	if cache != "" {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err = json.Unmarshal([]byte(cache), &inventories)
-		if err != nil {
-			return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to parse items: %v", err))
-		}
-	} else {
-		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, "No cached items found for this player and profile. Please try again later.")
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(cache, &inventories); err != nil {
+		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to parse items: %v", err))
 	}
 
 	output := []models.StrippedItem{}
+search:
 	for _, inventory := range inventories {
 		if inventory.Items == nil {
 			continue
@@ -85,7 +85,7 @@ func searchInventory(ctx context.Context, uuid string, profileId string, searchP
 			output = append(output, item)
 
 			if len(output) >= 5*9 {
-				break
+				break search
 			}
 		}
 	}

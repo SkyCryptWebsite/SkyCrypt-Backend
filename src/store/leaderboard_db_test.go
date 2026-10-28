@@ -88,7 +88,7 @@ func TestLeaderboardsRankEveryStat(t *testing.T) {
 	body := `{"success":true,"profiles":[` +
 		profileJSON(coop, "Apple", "", true, map[string]string{alice: bigMember, bob: smallMember}) + `,` +
 		profileJSON(ironman, "Banana", "ironman", false, map[string]string{alice: `{"leveling":{"experience":20000},"inventory":{}}`}) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(body), now, false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(body), now); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +150,7 @@ func TestLeaderboardsRankEveryStat(t *testing.T) {
 	hiddenBody := `{"success":true,"profiles":[` +
 		profileJSON(coop, "Apple", "", true, map[string]string{alice: `{"leveling":{"experience":31000},"inventory":{}}`, bob: smallMember}) + `,` +
 		profileJSON(ironman, "Banana", "ironman", false, map[string]string{alice: `{"leveling":{"experience":20000},"inventory":{}}`}) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(hiddenBody), now.Add(time.Minute), false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(hiddenBody), now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	wheat := board(t, ctx, "collection:WHEAT", "all")
@@ -178,7 +178,7 @@ func TestLeaderboardsRankEveryStat(t *testing.T) {
 	// Alice deletes her ironman profile.
 	left := `{"success":true,"profiles":[` +
 		profileJSON(coop, "Apple", "", true, map[string]string{alice: bigMember, bob: smallMember}) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(left), now.Add(2*time.Minute), false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(left), now.Add(2*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	if got := board(t, ctx, "skyblock_level", "ironman"); len(got) != 0 {
@@ -209,7 +209,7 @@ func TestLeaderboardsKeepOnlyTheTop(t *testing.T) {
 		carol: `{"leveling":{"experience":200}}`,
 	}
 	body := `{"success":true,"profiles":[` + profileJSON(coop, "Apple", "", true, members) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(body), time.Now(), false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(body), time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if got := rankedUUIDs(board(t, ctx, "skyblock_level", "all")); !equal(got, []string{bob, carol}) {
@@ -232,11 +232,11 @@ func TestGardenAndBackfill(t *testing.T) {
 	now := time.Now()
 
 	body := `{"success":true,"profiles":[` + profileJSON(coop, "Apple", "", true, map[string]string{alice: bigMember}) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(body), now, false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(body), now); err != nil {
 		t.Fatal(err)
 	}
 	garden := []byte(`{"success":true,"garden":{"garden_experience":5000,"resources_collected":{"WHEAT":123,"MELON":0}}}`)
-	if err := storeBlob(ctx, coop, kindGarden, garden, now, false); err != nil {
+	if err := storeBlob(ctx, coop, kindGarden, garden, now); err != nil {
 		t.Fatal(err)
 	}
 	if err := updateGardenValues(ctx, mustUUID(t, coop), garden, now); err != nil {

@@ -85,10 +85,10 @@ func TestStoreProfilesRoundTripAndCoopDedupe(t *testing.T) {
 	bobBody := `{"success":true,"profiles":[` +
 		profileJSON(coop, "Kiwi", "", true, map[string]string{alice: member(5000), bob: member(100)}) + `]}`
 
-	if err := storeProfiles(ctx, alice, []byte(aliceBody), now, false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(aliceBody), now); err != nil {
 		t.Fatal(err)
 	}
-	if err := storeProfiles(ctx, bob, []byte(bobBody), now.Add(time.Second), false); err != nil {
+	if err := storeProfiles(ctx, bob, []byte(bobBody), now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,13 +121,13 @@ func TestStoreProfilesMarksLeftAndDeletedProfiles(t *testing.T) {
 
 	first := `{"success":true,"profiles":[` + profileJSON(coop, "Apple", "", true, both) + `,` +
 		profileJSON(solo, "Banana", "", false, map[string]string{alice: `{}`}) + `]}`
-	if err := storeProfiles(ctx, alice, []byte(first), now, false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(first), now); err != nil {
 		t.Fatal(err)
 	}
 
 	// Alice leaves the coop and deletes her solo profile.
 	later := `{"success":true,"profiles":null}`
-	if err := storeProfiles(ctx, alice, []byte(later), now.Add(time.Minute), false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(later), now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,7 +149,7 @@ func TestStoreProfilesMarksLeftAndDeletedProfiles(t *testing.T) {
 	}
 
 	// An older response arriving late must not bring the profiles back.
-	if err := storeProfiles(ctx, alice, []byte(first), now.Add(-time.Minute), false); err != nil {
+	if err := storeProfiles(ctx, alice, []byte(first), now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	body, _, _ = LoadProfiles(ctx, alice)
@@ -164,7 +164,7 @@ func TestEvictToBudgetDropsLeastRecentlyUsed(t *testing.T) {
 	big := gzipBase64(t, randomText(400_000))
 	for i, id := range []string{coop, solo, ironman} {
 		body := []byte(`{"success":true,"members":{"x":{"items":{"data":"` + big + `"}}}}`)
-		if err := storeBlob(ctx, id, kindMuseum, body, time.Now(), true); err != nil {
+		if err := storeBlob(ctx, id, kindMuseum, body, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Postgres().Exec(ctx, `UPDATE blobs SET accessed_on = current_date - $2::integer WHERE profile_id = $1`,
@@ -219,8 +219,8 @@ func TestStoreRealSample(t *testing.T) {
 			continue
 		}
 		bodies[entry.Name()] = body
-		originalStored += len(plainEncoders.best.EncodeAll(body, nil))
-		if err := storeProfiles(ctx, entry.Name(), body, start.Add(time.Duration(i)*time.Millisecond), false); err != nil {
+		originalStored += len(plainEncoders.encoder.EncodeAll(body, nil))
+		if err := storeProfiles(ctx, entry.Name(), body, start.Add(time.Duration(i)*time.Millisecond)); err != nil {
 			t.Fatalf("%s: %v", entry.Name(), err)
 		}
 	}
@@ -247,7 +247,7 @@ func TestStoreRealSample(t *testing.T) {
 				t.Fatal(err)
 			}
 			for name, body := range bodies {
-				if err := storeProfiles(ctx, name, body, time.Now(), false); err != nil {
+				if err := storeProfiles(ctx, name, body, time.Now()); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -344,7 +344,7 @@ func legacyTable(t *testing.T, ctx context.Context, rows map[string][]byte) {
 	}
 	for key, body := range rows {
 		if _, err := pool.Exec(ctx, `INSERT INTO fallback_cache (key, body, hash) VALUES ($1, $2, 0)`,
-			key, plainEncoders.better.EncodeAll(body, nil)); err != nil {
+			key, plainEncoders.encoder.EncodeAll(body, nil)); err != nil {
 			t.Fatal(err)
 		}
 	}

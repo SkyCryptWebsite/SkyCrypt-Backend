@@ -120,8 +120,8 @@ func SetupApplication() error {
 		if err := lib.PrepareCustomResourceCache(); err != nil {
 			log.Printf("failed to load custom resource index: %v", err)
 		}
-
-		lib.WarmCustomResourceRendererAsync(1500 * time.Millisecond)
+		// The renderer (about 37 MB) loads on the first item that isn't pre-rendered, not at start: the rendered
+		// texture index serves almost every item, so most children never need it.
 	}
 
 	return nil

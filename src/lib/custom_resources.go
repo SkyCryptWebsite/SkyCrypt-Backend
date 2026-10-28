@@ -448,6 +448,7 @@ func ensureCustomResourceRenderer() error {
 		return nil
 	}
 
+	timeNow := time.Now()
 	renderer, err := newRendererForPackIDs(config.CacheDir, config.ResourcePacksPath, config.AssetsPath, defaultResourcePackIDs(), false)
 	if err != nil {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: %v", err)
@@ -456,25 +457,8 @@ func ensureCustomResourceRenderer() error {
 		return fmt.Errorf("[CUSTOM_RESOURCES] Failed to initialize SkyCrypt renderer: renderer is nil")
 	}
 	customResourceRenderer = renderer
+	logCustomResourceRoutine("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully in %s", time.Since(timeNow))
 	return nil
-}
-
-func WarmCustomResourceRendererAsync(delay time.Duration) {
-	go func() {
-		if delay > 0 {
-			time.Sleep(delay)
-		}
-
-		alreadyInitialized := currentCustomResourceRenderer() != nil
-		timeNow := time.Now()
-		if err := ensureCustomResourceRenderer(); err != nil {
-			fmt.Printf("[CUSTOM_RESOURCES] Failed to warm SkyCrypt renderer: %v\n", err)
-			return
-		}
-		if !alreadyInitialized {
-			logCustomResourceRoutine("[CUSTOM_RESOURCES] SkyCrypt renderer initialized successfully in %s", time.Since(timeNow))
-		}
-	}()
 }
 
 func warmConfiguredSkyBlockTexturesWithResult(ctx context.Context, cacheDir string, resourcePacksPath string, assetsPath string, itemIDs []string, options mr.PreRenderOptions) (skyBlockTextureWarmResult, error) {

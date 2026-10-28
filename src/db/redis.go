@@ -28,16 +28,28 @@ const compressMinBytes = 1024
 
 // Sized explicitly: the defaults follow GOMAXPROCS at package init, before a prefork child drops to one core, so
 // every child kept an encoder per CPU, each with a 16 MB window once it compressed a large body (about 140 MB per
-// child measured). Two encoders with a 4 MB window keep that to a few MB, and still find the repeats in a profile.
+// child measured). A prefork child serves on one core, so one encoder and one decoder are all it can use; the parent
+// (or a single process) keeps two for its ingest workers. A 1 MB window still finds most repeats in a profile, and
+// the encoder and decoder together hold a few MB instead of about 22 MB.
+var codecConcurrency = codecWorkers()
+
+func codecWorkers() int {
+	if fiber.IsChild() {
+		return 1
+	}
+	return 2
+}
+
 var zstdEncoder, _ = zstd.NewWriter(nil,
-	zstd.WithEncoderConcurrency(2),
-	zstd.WithWindowSize(4<<20),
+	zstd.WithEncoderConcurrency(codecConcurrency),
+	zstd.WithWindowSize(1<<20),
 	zstd.WithLowerEncoderMem(true),
 )
 
-// The memory cap also stops a corrupt value from making the decoder allocate up to its 64 GB default.
+// The memory cap also stops a corrupt value from making the decoder allocate up to its 64 GB default. Values written
+// with the older 4 MB window still decode.
 var zstdDecoder, _ = zstd.NewReader(nil,
-	zstd.WithDecoderConcurrency(2),
+	zstd.WithDecoderConcurrency(codecConcurrency),
 	zstd.WithDecoderLowmem(true),
 	zstd.WithDecoderMaxMemory(256<<20),
 )

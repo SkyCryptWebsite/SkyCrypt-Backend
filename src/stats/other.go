@@ -106,7 +106,7 @@ func isMemberRemoved(memberData *skycrypttypes.Member) bool {
 		return true
 	}
 
-	if memberData.Profile.DeletionNotice != nil && memberData.Profile.DeletionNotice.Timestamp != 0 {
+	if memberData.Profile != nil && memberData.Profile.DeletionNotice != nil && memberData.Profile.DeletionNotice.Timestamp != 0 {
 		return true
 	}
 	return false

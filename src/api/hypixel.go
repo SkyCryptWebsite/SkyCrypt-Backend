@@ -10,7 +10,6 @@ import (
 	"os"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
-	"skycrypt/src/localcache"
 	"skycrypt/src/models"
 	"skycrypt/src/security"
 	"skycrypt/src/store"
@@ -28,32 +27,9 @@ var hypixelFetchGroup singleflight.Group
 
 var hypixelRequestTimeout = 30 * time.Second
 
-// Parsed upstream bodies are kept in process memory briefly, so the endpoints one page load calls in parallel (stats,
-// networth, combined, inventory, ...) parse a profile once instead of once each. Values are shared between requests
-// and must be treated as read-only; singleflight already shares them between concurrent callers.
-const parsedCacheTTL = 30 * time.Second
-
-// Parsed profiles can be several MB, and every prefork process has its own caches, so they stay small and expired
-// entries are swept rather than held until the key is read again.
-var (
-	parsedPlayers  = newParsedCache[*skycrypttypes.Player](128)
-	parsedProfiles = newParsedCache[*models.HypixelProfilesResponse](16)
-	parsedMuseums  = newParsedCache[map[string]*skycrypttypes.Museum](16)
-	parsedGardens  = newParsedCache[*skycrypttypes.Garden](16)
-)
-
-func newParsedCache[T any](maxEntries int) *localcache.LocalCache[T] {
-	cache := localcache.NewLocalCache[T](maxEntries)
-	cache.SweepExpiredEvery(parsedCacheTTL)
-	return cache
-}
-
-// readParsed returns the parsed value for a Redis key, from process memory when it was parsed recently.
-func readParsed[T any](ctx context.Context, local *localcache.LocalCache[T], key string, parse func([]byte) (T, error)) (T, bool) {
-	if value, ok, _ := local.Get(key); ok {
-		return value, true
-	}
-
+// readParsed reads and parses the body cached in Redis under key. Parsed bodies aren't kept in process memory:
+// every prefork child held its own copies, which were most of its memory.
+func readParsed[T any](ctx context.Context, key string, parse func([]byte) (T, error)) (T, bool) {
 	var zero T
 	body, err := redis.GetBytesContext(ctx, key)
 	if err != nil || len(body) == 0 {
@@ -63,7 +39,6 @@ func readParsed[T any](ctx context.Context, local *localcache.LocalCache[T], key
 	if err != nil {
 		return zero, false
 	}
-	local.Set(key, value, parsedCacheTTL, 0)
 	return value, true
 }
 
@@ -114,7 +89,7 @@ func GetPlayerContext(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 }
 
 func getPlayerFromCache(ctx context.Context, uuid string) (*skycrypttypes.Player, bool) {
-	return readParsed(ctx, parsedPlayers, fmt.Sprintf(`player:%s`, uuid), parsePlayer)
+	return readParsed(ctx, fmt.Sprintf(`player:%s`, uuid), parsePlayer)
 }
 
 func parsePlayer(body []byte) (*skycrypttypes.Player, error) {
@@ -148,7 +123,6 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 
 	if fresh {
 		cacheFresh(ctx, key, body, playerCacheTTL)
-		parsedPlayers.Set(key, &rawReponse.Player, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -199,7 +173,7 @@ func GetProfilesContext(ctx context.Context, uuid string) (*models.HypixelProfil
 }
 
 func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProfilesResponse, bool) {
-	return readParsed(ctx, parsedProfiles, fmt.Sprintf(`profiles:%s`, uuid), parseProfiles)
+	return readParsed(ctx, fmt.Sprintf(`profiles:%s`, uuid), parseProfiles)
 }
 
 func parseProfiles(body []byte) (*models.HypixelProfilesResponse, error) {
@@ -236,7 +210,6 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 
 	if fresh {
 		cacheFresh(ctx, key, body, profilesCacheTTL)
-		parsedProfiles.Set(key, &response, parsedCacheTTL, 0)
 	}
 	if utility.IsForensicsEnabled() {
 		forensics.Logger.Info("api_response_parsed",
@@ -275,8 +248,8 @@ func GetProfileContext(ctx context.Context, uuid string, profileId ...string) (*
 			}
 		}
 
-		// A copy, like the selected profile above: profiles is the parsed cache shared between requests, and callers
-		// fill in fields such as Banking.
+		// A copy, like the selected profile above: singleflight shares profiles between concurrent requests, and
+		// callers fill in fields such as Banking.
 		first := profiles.Profiles[0]
 		return &first, nil
 	}
@@ -320,7 +293,7 @@ func GetMuseumContext(ctx context.Context, profileId string) (map[string]*skycry
 }
 
 func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skycrypttypes.Museum, bool) {
-	return readParsed(ctx, parsedMuseums, fmt.Sprintf(`museum:%s`, profileId), parseMuseum)
+	return readParsed(ctx, fmt.Sprintf(`museum:%s`, profileId), parseMuseum)
 }
 
 func parseMuseum(body []byte) (map[string]*skycrypttypes.Museum, error) {
@@ -353,7 +326,6 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 
 	if fresh {
 		cacheFresh(ctx, key, body, museumCacheTTL)
-		parsedMuseums.Set(key, rawReponse.Members, parsedCacheTTL, 0)
 	}
 	return rawReponse.Members, nil
 }
@@ -386,7 +358,7 @@ func GetGardenContext(ctx context.Context, profileId string) (*skycrypttypes.Gar
 }
 
 func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.Garden, bool) {
-	return readParsed(ctx, parsedGardens, fmt.Sprintf(`garden:%s`, profileId), parseGarden)
+	return readParsed(ctx, fmt.Sprintf(`garden:%s`, profileId), parseGarden)
 }
 
 func parseGarden(body []byte) (*skycrypttypes.Garden, error) {
@@ -427,7 +399,6 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 
 	if fresh {
 		cacheFresh(ctx, key, body, gardenCacheTTL)
-		parsedGardens.Set(key, &rawReponse.Garden, parsedCacheTTL, 0)
 	}
 	return &rawReponse.Garden, nil
 }

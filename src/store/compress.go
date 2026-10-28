@@ -23,33 +23,29 @@ const (
 // Kinds that get a trained dictionary. Gardens and trimmed players are too small to need one.
 var dictKinds = []int16{kindProfile, kindMuseum}
 
-// encoderSet compresses one kind. best is used normally; better (about 7% bigger, 4x faster) takes over while the
-// queue is backed up.
+// encoderSet compresses one kind at zstd's better level. The best level is about 7% smaller, but each of its
+// encoders holds about 34 MB of match tables whatever the input, which made the store's encoders most of the
+// parent's memory.
 type encoderSet struct {
-	dictID int32
-	better *zstd.Encoder
-	best   *zstd.Encoder
+	dictID  int32
+	encoder *zstd.Encoder
 }
 
 func newEncoderSet(dictID int32, dict []byte) (*encoderSet, error) {
-	set := &encoderSet{dictID: dictID}
-	for _, target := range []struct {
-		encoder **zstd.Encoder
-		level   zstd.EncoderLevel
-	}{{&set.better, zstd.SpeedBetterCompression}, {&set.best, zstd.SpeedBestCompression}} {
-		// One encoder per worker that compresses at once (ingest and the legacy import), so they don't queue
-		// behind each other. Encoders are only built when first used, which is in the parent alone.
-		options := []zstd.EOption{zstd.WithEncoderLevel(target.level), zstd.WithEncoderConcurrency(ingestWorkers + importWorkers)}
-		if dict != nil {
-			options = append(options, zstd.WithEncoderDict(dict))
-		}
-		encoder, err := zstd.NewWriter(nil, options...)
-		if err != nil {
-			return nil, err
-		}
-		*target.encoder = encoder
+	// One encoder state per worker that compresses at once (ingest and the legacy import), so they don't queue
+	// behind each other. Encoders are only built when first used, which is in the parent alone.
+	options := []zstd.EOption{
+		zstd.WithEncoderLevel(zstd.SpeedBetterCompression), zstd.WithEncoderConcurrency(ingestWorkers + importWorkers),
+		zstd.WithLowerEncoderMem(true),
 	}
-	return set, nil
+	if dict != nil {
+		options = append(options, zstd.WithEncoderDict(dict))
+	}
+	encoder, err := zstd.NewWriter(nil, options...)
+	if err != nil {
+		return nil, err
+	}
+	return &encoderSet{dictID: dictID, encoder: encoder}, nil
 }
 
 var (
@@ -66,15 +62,12 @@ var (
 )
 
 // compress returns the codec (dictionary id, 0 for none) and the compressed body.
-func compress(kind int16, body []byte, busy bool) (int32, []byte) {
+func compress(kind int16, body []byte) (int32, []byte) {
 	set := plainEncoders
 	if value, ok := kindEncoders.Load(kind); ok {
 		set = value.(*encoderSet)
 	}
-	if busy {
-		return set.dictID, set.better.EncodeAll(body, nil)
-	}
-	return set.dictID, set.best.EncodeAll(body, nil)
+	return set.dictID, set.encoder.EncodeAll(body, nil)
 }
 
 func decompress(ctx context.Context, codec int32, data []byte) ([]byte, error) {

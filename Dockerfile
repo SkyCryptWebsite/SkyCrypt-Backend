@@ -84,9 +84,9 @@ RUN mkdir -p logs cache
 #             GOMEMLIMIT; GOMEMLIMIT itself is per process, so setting it here
 #             would give every process the whole budget.
 #
-# GOGC=100    Collect at the default target instead of allowing the heap to grow
-#             several times between collections. This keeps allocation spikes from
-#             turning into multi-gigabyte RSS spikes.
+# GOGC=50     Collect when the heap grows by half instead of doubling. Every prefork
+#             child holds ~170 MiB live under load, so at 100 each one settled near
+#             400 MiB RSS; GC time stays well under 1% of CPU at 50.
 #
 # GODEBUG=netdns=go,madvdontneed=1
 #             Use the pure-Go DNS resolver and return scavenged pages to Linux
@@ -94,7 +94,7 @@ RUN mkdir -p logs cache
 #
 ENV SOURCE_COMMIT=$SOURCE_COMMIT \
     SKYCRYPT_MEMORY_LIMIT=7GiB \
-    GOGC=100 \
+    GOGC=50 \
     GODEBUG=netdns=go,madvdontneed=1
 
 # Expose port

@@ -447,7 +447,7 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 		return "", nil
 	}
 
-	if resp.StatusCode == http.StatusNotFound {
+	if mojangNotFound(resp.StatusCode) {
 		if shouldThrowError {
 			return "", fmt.Errorf("%w: invalid username or UUID provided", ErrPlayerNotFound)
 		}
@@ -513,7 +513,7 @@ func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError 
 		return "", nil
 	}
 
-	if resp.StatusCode == http.StatusNotFound {
+	if mojangNotFound(resp.StatusCode) {
 		return "Player not Found", nil
 	}
 
@@ -566,7 +566,7 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 		return &models.MowojangResponse{}, upstreamError("Mojang", err)
 	}
 
-	if resp.StatusCode == http.StatusNotFound {
+	if mojangNotFound(resp.StatusCode) {
 		return &models.MowojangResponse{
 			Name: "Player not Found",
 			UUID: uuid,
@@ -597,6 +597,12 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 	cacheMowojangIdentity(ctx, mojangResp.Name, mojangResp.ID, string(mojangBytes), true)
 
 	return post, nil
+}
+
+// mojangNotFound reports a Mojang answer that means the player doesn't exist: 404, 204 (no content) or 400 (not a
+// valid name). Without this, such answers parsed into an empty uuid that callers took as a player.
+func mojangNotFound(status int) bool {
+	return status == http.StatusNotFound || status == http.StatusNoContent || status == http.StatusBadRequest
 }
 
 func cacheMowojangIdentity(ctx context.Context, name string, uuid string, body string, includeFullResponse bool) {

@@ -141,19 +141,19 @@ func importLegacyRow(ctx context.Context, row legacyRow) error {
 	kind, id, _ := strings.Cut(row.key, ":")
 	switch kind {
 	case "profiles":
-		return storeProfiles(ctx, id, body, row.fetchedAt, true)
+		return storeProfiles(ctx, id, body, row.fetchedAt)
 	case "player":
 		return storePlayer(ctx, id, body, row.fetchedAt)
 	case "museum":
 		if !successful(body) {
 			return nil
 		}
-		return storeBlob(ctx, id, kindMuseum, body, row.fetchedAt, true)
+		return storeBlob(ctx, id, kindMuseum, body, row.fetchedAt)
 	case "garden":
 		if !successful(body) {
 			return nil
 		}
-		return storeBlob(ctx, id, kindGarden, body, row.fetchedAt, true)
+		return storeBlob(ctx, id, kindGarden, body, row.fetchedAt)
 	case "username":
 		return storeIdentity(ctx, id, string(body), row.fetchedAt)
 	case "mowojangUUID":
@@ -169,7 +169,7 @@ func importLegacyRow(ctx context.Context, row legacyRow) error {
 		// Only the lowercased name: username:<uuid> carries the real one.
 		return nil
 	case "skyblock_items", "skyblock_collections":
-		_, data := compress(0, body, false)
+		_, data := compress(0, body)
 		_, err := postgres().Exec(ctx, `INSERT INTO resources (name, fetched_at, data) VALUES ($1, $2, $3)
 			ON CONFLICT (name) DO UPDATE SET fetched_at = excluded.fetched_at, data = excluded.data
 			WHERE resources.fetched_at < excluded.fetched_at`, kind, row.fetchedAt, data)

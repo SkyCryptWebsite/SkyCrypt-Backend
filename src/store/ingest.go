@@ -32,8 +32,6 @@ const (
 
 	ingestWorkers = 3
 	ingestBatch   = 8
-	// Past this many queued jobs, blobs are compressed faster at a slightly worse ratio.
-	busyBacklog = 200
 
 	// An active player's profile changes on every fetch; rewriting a multi-MB blob more than hourly buys nothing.
 	blobRewriteInterval = time.Hour
@@ -108,15 +106,13 @@ func ingestWorker() {
 			time.Sleep(time.Second)
 			continue
 		}
-		backlog, _ := client.ZCard(ctx, queueKey).Result()
-		busy := backlog > busyBacklog
 
 		for _, job := range jobs {
 			member, _ := job.Member.(string)
 			fetchedAt := time.UnixMilli(int64(job.Score))
 			jobCtx, cancel := context.WithTimeout(ctx, ingestTimeout)
 			start := time.Now()
-			err := withRetry(func() error { return ingest(jobCtx, member, fetchedAt, busy) })
+			err := withRetry(func() error { return ingest(jobCtx, member, fetchedAt) })
 			db.RecordPostgresDependency(jobCtx, "store", "ingest", time.Since(start), err)
 			cancel()
 			switch {
@@ -145,7 +141,7 @@ func withRetry(f func() error) error {
 	return err
 }
 
-func ingest(ctx context.Context, job string, fetchedAt time.Time, busy bool) error {
+func ingest(ctx context.Context, job string, fetchedAt time.Time) error {
 	if postgres() == nil {
 		return nil
 	}
@@ -153,7 +149,7 @@ func ingest(ctx context.Context, job string, fetchedAt time.Time, busy bool) err
 	kind, id, _ := strings.Cut(job, ":")
 	switch kind + ":" {
 	case jobNoGarden:
-		return storeBlob(ctx, id, kindGarden, nil, fetchedAt, busy)
+		return storeBlob(ctx, id, kindGarden, nil, fetchedAt)
 	case jobName:
 		uuid, name, _ := strings.Cut(id, ":")
 		return storeIdentity(ctx, uuid, name, fetchedAt)
@@ -174,19 +170,19 @@ func ingest(ctx context.Context, job string, fetchedAt time.Time, busy bool) err
 
 	switch kind {
 	case "profiles":
-		return storeProfiles(ctx, id, body, fetchedAt, busy)
+		return storeProfiles(ctx, id, body, fetchedAt)
 	case "player":
 		return storePlayer(ctx, id, body, fetchedAt)
 	case "museum":
 		if !successful(body) {
 			return nil
 		}
-		return storeBlob(ctx, id, kindMuseum, body, fetchedAt, busy)
+		return storeBlob(ctx, id, kindMuseum, body, fetchedAt)
 	case "garden":
 		if !successful(body) {
 			return nil
 		}
-		if err := storeBlob(ctx, id, kindGarden, body, fetchedAt, busy); err != nil {
+		if err := storeBlob(ctx, id, kindGarden, body, fetchedAt); err != nil {
 			return err
 		}
 		profileID, err := parseUUID(id)
@@ -254,7 +250,7 @@ type blobState struct {
 
 // storeProfiles stores one player's /v2/skyblock/profiles response: every profile once, however many of its members
 // get looked up, plus the light rows for profiles, members, stats and the player's own profile list.
-func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt time.Time, busy bool) error {
+func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt time.Time) error {
 	uuid, err := parseUUID(uuidText)
 	if err != nil {
 		return err
@@ -333,7 +329,7 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 	// Rows are locked in id order, so two coop members stored at once can't deadlock on each other's profiles.
 	slices.SortFunc(profiles, func(a, b profileWrite) int { return compareUUID(a.id, b.id) })
 
-	blobs, err := compressProfiles(ctx, profiles, fetchedAt, busy)
+	blobs, err := compressProfiles(ctx, profiles, fetchedAt)
 	if err != nil {
 		return err
 	}
@@ -504,7 +500,7 @@ func (b blobWrite) queue(batch *pgx.Batch) {
 }
 
 // decideBlob compares new content with what is stored and compresses it only when it will be written.
-func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte, hash int64, fetchedAt time.Time, busy bool) blobWrite {
+func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte, hash int64, fetchedAt time.Time) blobWrite {
 	write := blobWrite{profileID: profileID, kind: kind, fetchedAt: fetchedAt, hash: hash}
 	if stored != nil && (stored.hash == hash || fetchedAt.Sub(stored.fetchedAt) < blobRewriteInterval) {
 		return write
@@ -512,7 +508,7 @@ func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte
 	write.replace = true
 	write.bytes = len(packed)
 	if len(packed) > 0 {
-		write.codec, write.data = compress(kind, packed, busy)
+		write.codec, write.data = compress(kind, packed)
 		write.bytes = len(write.data)
 	} else {
 		write.data = []byte{}
@@ -520,7 +516,7 @@ func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte
 	return write
 }
 
-func compressProfiles(ctx context.Context, profiles []profileWrite, fetchedAt time.Time, busy bool) ([]blobWrite, error) {
+func compressProfiles(ctx context.Context, profiles []profileWrite, fetchedAt time.Time) ([]blobWrite, error) {
 	ids := make([][16]byte, len(profiles))
 	for i, p := range profiles {
 		ids[i] = p.id
@@ -532,7 +528,7 @@ func compressProfiles(ctx context.Context, profiles []profileWrite, fetchedAt ti
 
 	writes := make([]blobWrite, len(profiles))
 	for i, p := range profiles {
-		writes[i] = decideBlob(states[p.id], p.id, kindProfile, p.packed, p.hash, fetchedAt, busy)
+		writes[i] = decideBlob(states[p.id], p.id, kindProfile, p.packed, p.hash, fetchedAt)
 	}
 	return writes, nil
 }
@@ -557,7 +553,7 @@ func blobStates(ctx context.Context, kind int16, ids [][16]byte) (map[[16]byte]*
 }
 
 // storeBlob stores a museum or garden body. A nil body records that Hypixel has none.
-func storeBlob(ctx context.Context, profileText string, kind int16, body []byte, fetchedAt time.Time, busy bool) error {
+func storeBlob(ctx context.Context, profileText string, kind int16, body []byte, fetchedAt time.Time) error {
 	profileID, err := parseUUID(profileText)
 	if err != nil {
 		return err
@@ -575,7 +571,7 @@ func storeBlob(ctx context.Context, profileText string, kind int16, body []byte,
 	if err != nil {
 		return err
 	}
-	write := decideBlob(states[profileID], profileID, kind, packed, hash, fetchedAt, busy)
+	write := decideBlob(states[profileID], profileID, kind, packed, hash, fetchedAt)
 
 	batch := &pgx.Batch{}
 	write.queue(batch)
@@ -591,7 +587,7 @@ func storePlayer(ctx context.Context, uuidText string, body []byte, fetchedAt ti
 	if err != nil {
 		return nil
 	}
-	_, data := compress(0, trimmed, false)
+	_, data := compress(0, trimmed)
 
 	_, err = postgres().Exec(ctx, `INSERT INTO players (uuid, player_data, player_fetched_at) VALUES ($1, $2, $3)
 		ON CONFLICT (uuid) DO UPDATE SET player_data = excluded.player_data, player_fetched_at = excluded.player_fetched_at,

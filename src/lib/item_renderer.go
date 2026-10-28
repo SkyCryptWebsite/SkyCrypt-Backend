@@ -68,7 +68,9 @@ const fallbackItemCacheTTL = time.Minute
 
 var (
 	resolvedItemTextures = localcache.NewLocalCache[AppliedItemTexture](8192)
-	textureFileBytes     = localcache.NewLocalCache[[]byte](4096)
+	// Only the hottest files: the OS page cache already holds the rest once for every prefork process, while this
+	// cache is a copy per process.
+	textureFileBytes = localcache.NewLocalCache[[]byte](512)
 )
 
 func readTextureFile(texturePath string) ([]byte, error) {
