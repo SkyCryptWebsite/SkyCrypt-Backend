@@ -13,6 +13,7 @@ import (
 	"skycrypt/src/forensics"
 	"skycrypt/src/lib"
 	"skycrypt/src/routes"
+	"skycrypt/src/security"
 	"skycrypt/src/store"
 	"skycrypt/src/utility"
 	"strings"
@@ -50,12 +51,13 @@ func SetupApplication() error {
 
 	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
 		if err := db.InitPostgres(databaseURL); err != nil {
-			log.Printf("Postgres unavailable, fallback cache disabled: %v", err)
+			store.Disable(fmt.Sprintf("could not connect to Postgres: %v", security.RedactError(err)), false)
 		} else if err := store.Init(context.Background()); err != nil {
-			log.Printf("Postgres store unavailable, fallback cache disabled: %v", err)
+			// A child that disagrees with the parent's schema says so itself.
+			store.Disable(fmt.Sprintf("could not start the store: %v", err), fiber.IsChild())
 		}
 	} else {
-		log.Println("DATABASE_URL not set, fallback cache disabled")
+		store.Disable("DATABASE_URL is not set", false)
 	}
 
 	// Main process: fetch all remote data, init/update repos, then parse

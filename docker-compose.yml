@@ -5,6 +5,6 @@ services:
     container_name: skycrypt-redis
     restart: unless-stopped
     # Pure cache: snapshots would rewrite the whole dataset every few minutes for nothing.
-    command: redis-server --save "" --appendonly no --maxmemory ${REDIS_MAXMEMORY:-8gb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lfu} --requirepass ${REDIS_PASSWORD:-DEV}
+    command: redis-server --save "" --appendonly no --maxmemory ${REDIS_MAXMEMORY:-8gb} --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-volatile-lfu} --requirepass ${REDIS_PASSWORD:-DEV}
     ports:
       - "6379:6379"

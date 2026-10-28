@@ -76,8 +76,8 @@ func TestSpecDocumentsEveryOperation(t *testing.T) {
 			}
 		}
 	}
-	if operations != 21 {
-		t.Errorf("documented %d operations, want 21", operations)
+	if operations != 24 {
+		t.Errorf("documented %d operations, want 24", operations)
 	}
 }
 

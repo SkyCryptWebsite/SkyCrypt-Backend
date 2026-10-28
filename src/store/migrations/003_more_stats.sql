@@ -1,0 +1,27 @@
+-- More leaderboard stats. stats_version says which set of stats a row was written with, so rows from before a new
+-- stat get it backfilled from the stored profile.
+ALTER TABLE member_stats
+	ALTER COLUMN skyblock_xp TYPE bigint,
+	ADD COLUMN stats_version   smallint NOT NULL DEFAULT 1,
+	ADD COLUMN catacombs_xp    bigint,
+	ADD COLUMN catacombs_xp_at timestamptz,
+	ADD COLUMN slayer_xp       bigint,
+	ADD COLUMN slayer_xp_at    timestamptz,
+	ADD COLUMN farming_xp      bigint,
+	ADD COLUMN farming_xp_at   timestamptz,
+	ADD COLUMN mining_xp       bigint,
+	ADD COLUMN mining_xp_at    timestamptz,
+	ADD COLUMN combat_xp       bigint,
+	ADD COLUMN combat_xp_at    timestamptz,
+	ADD COLUMN foraging_xp     bigint,
+	ADD COLUMN foraging_xp_at  timestamptz,
+	ADD COLUMN fishing_xp      bigint,
+	ADD COLUMN fishing_xp_at   timestamptz,
+	ADD COLUMN enchanting_xp    bigint,
+	ADD COLUMN enchanting_xp_at timestamptz,
+	ADD COLUMN alchemy_xp      bigint,
+	ADD COLUMN alchemy_xp_at   timestamptz,
+	ADD COLUMN taming_xp       bigint,
+	ADD COLUMN taming_xp_at    timestamptz,
+	ADD COLUMN carpentry_xp    bigint,
+	ADD COLUMN carpentry_xp_at timestamptz;

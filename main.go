@@ -82,7 +82,7 @@ func main() {
 		close(shutdownDone)
 	}
 
-	if err := app.Listen(":8080", fiber.ListenConfig{EnablePrefork: prefork}); err != nil {
+	if err := app.Listen(":"+listenPort(), fiber.ListenConfig{EnablePrefork: prefork}); err != nil {
 		panic(err)
 	}
 
@@ -170,4 +170,12 @@ func preforkEnabled() bool {
 	}
 
 	return os.Getenv("DEV") != "true"
+}
+
+// listenPort is PORT, or 8080. A second backend can run next to the usual one in development.
+func listenPort() string {
+	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+		return port
+	}
+	return "8080"
 }

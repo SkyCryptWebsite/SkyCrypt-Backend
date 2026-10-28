@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -182,7 +181,14 @@ func ingest(ctx context.Context, job string, fetchedAt time.Time, busy bool) err
 		if !successful(body) {
 			return nil
 		}
-		return storeBlob(ctx, id, kindGarden, body, fetchedAt, busy)
+		if err := storeBlob(ctx, id, kindGarden, body, fetchedAt, busy); err != nil {
+			return err
+		}
+		profileID, err := parseUUID(id)
+		if err != nil {
+			return err
+		}
+		return updateGardenValues(ctx, profileID, body, fetchedAt)
 	}
 	return fmt.Errorf("unknown job %q", job)
 }
@@ -221,31 +227,16 @@ var gameModes = map[string]int16{"": 0, "ironman": 1, "island": 2, "stranded": 2
 
 // profileLight is what the light tables need from a profile. jsoniter skips everything else.
 type profileLight struct {
-	GameMode string `json:"game_mode"`
-	Members  map[string]struct {
-		Profile *struct {
-			DeletionNotice *struct{} `json:"deletion_notice"`
-			CoopInvitation *struct {
-				Confirmed bool `json:"confirmed"`
-			} `json:"coop_invitation"`
-		} `json:"profile"`
-		Leveling *struct {
-			Experience *float64 `json:"experience"`
-		} `json:"leveling"`
-	} `json:"members"`
-}
-
-type memberLight struct {
-	uuid       [16]byte
-	removed    bool
-	skyblockXP *int32
+	GameMode string                `json:"game_mode"`
+	Members  map[string]memberJSON `json:"members"`
 }
 
 type profileWrite struct {
 	id       [16]byte
 	cuteName string
 	gameMode int16
-	members  []memberLight
+	members  []memberUpdate
+	object   []byte
 
 	packed []byte
 	hash   int64
@@ -316,18 +307,16 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 			if err != nil {
 				return err
 			}
-			m := memberLight{uuid: memberUUID}
+			m := memberUpdate{uuid: memberUUID}
+			m.values, m.hidden = memberStatValues(&member)
 			if member.Profile != nil {
 				m.removed = member.Profile.DeletionNotice != nil ||
 					(member.Profile.CoopInvitation != nil && !member.Profile.CoopInvitation.Confirmed)
 			}
-			if member.Leveling != nil && member.Leveling.Experience != nil {
-				xp := int32(min(math.Round(*member.Leveling.Experience), math.MaxInt32))
-				m.skyblockXP = &xp
-			}
 			write.members = append(write.members, m)
 		}
-		slices.SortFunc(write.members, func(a, b memberLight) int { return compareUUID(a.uuid, b.uuid) })
+		slices.SortFunc(write.members, func(a, b memberUpdate) int { return compareUUID(a.uuid, b.uuid) })
+		write.object = object
 
 		if write.packed, err = Pack(object); err != nil {
 			return err
@@ -344,7 +333,8 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 		return err
 	}
 
-	return pgx.BeginFunc(ctx, postgres(), func(tx pgx.Tx) error {
+	applied := false
+	err = pgx.BeginFunc(ctx, postgres(), func(tx pgx.Tx) error {
 		// Lock the player first: an older response for the same player must not undo a newer one.
 		if _, err := tx.Exec(ctx, `INSERT INTO players (uuid) VALUES ($1) ON CONFLICT DO NOTHING`, uuid); err != nil {
 			return err
@@ -371,12 +361,7 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 			return err
 		}
 
-		// Members, then their stats, which need the member ids.
 		batch = &pgx.Batch{}
-		type statWrite struct {
-			xp *int32
-		}
-		var stats []statWrite
 		for _, p := range profiles {
 			uuids := make([][16]byte, len(p.members))
 			for i, m := range p.members {
@@ -393,45 +378,13 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 					ON CONFLICT (profile_id, player_uuid) DO UPDATE SET
 						removed_at = CASE WHEN excluded.removed_at IS NULL THEN NULL
 							ELSE coalesce(profile_members.removed_at, excluded.removed_at) END,
-						cute_name = coalesce(excluded.cute_name, profile_members.cute_name)
-					RETURNING id`, p.id, m.uuid, removedAt, cuteName)
-				stats = append(stats, statWrite{xp: m.skyblockXP})
+						cute_name = coalesce(excluded.cute_name, profile_members.cute_name)`,
+					p.id, m.uuid, removedAt, cuteName)
 			}
 			// Someone who no longer shows up in the members at all has left too.
 			batch.Queue(`UPDATE profile_members SET removed_at = $3
 				WHERE profile_id = $1 AND removed_at IS NULL AND NOT (player_uuid = ANY($2))`, p.id, uuids, fetchedAt)
 		}
-		results := tx.SendBatch(ctx, batch)
-		memberIDs := make([]int64, 0, len(stats))
-		for _, p := range profiles {
-			for range p.members {
-				var id int64
-				if err := results.QueryRow().Scan(&id); err != nil {
-					_ = results.Close()
-					return err
-				}
-				memberIDs = append(memberIDs, id)
-			}
-			if _, err := results.Exec(); err != nil {
-				_ = results.Close()
-				return err
-			}
-		}
-		if err := results.Close(); err != nil {
-			return err
-		}
-
-		batch = &pgx.Batch{}
-		for i, stat := range stats {
-			batch.Queue(`INSERT INTO member_stats (member_id, seen_at, skyblock_xp, skyblock_xp_at)
-				VALUES ($1, $2, $3, CASE WHEN $3::integer IS NULL THEN NULL ELSE $2::timestamptz END)
-				ON CONFLICT (member_id) DO UPDATE SET
-					seen_at = excluded.seen_at,
-					skyblock_xp = coalesce(excluded.skyblock_xp, member_stats.skyblock_xp),
-					skyblock_xp_at = coalesce(excluded.skyblock_xp_at, member_stats.skyblock_xp_at)
-				WHERE member_stats.seen_at < excluded.seen_at`, memberIDs[i], fetchedAt, stat.xp)
-		}
-
 		// Profiles that left the player's list: the player left or deleted them. A profile nobody is active on
 		// anymore is deleted, and its rows go after a grace period in case it was a glitch.
 		batch.Queue(`WITH left_profiles AS (
@@ -445,8 +398,53 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 					AND m.removed_at IS NULL AND m.player_uuid <> $1)`, uuid, order, fetchedAt)
 		batch.Queue(`UPDATE players SET profile_ids = $2, selected_profile = $3, profiles_fetched_at = $4, touched_at = now()
 			WHERE uuid = $1`, uuid, order, selected, fetchedAt)
+		applied = true
 		return tx.SendBatch(ctx, batch).Close()
 	})
+	if err != nil || !applied {
+		return err
+	}
+
+	if err := updateLeaderboardValues(ctx, uuid, profiles, blobs, fetchedAt); err != nil {
+		fmt.Printf("[STORE] could not update leaderboards for %s: %v\n", uuidText, err)
+	}
+	return nil
+}
+
+// updateLeaderboardValues stores every member's values and moves them on the boards. Networth is recomputed only
+// for profiles whose stored body changed, since it decodes every inventory.
+func updateLeaderboardValues(ctx context.Context, requester [16]byte, profiles []profileWrite, blobs []blobWrite, seenAt time.Time) error {
+	ids := make([][16]byte, len(profiles))
+	for i, p := range profiles {
+		update := profileValueUpdate{id: p.id, gameMode: p.gameMode, members: p.members}
+		if blobs[i].replace {
+			update.networth = profileNetworth(ctx, p.id, p.object)
+		}
+		if err := updateProfileValues(ctx, update, seenAt); err != nil {
+			return err
+		}
+		ids[i] = p.id
+	}
+
+	// Members who left or were dropped from these profiles, and the requester's profiles that are gone.
+	if err := reconcileMembers(ctx, `m.player_uuid = $1 OR m.profile_id = ANY($2)`, requester, ids); err != nil {
+		return err
+	}
+	var gone [][16]byte
+	rows, err := postgres().Query(ctx, `SELECT profile_id FROM profile_members WHERE player_uuid = $1`, requester)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id [16]byte
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		gone = append(gone, id)
+	}
+	rows.Close()
+	return reconcileProfiles(ctx, gone)
 }
 
 func isSelected(raw []byte) bool {

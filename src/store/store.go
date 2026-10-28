@@ -53,11 +53,16 @@ func Init(ctx context.Context) error {
 		return err
 	}
 	enabled.Store(true)
+	logStarted(latestVersion())
 
 	go runIngest()
 	go runLegacyImport()
 	go runEviction()
 	go runDictTraining()
+	warnAboutEviction(ctx)
+	go runStatsBackfill()
+	go runLeaderboards()
+	go runHealthCheck()
 	return nil
 }
 

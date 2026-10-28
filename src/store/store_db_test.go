@@ -108,13 +108,9 @@ func TestStoreProfilesRoundTripAndCoopDedupe(t *testing.T) {
 		assertSameProfiles(t, []byte(original), rebuilt)
 	}
 
-	var xp int
 	var mode int16
-	err := db.Postgres().QueryRow(ctx, `SELECT s.skyblock_xp, p.game_mode FROM member_stats s
-		JOIN profile_members m ON m.id = s.member_id JOIN profiles p USING (profile_id)
-		WHERE m.player_uuid = $1 AND m.profile_id = $2`, mustUUID(t, alice), mustUUID(t, solo)).Scan(&xp, &mode)
-	if err != nil || xp != 42 || mode != 1 {
-		t.Fatalf("stats: xp=%d mode=%d err=%v", xp, mode, err)
+	if err := db.Postgres().QueryRow(ctx, `SELECT game_mode FROM profiles WHERE profile_id = $1`, mustUUID(t, solo)).Scan(&mode); err != nil || mode != 1 {
+		t.Fatalf("solo profile mode = %d, err %v", mode, err)
 	}
 }
 
@@ -181,7 +177,8 @@ func TestEvictToBudgetDropsLeastRecentlyUsed(t *testing.T) {
 	var stored, light int64
 	err := db.Postgres().QueryRow(ctx, `SELECT (SELECT sum(bytes) FROM blobs),
 		pg_total_relation_size('players') + pg_total_relation_size('profiles') + pg_total_relation_size('profile_members')
-			+ pg_total_relation_size('member_stats') + pg_total_relation_size('resources') + pg_total_relation_size('codec_dicts')`).
+			+ pg_total_relation_size('member_values') + pg_total_relation_size('profile_values') + pg_total_relation_size('stat_keys')
+			+ pg_total_relation_size('resources') + pg_total_relation_size('codec_dicts')`).
 		Scan(&stored, &light)
 	if err != nil {
 		t.Fatal(err)

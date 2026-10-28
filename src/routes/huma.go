@@ -54,6 +54,7 @@ func NewAPI(app *fiber.App, description string) huma.API {
 	registerStatsConstants(api)
 	registerEnchantments(api)
 	registerResourcePacks(api)
+	registerLeaderboards(api)
 	// Huma adds this response to operations without documented errors, with no example of its own.
 	for _, item := range api.OpenAPI().Paths {
 		if response := item.Get.Responses["default"]; response != nil {

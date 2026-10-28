@@ -446,6 +446,13 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error),
 
 	stale, ok := load(ctx)
 	if !ok {
+		if on, _ := store.Status(); !on {
+			if state != nil && state.CacheOnly {
+				store.LogUnavailable("a cache-only request")
+			} else {
+				store.LogUnavailable("serving stored data after an upstream failure")
+			}
+		}
 		if state != nil && state.CacheOnly {
 			state.notCached.Store(true)
 			return nil, false, ErrNotCached

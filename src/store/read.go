@@ -120,6 +120,16 @@ func LoadGarden(ctx context.Context, profileID string) ([]byte, time.Time, bool)
 }
 
 func loadBlob(ctx context.Context, profileText string, kind int16) ([]byte, time.Time, bool) {
+	body, fetchedAt, ok := readBlob(ctx, profileText, kind)
+	if ok {
+		enqueueTouch(ctx, kind, profileText)
+	}
+	return body, fetchedAt, ok
+}
+
+// readBlob reads a stored body without counting as a use, for the store's own work (networth, backfill), which
+// must not keep blobs from being evicted.
+func readBlob(ctx context.Context, profileText string, kind int16) ([]byte, time.Time, bool) {
 	pool := postgres()
 	profileID, err := parseUUID(profileText)
 	if pool == nil || err != nil {
@@ -137,7 +147,6 @@ func loadBlob(ctx context.Context, profileText string, kind int16) ([]byte, time
 		return nil, time.Time{}, false
 	}
 
-	enqueueTouch(ctx, kind, profileText)
 	if len(data) == 0 {
 		return []byte{}, fetchedAt, true
 	}
