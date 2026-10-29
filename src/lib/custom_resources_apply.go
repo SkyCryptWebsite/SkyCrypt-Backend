@@ -711,77 +711,30 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 	}
 	isGenericSkullInput := skullFallback.Texture != "" && strings.TrimSpace(input.SkyBlockID) == "" && id == "minecraft:player_head"
 
-	itemMap := map[string]any(nil)
-	var renderErr error
-	renderer := currentCustomResourceRenderer()
 	canRuntimeRender := !isGenericSkullInput && !textureCtx.DisableRuntimeRender
-	if canRuntimeRender && renderer == nil {
-		if err := ensureCustomResourceRenderer(); err == nil {
-			renderer = currentCustomResourceRenderer()
-		}
-	}
-	canRuntimeRender = canRuntimeRender && renderer != nil
-	if !canRuntimeRender {
-		recordRuntimeRenderSkip(stats, renderer, textureCtx, isGenericSkullInput)
-	}
-	if canRuntimeRender {
-		itemMap = itemTextureInputRenderMap(input)
-		renderStart := time.Now()
-		renderPackIDs := rendererPackIDsForInput(input, textureCtx.EnabledPackIDs)
-		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, packIDsForRenderer(renderPackIDs))
-		renderDuration := time.Since(renderStart)
-		if stats != nil {
-			stats.RenderAttempts++
-			stats.RenderDuration += renderDuration
-		}
-		if err != nil {
+	if canRuntimeRender && renderInMaster() {
+		// A prefork child never builds a renderer: the master renders queued items, and the result is read here
+		// once it is ready. Until then the item gets its fallback texture, cached only briefly.
+		if texture, reason, ok := queuedRuntimeRender(input, textureCtx); ok {
 			if stats != nil {
-				stats.RenderErrors++
+				stats.RenderHits++
 			}
-			renderErr = err
+			return finishFallback(reason, "", texture)
 		}
-		if customTexture != nil && customTexture.Path != "" && texturePackEnabled(customTexture.TexturePackID, textureCtx.EnabledPackSet) {
-			outputTexture := AppliedItemTexture{
-				Texture:     publicCacheTextureURL(customTexture.Path),
-				TexturePack: customTexture.TexturePackID,
-			}
-			if !isGenericPackedSkullTexture(input, outputTexture) {
-				if stats != nil {
-					stats.RenderHits++
-				}
-				return finishFallback("runtime_render_hit", "", outputTexture)
+	} else if canRuntimeRender {
+		renderer := currentCustomResourceRenderer()
+		if renderer == nil {
+			if err := ensureCustomResourceRenderer(); err == nil {
+				renderer = currentCustomResourceRenderer()
 			}
 		}
-
-		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
-			if vanillaItem := vanillaRenderItem(itemMap, id); vanillaItem != nil {
-				renderStart := time.Now()
-				customTexture, err := renderer.RenderItemNBTWithPackIDs(vanillaItem, packIDsForRenderer(renderPackIDs))
-				renderDuration := time.Since(renderStart)
-				if stats != nil {
-					stats.RenderAttempts++
-					stats.RenderDuration += renderDuration
-				}
-				if err != nil {
-					if stats != nil {
-						stats.RenderErrors++
-					}
-					renderErr = err
-				}
-				if customTexture != nil && customTexture.Path != "" && texturePackEnabled(customTexture.TexturePackID, textureCtx.EnabledPackSet) {
-					outputTexture := AppliedItemTexture{
-						Texture:     publicCacheTextureURL(customTexture.Path),
-						TexturePack: customTexture.TexturePackID,
-					}
-					if !isGenericPackedSkullTexture(input, outputTexture) {
-						if stats != nil {
-							stats.RenderHits++
-						}
-						return finishFallback("runtime_vanilla_render_hit", "", outputTexture)
-					}
-				}
-			}
+		if renderer == nil {
+			recordRuntimeRenderSkip(stats, renderer, textureCtx, isGenericSkullInput)
+		} else if texture, reason, ok := runtimeRenderTexture(renderer, input, textureCtx, stats); ok {
+			return finishFallback(reason, "", texture)
 		}
+	} else {
+		recordRuntimeRenderSkip(stats, nil, textureCtx, isGenericSkullInput)
 	}
 
 	if skullFallback.Texture != "" {
@@ -854,10 +807,6 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 		return finishFallback("vanilla_model_fallback", "", vanillaTexture)
 	}
 
-	if renderErr != nil {
-		fmt.Printf("[CUSTOM_RESOURCES] RenderItemNBT failed id=%q skyblock_id=%q error=%v\n", id, input.SkyBlockID, renderErr)
-	}
-
 	fmt.Printf("[CUSTOM_RESOURCES] No texture found for item id=%q skyblock_id=%q item_id=%d damage=%d\n", id, input.SkyBlockID, input.NumericID, input.Damage)
 	texture := AppliedItemTexture{Texture: barrierTextureURL()}
 	if stats != nil {
@@ -909,4 +858,78 @@ func ApplyTexture(item any, enabledPacksParam ...[]string) AppliedItemTexture {
 		return AppliedItemTexture{Texture: barrierTextureURL()}
 	}
 	return ApplyTextureInput(itemTextureInputFromMap(itemMap), textureCtx)
+}
+
+// runtimeRenderTexture renders input with the stack it should use, and retries a failed render as the plain vanilla
+// item. ok is false when neither gave a usable texture.
+func runtimeRenderTexture(renderer *mr.Renderer, input ItemTextureInput, textureCtx TextureApplyContext, stats *TextureApplyStats) (AppliedItemTexture, string, bool) {
+	id := normalizeMinecraftItemID(input.ID)
+	if id == "" && input.ItemModel != "" {
+		id = normalizeMinecraftItemID(input.ItemModel)
+	}
+	itemMap := map[string]any(nil)
+	var renderErr error
+	{
+		itemMap = itemTextureInputRenderMap(input)
+		renderStart := time.Now()
+		renderPackIDs := rendererPackIDsForInput(input, textureCtx.EnabledPackIDs)
+		customTexture, err := renderer.RenderItemNBTWithPackIDs(itemMap, packIDsForRenderer(renderPackIDs))
+		renderDuration := time.Since(renderStart)
+		if stats != nil {
+			stats.RenderAttempts++
+			stats.RenderDuration += renderDuration
+		}
+		if err != nil {
+			if stats != nil {
+				stats.RenderErrors++
+			}
+			renderErr = err
+		}
+		if customTexture != nil && customTexture.Path != "" && texturePackEnabled(customTexture.TexturePackID, textureCtx.EnabledPackSet) {
+			outputTexture := AppliedItemTexture{
+				Texture:     publicCacheTextureURL(customTexture.Path),
+				TexturePack: customTexture.TexturePackID,
+			}
+			if !isGenericPackedSkullTexture(input, outputTexture) {
+				if stats != nil {
+					stats.RenderHits++
+				}
+				return outputTexture, "runtime_render_hit", true
+			}
+		}
+
+		if renderErr != nil && id != "" && vanillaItemResourceExists(id) {
+			if vanillaItem := vanillaRenderItem(itemMap, id); vanillaItem != nil {
+				renderStart := time.Now()
+				customTexture, err := renderer.RenderItemNBTWithPackIDs(vanillaItem, packIDsForRenderer(renderPackIDs))
+				renderDuration := time.Since(renderStart)
+				if stats != nil {
+					stats.RenderAttempts++
+					stats.RenderDuration += renderDuration
+				}
+				if err != nil {
+					if stats != nil {
+						stats.RenderErrors++
+					}
+					renderErr = err
+				}
+				if customTexture != nil && customTexture.Path != "" && texturePackEnabled(customTexture.TexturePackID, textureCtx.EnabledPackSet) {
+					outputTexture := AppliedItemTexture{
+						Texture:     publicCacheTextureURL(customTexture.Path),
+						TexturePack: customTexture.TexturePackID,
+					}
+					if !isGenericPackedSkullTexture(input, outputTexture) {
+						if stats != nil {
+							stats.RenderHits++
+						}
+						return outputTexture, "runtime_vanilla_render_hit", true
+					}
+				}
+			}
+		}
+	}
+	if renderErr != nil {
+		fmt.Printf("[CUSTOM_RESOURCES] RenderItemNBT failed id=%q skyblock_id=%q error=%v\n", id, input.SkyBlockID, renderErr)
+	}
+	return AppliedItemTexture{}, "", false
 }

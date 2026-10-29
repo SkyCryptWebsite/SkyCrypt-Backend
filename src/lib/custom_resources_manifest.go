@@ -8,8 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	notenoughupdates "skycrypt/src/NotEnoughUpdates"
@@ -513,9 +515,12 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 	batch := newTextureCacheBatch()
 
 	renderedDir := filepath.Join(cacheDir, "rendered")
-	files, err := os.ReadDir(renderedDir)
+	names, err := readRenderedTextureNames(renderedDir)
 	if err != nil {
 		batch.apply(true)
+		renderedTextureIndexSeen.Lock()
+		renderedTextureIndexSeen.names = map[string]struct{}{}
+		renderedTextureIndexSeen.Unlock()
 		if os.IsNotExist(err) {
 			return 0, nil
 		}
@@ -524,82 +529,171 @@ func LoadRenderedTextureIndex(cacheDir string) (int, error) {
 
 	knownPacks := knownResourcePackAliases()
 	loaded := 0
-	for _, file := range files {
-		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".webp") {
-			continue
-		}
-
-		fileName := file.Name()
-		parts := strings.Split(fileName, "__")
-		itemId := ""
-		minecraftID := ""
-		inputItemModel := ""
-		resolvedModel := ""
-		texturePack := ""
-		packSegments := 0
-		modelConflict := false
-		for _, part := range parts {
-			if strings.HasPrefix(part, "skyblock=") {
-				itemId = strings.TrimPrefix(part, "skyblock=")
-			} else if strings.HasPrefix(part, "mc=") {
-				minecraftID = debugFilenameIdentifier(strings.TrimPrefix(part, "mc="))
-			} else if strings.HasPrefix(part, "itemmodel=") {
-				modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
-				if inputItemModel != "" && modelValue != "" && inputItemModel != modelValue {
-					modelConflict = true
-				}
-				if inputItemModel == "" {
-					inputItemModel = modelValue
-				}
-			} else if strings.HasPrefix(part, "model=") {
-				modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "model="))
-				if resolvedModel != "" && modelValue != "" && resolvedModel != modelValue {
-					modelConflict = true
-				}
-				if resolvedModel == "" {
-					resolvedModel = modelValue
-				}
-			} else if strings.HasPrefix(part, "pack=") {
-				packSegments++
-				texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
-			}
-		}
-		if modelConflict || packSegments != 1 || !validRenderedTexturePackID(texturePack, knownPacks) {
-			continue
-		}
-		itemModel := inputItemModel
-		if itemModel == "" {
-			itemModel = resolvedModel
-		}
-
-		texture := AppliedItemTexture{
-			Texture:     publicCacheTextureURL(filepath.Join(renderedDir, fileName)),
-			TexturePack: texturePack,
-		}
-		if texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
-			continue
-		}
-		// A SkyBlock render only stands for that SkyBlock item. Indexing it under the generic itemmodel/mc keys made
-		// plain vanilla lookups (GOLDEN_HOE, GHAST_SPAWN_EGG) return whichever SkyBlock item shared the base item.
-		if itemId != "" {
-			batch.set(texturePack, "skyblock:"+itemId, texture)
-			if itemModel != "" {
-				batch.set(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
-			}
+	seen := make(map[string]struct{}, len(names))
+	for _, fileName := range names {
+		seen[fileName] = struct{}{}
+		if indexRenderedTextureFile(batch, renderedDir, fileName, knownPacks) {
 			loaded++
-			continue
-		}
-		if itemModel != "" {
-			batch.set(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
-		}
-		// Likewise an item-model render (itemmodel=hypixel_...__mc=minecraft_golden_hoe) is not the plain base item.
-		if minecraftID != "" && inputItemModel == "" {
-			batch.set(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
 		}
 	}
 
 	batch.apply(true)
+	renderedTextureIndexSeen.Lock()
+	renderedTextureIndexSeen.names = seen
+	renderedTextureIndexSeen.Unlock()
 	return loaded, nil
+}
+
+// renderedTextureIndexSeen holds the file names the index was last built from. Rendered files never change once
+// written (their names hash what they show), so a refresh only has to index names it hasn't seen.
+var renderedTextureIndexSeen = struct {
+	sync.Mutex
+	names map[string]struct{}
+}{names: map[string]struct{}{}}
+
+// refreshRenderedTextureIndex adds renders written since the last load, by this process or another prefork process.
+// Reloading the whole index on every refresh re-parsed tens of thousands of names every few seconds in every
+// process, about a third of all allocation in production. It falls back to a full reload when files were removed.
+func refreshRenderedTextureIndex(cacheDir string) (int, error) {
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	names, err := readRenderedTextureNames(renderedDir)
+	if err != nil {
+		return 0, err
+	}
+
+	renderedTextureIndexSeen.Lock()
+	seenCount := len(renderedTextureIndexSeen.names)
+	var added []string
+	present := 0
+	for _, name := range names {
+		if _, ok := renderedTextureIndexSeen.names[name]; ok {
+			present++
+		} else {
+			added = append(added, name)
+		}
+	}
+	renderedTextureIndexSeen.Unlock()
+
+	if present < seenCount {
+		// Some files are gone (the cache was cleared or rebuilt): entries may point at them, so start over.
+		return LoadRenderedTextureIndex(cacheDir)
+	}
+	if len(added) == 0 {
+		return 0, nil
+	}
+
+	batch := newTextureCacheBatch()
+	knownPacks := knownResourcePackAliases()
+	loaded := 0
+	for _, fileName := range added {
+		if indexRenderedTextureFile(batch, renderedDir, fileName, knownPacks) {
+			loaded++
+		}
+	}
+	// New renders can change what an ordered pack stack resolves to, so its cached answers are dropped as in a
+	// full load.
+	batch.apply(true)
+
+	renderedTextureIndexSeen.Lock()
+	for _, name := range added {
+		renderedTextureIndexSeen.names[name] = struct{}{}
+	}
+	renderedTextureIndexSeen.Unlock()
+	return loaded, nil
+}
+
+// readRenderedTextureNames lists the .webp files in renderedDir. Readdirnames skips the per-entry structs and the
+// sort os.ReadDir does, which add up for a directory this size.
+func readRenderedTextureNames(renderedDir string) ([]string, error) {
+	dir, err := os.Open(renderedDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = dir.Close() }()
+	names, err := dir.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
+	out := names[:0]
+	for _, name := range names {
+		if strings.EqualFold(filepath.Ext(name), ".webp") {
+			out = append(out, name)
+		}
+	}
+	// Sorted like os.ReadDir, so when two files index the same key the same one wins as before.
+	slices.Sort(out)
+	return out, nil
+}
+
+// indexRenderedTextureFile adds the texture a rendered file stands for to batch, and reports whether it was a
+// SkyBlock item render.
+func indexRenderedTextureFile(batch *textureCacheBatch, renderedDir string, fileName string, knownPacks map[string]struct{}) bool {
+	parts := strings.Split(fileName, "__")
+	itemId := ""
+	minecraftID := ""
+	inputItemModel := ""
+	resolvedModel := ""
+	texturePack := ""
+	packSegments := 0
+	modelConflict := false
+	for _, part := range parts {
+		if strings.HasPrefix(part, "skyblock=") {
+			itemId = strings.TrimPrefix(part, "skyblock=")
+		} else if strings.HasPrefix(part, "mc=") {
+			minecraftID = debugFilenameIdentifier(strings.TrimPrefix(part, "mc="))
+		} else if strings.HasPrefix(part, "itemmodel=") {
+			modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "itemmodel="))
+			if inputItemModel != "" && modelValue != "" && inputItemModel != modelValue {
+				modelConflict = true
+			}
+			if inputItemModel == "" {
+				inputItemModel = modelValue
+			}
+		} else if strings.HasPrefix(part, "model=") {
+			modelValue := debugFilenameIdentifier(strings.TrimPrefix(part, "model="))
+			if resolvedModel != "" && modelValue != "" && resolvedModel != modelValue {
+				modelConflict = true
+			}
+			if resolvedModel == "" {
+				resolvedModel = modelValue
+			}
+		} else if strings.HasPrefix(part, "pack=") {
+			packSegments++
+			texturePack = strings.TrimSpace(strings.TrimPrefix(part, "pack="))
+		}
+	}
+	if modelConflict || packSegments != 1 || !validRenderedTexturePackID(texturePack, knownPacks) {
+		return false
+	}
+	itemModel := inputItemModel
+	if itemModel == "" {
+		itemModel = resolvedModel
+	}
+
+	texture := AppliedItemTexture{
+		Texture:     publicCacheTextureURL(filepath.Join(renderedDir, fileName)),
+		TexturePack: texturePack,
+	}
+	if texture.Texture == "" || isStaleVanillaChestParticleRender(texture.Texture) {
+		return false
+	}
+	// A SkyBlock render only stands for that SkyBlock item. Indexing it under the generic itemmodel/mc keys made
+	// plain vanilla lookups (GOLDEN_HOE, GHAST_SPAWN_EGG) return whichever SkyBlock item shared the base item.
+	if itemId != "" {
+		batch.set(texturePack, "skyblock:"+itemId, texture)
+		if itemModel != "" {
+			batch.set(texturePack, "skyblock:"+itemId+"|itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+		}
+		return true
+	}
+	if itemModel != "" {
+		batch.set(texturePack, "itemmodel:"+normalizeMinecraftItemID(itemModel), texture)
+	}
+	// Likewise an item-model render (itemmodel=hypixel_...__mc=minecraft_golden_hoe) is not the plain base item.
+	if minecraftID != "" && inputItemModel == "" {
+		batch.set(texturePack, fmt.Sprintf("mc:%s|damage:0|color:0", normalizeMinecraftItemID(minecraftID)), texture)
+	}
+	return false
 }
 
 func validRenderedTexturePackID(packID string, knownPacks map[string]struct{}) bool {

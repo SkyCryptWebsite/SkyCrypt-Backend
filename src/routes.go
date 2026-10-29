@@ -78,6 +78,8 @@ func SetupApplication() error {
 		if err := lib.StartCustomResources(); err != nil {
 			return fmt.Errorf("failed to start custom resources: %v", err)
 		}
+		// Prefork children queue live renders; this process renders them.
+		lib.StartRenderWorkers()
 
 		go func() {
 			_, err := skyhelpernetworthgo.GetPrices(true, 0, 0)

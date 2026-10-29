@@ -46,7 +46,7 @@ var vanillaAssets *vanillaAssetIndex
 var itemTextureResolutionGroup singleflight.Group
 
 var renderedTextureIndexLazyReloadInterval = 5 * time.Second
-var loadRenderedTextureIndexForRefresh = LoadRenderedTextureIndex
+var loadRenderedTextureIndexForRefresh = refreshRenderedTextureIndex
 
 const (
 	renderedResourcePackManifestSchemaVersion  = 1

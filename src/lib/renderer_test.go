@@ -1127,3 +1127,47 @@ func TestRenderItemRejectsUnknownOrEmptyItemID(t *testing.T) {
 		t.Fatal("RenderItem unknown ID returned nil error")
 	}
 }
+
+func TestRefreshRenderedTextureIndexOnlyIndexesNewFiles(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(item string) string {
+		path := filepath.Join(renderedDir, "skyblock="+item+"__pack=HYPIXEL_PLUS__hash="+strings.ToLower(item)+".webp")
+		if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	write("FIRST_ITEM")
+	second := write("SECOND_ITEM")
+	if loaded, err := reloadRenderedTextureIndex(cacheDir); err != nil || loaded != 2 {
+		t.Fatalf("initial load indexed %d (%v), want 2", loaded, err)
+	}
+
+	write("THIRD_ITEM")
+	if loaded, err := refreshRenderedTextureIndex(cacheDir); err != nil || loaded != 1 {
+		t.Fatalf("refresh indexed %d (%v), want only the 1 new file", loaded, err)
+	}
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+	for _, item := range []string{"FIRST_ITEM", "SECOND_ITEM", "THIRD_ITEM"} {
+		if _, ok := cachedStableSkyBlockTexture(item, context); !ok {
+			t.Fatalf("%s missing after the refresh", item)
+		}
+	}
+	if loaded, err := refreshRenderedTextureIndex(cacheDir); err != nil || loaded != 0 {
+		t.Fatalf("refresh with nothing new indexed %d (%v)", loaded, err)
+	}
+
+	// A removed file means the cache was cleared: everything is indexed again from what is there.
+	if err := os.Remove(second); err != nil {
+		t.Fatal(err)
+	}
+	if loaded, err := refreshRenderedTextureIndex(cacheDir); err != nil || loaded != 2 {
+		t.Fatalf("refresh after a removal indexed %d (%v), want a full reload of 2", loaded, err)
+	}
+}
