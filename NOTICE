@@ -36,6 +36,18 @@ Built output generated from SkyCrypt-owned AGPL-covered source is covered by
 GNU AGPLv3, except for third-party components and assets, which retain their
 own license notices.
 
+The following files are expressly designated as subject to the SkyCrypt
+Brand Assets License (LICENSES/LicenseRef-SkyCrypt-Brand.txt). This list is
+authoritative; other files are Brand Assets only if they are added to it. They
+are not offered under the GNU AGPLv3 or the MIT License, and all rights are
+reserved by SkyCrypt LLC except as granted in that license:
+
+- assets/static/favicon.ico
+- assets/static/skycrypt-api.avif
+
+That license only allows use of these assets to refer or link to SkyCrypt.
+Public deployments of SkyCrypt, modified or not, must replace them with their
+own branding.
+
 SkyCrypt names, service names, and branding references are not licensed for use
-in a way that is confusing, misleading, or suggests endorsement by the SkyCrypt
-project.
+in a way that is confusing, misleading, or suggests endorsement by SkyCrypt LLC.

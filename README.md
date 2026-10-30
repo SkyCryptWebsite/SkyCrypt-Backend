@@ -1,6 +1,6 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: light)" srcset="static/img/logo_black.avif">
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/SkyCryptWebsite/SkyCrypt-Frontend/raw/dev/static/img/logo_black.avif">
     <img alt="SkyCrypt" height="96px" src="https://github.com/SkyCryptWebsite/SkyCrypt-Frontend/raw/dev/static/img/logo.avif">
   </picture>
 </p>
@@ -226,6 +226,7 @@ SkyCrypt Backend uses a split license model:
 | Hypixel Plus resource-pack assets | CC-BY-NC-ND-4.0 | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
 | Minecraft/Mojang-derived assets and rendering helper assets | Upstream Mojang/Microsoft terms | These assets are not relicensed under GNU AGPLv3. See [`NOTICE`](./NOTICE) and [`REUSE.toml`](./REUSE.toml). |
 | Asset files pending provenance review | Their respective rights holders | These assets are not relicensed under GNU AGPLv3 by default. |
+| SkyCrypt brand/logo assets (`assets/static/favicon.ico`, `assets/static/skycrypt-api.avif`) | [All rights reserved](./LICENSES/LicenseRef-SkyCrypt-Brand.txt) | Use only to refer or link to SkyCrypt. Deployments of SkyCrypt must use their own branding. See [`NOTICE`](./NOTICE). |
 
 The public API exposes source and license metadata at `/api/source`.
 
