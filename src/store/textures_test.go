@@ -229,6 +229,92 @@ func TestArchiveBlobUsesTheNewestDictionary(t *testing.T) {
 	}
 }
 
+// Two parents walk the blobs in the same order, so each must leave the other's rows alone.
+func TestArchiveBlobSkipsClaimedAndFinishedRows(t *testing.T) {
+	ctx := testDatabase(t)
+	testRedis(t, ctx)
+	profileID := "33333333-3333-3333-3333-333333333333"
+	body := []byte(`{"success":true,"garden":{"level":1}}`)
+	if err := storeBlob(ctx, profileID, kindGarden, body, time.Now().Add(-2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := nextArchiveRows(ctx, archiveRow{})
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("rows = %v, %v", rows, err)
+	}
+	level := func() int16 {
+		t.Helper()
+		var level int16
+		if err := postgres().QueryRow(ctx, `SELECT level FROM blobs`).Scan(&level); err != nil {
+			t.Fatal(err)
+		}
+		return level
+	}
+
+	release, ok := claimArchiveRow(ctx, rows[0])
+	if !ok {
+		t.Fatal("a free row could not be claimed")
+	}
+	if err := archiveBlob(ctx, rows[0], map[int16]archiveDict{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := level(); got != 0 {
+		t.Fatalf("a claimed row was compressed, level %d", got)
+	}
+	release()
+
+	if err := archiveBlob(ctx, rows[0], map[int16]archiveDict{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := level(); got != archiveLevel {
+		t.Fatalf("a released row stayed at level %d", got)
+	}
+
+	// Data that can't be decompressed shows whether a stale batch reads a finished row again.
+	if _, err := postgres().Exec(ctx, `UPDATE blobs SET data = 'not zstd'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := archiveBlob(ctx, rows[0], map[int16]archiveDict{}); err != nil {
+		t.Fatalf("a finished row was compressed again: %v", err)
+	}
+}
+
+// Two parents share a database and only the one that trains a dictionary is told about it.
+func TestLoadDictsPicksUpAnotherParentsDictionary(t *testing.T) {
+	ctx := testDatabase(t)
+	resetCaches()
+	body := []byte(`{"success":true,"members":{"a":{"value":1234}}}`)
+	if codec, _ := compress(kindMuseum, body); codec != 0 {
+		t.Fatalf("codec %d before any dictionary", codec)
+	}
+
+	var samples [][]byte
+	for i := range 500 {
+		samples = append(samples, []byte(fmt.Sprintf(`{"success":true,"members":{"a":{"value":%d,"items":{"WITHER_SKULL_%d":{"donated_time":%d}}}}}`, i, i%40, i*7919)))
+	}
+	dict, err := trainWithZstdCommand(samples, 77, dictSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := postgres().Exec(ctx, `INSERT INTO codec_dicts (id, kind, data) VALUES (77, $1, $2)`, kindMuseum, dict); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := loadDicts(ctx, postgres()); err != nil {
+		t.Fatal(err)
+	}
+	if codec, _ := compress(kindMuseum, body); codec != 77 {
+		t.Fatalf("codec %d after loading", codec)
+	}
+	first, _ := kindEncoders.Load(kindMuseum)
+	if err := loadDicts(ctx, postgres()); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := kindEncoders.Load(kindMuseum); again != first {
+		t.Fatal("loading the same dictionary again rebuilt its encoders")
+	}
+}
+
 func TestPlayerDictionary(t *testing.T) {
 	ctx := testDatabase(t)
 	resetCaches()
@@ -402,6 +488,9 @@ func TestArchiveRealSample(t *testing.T) {
 		dict, err := trainWithZstdCommand(samples, dictID, dictSize)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if len(dict) < dictSize*9/10 {
+			t.Fatalf("kind %d: dictionary is %d KB of the %d KB asked for", kind, len(dict)>>10, dictSize>>10)
 		}
 		if _, err := postgres().Exec(ctx, `INSERT INTO codec_dicts (id, kind, data) VALUES ($1, $2, $3)`, dictID, kind, dict); err != nil {
 			t.Fatal(err)

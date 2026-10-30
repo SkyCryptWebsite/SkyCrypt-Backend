@@ -36,6 +36,14 @@ const (
 
 func runDictTraining() {
 	for {
+		// Another parent may have trained one. Without this, this one keeps writing with what it had when it started.
+		if pool := postgres(); pool != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			if err := loadDicts(ctx, pool); err != nil {
+				fmt.Printf("[STORE] could not load the dictionaries: %v\n", err)
+			}
+			cancel()
+		}
 		for _, kind := range dictKinds {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			if err := maybeTrainDict(ctx, kind); err != nil {
@@ -167,8 +175,10 @@ func trainWithZstdCommand(samples [][]byte, id int32, size int) ([]byte, error) 
 		}
 	}
 
+	// Fixed settings, because the defaults search for their own and can settle on a much smaller dictionary. On 128 MB
+	// of real profiles the defaults made 164-295 KB of the 2 MB asked for and compressed 25-30% worse.
 	out := filepath.Join(dir, "dict")
-	cmd := exec.Command("zstd", "--train", "-q", "-r", sampleDir, "-o", out,
+	cmd := exec.Command("zstd", "--train", "--train-fastcover=k=2048,d=8,f=24", "-q", "-r", sampleDir, "-o", out,
 		"--maxdict="+strconv.Itoa(size), "--dictID="+strconv.Itoa(int(id)))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("%w: %s", err, output)
