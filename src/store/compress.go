@@ -146,6 +146,9 @@ func addDecoder(id int32, dict []byte) (*zstd.Decoder, error) {
 
 // useDict makes dict the one new blobs of kind are written with.
 func useDict(kind int16, id int32, dict []byte) error {
+	if value, ok := kindEncoders.Load(kind); ok && value.(*encoderSet).dictID == id {
+		return nil
+	}
 	if got, ok := dictID(dict); !ok || got != uint32(id) {
 		return fmt.Errorf("store: dictionary %d has id %d in its header", id, got)
 	}

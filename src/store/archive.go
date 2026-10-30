@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"skycrypt/src/db"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -28,6 +30,8 @@ const (
 	archiveIdle     = 10 * time.Minute
 	archiveMinAge   = time.Hour
 	archiveZstdFlag = "-19"
+	// Longer than the time archiveBlob gets, so a claim outlives the work and a crashed parent's claims still expire.
+	archiveClaimTTL = 6 * time.Minute
 )
 
 type archiveRow struct {
@@ -145,12 +149,36 @@ func writeArchiveDict(ctx context.Context, dir string, kind int16) (archiveDict,
 	return dict, nil
 }
 
+// claimArchiveRow stops parents sharing a database from compressing the same row at once. It reports false when
+// another worker has the row. Without Redis the row is compressed anyway, since doing it twice only wastes work.
+func claimArchiveRow(ctx context.Context, row archiveRow) (release func(), ok bool) {
+	client, err := db.Redis()
+	if err != nil {
+		return func() {}, true
+	}
+	key := fmt.Sprintf("store:archive:%x:%d", row.profileID, row.kind)
+	claimed, err := client.SetNX(ctx, key, 1, archiveClaimTTL).Result()
+	if err != nil {
+		return func() {}, true
+	}
+	if !claimed {
+		return nil, false
+	}
+	return func() { client.Del(context.WithoutCancel(ctx), key) }, true
+}
+
 func archiveBlob(ctx context.Context, row archiveRow, dicts map[int16]archiveDict) error {
 	dict := dicts[row.kind]
 	// A kind that gets a dictionary waits for its first one, or its rows would finish without it.
 	if isDictKind(row.kind) && dict.path == "" {
 		return nil
 	}
+
+	release, ok := claimArchiveRow(ctx, row)
+	if !ok {
+		return nil
+	}
+	defer release()
 
 	var codec int32
 	var hash int64
@@ -159,8 +187,9 @@ func archiveBlob(ctx context.Context, row archiveRow, dicts map[int16]archiveDic
 	if pool == nil {
 		return errors.New("store: Postgres is unavailable")
 	}
-	err := pool.QueryRow(ctx, `SELECT codec, hash, data FROM blobs WHERE profile_id = $1 AND kind = $2`,
-		row.profileID, row.kind).Scan(&codec, &hash, &data)
+	// The level check skips a row another worker finished after this batch was listed.
+	err := pool.QueryRow(ctx, `SELECT codec, hash, data FROM blobs WHERE profile_id = $1 AND kind = $2 AND level < $3`,
+		row.profileID, row.kind, archiveLevel).Scan(&codec, &hash, &data)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
