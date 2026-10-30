@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -50,8 +51,18 @@ func latest(a, b time.Time) time.Time {
 	return b
 }
 
-// encodeValues packs a record: per value, uvarint stat id, zigzag varint value, uvarint seconds it is older than
-// seenAt.
+// Value records start with valueRecordMarker, which the older format can't (its first byte was a stat id, never 0),
+// then a byte saying whether the rest is zstd. Inside: uvarint count, per value the uvarint difference from the
+// previous stat id (sorted) and the zigzag varint value, then uvarint count of values older than seenAt, per value
+// the uvarint difference from the previous such index and uvarint seconds. Nearly every value is current, and ids
+// are close together, so this is about 45% smaller than id, value, age per value.
+const (
+	valueRecordMarker byte = 0
+	valuesPlain       byte = 0
+	valuesCompressed  byte = 1
+)
+
+// encodeValues packs a record for storage. Parent only.
 func encodeValues(ctx context.Context, values valueSet, seenAt time.Time) ([]byte, error) {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -62,16 +73,42 @@ func encodeValues(ctx context.Context, values valueSet, seenAt time.Time) ([]byt
 		return nil, err
 	}
 
-	out := make([]byte, 0, len(values)*6)
-	for key, v := range values {
-		out = binary.AppendUvarint(out, uint64(ids[key]))
-		out = binary.AppendVarint(out, v.value)
-		out = binary.AppendUvarint(out, uint64(max(0, seenAt.Sub(v.updatedAt)/time.Second)))
+	slices.SortFunc(keys, func(a, b string) int { return int(ids[a] - ids[b]) })
+
+	body := make([]byte, 0, len(values)*4)
+	body = binary.AppendUvarint(body, uint64(len(keys)))
+	var previous int32
+	var ages []uint64
+	var ageIndexes []int
+	for i, key := range keys {
+		body = binary.AppendUvarint(body, uint64(ids[key]-previous))
+		body = binary.AppendVarint(body, values[key].value)
+		previous = ids[key]
+		if age := uint64(max(0, seenAt.Sub(values[key].updatedAt)/time.Second)); age > 0 {
+			ages = append(ages, age)
+			ageIndexes = append(ageIndexes, i)
+		}
 	}
-	return out, nil
+	body = binary.AppendUvarint(body, uint64(len(ages)))
+	previousIndex := 0
+	for i, age := range ages {
+		body = binary.AppendUvarint(body, uint64(ageIndexes[i]-previousIndex))
+		body = binary.AppendUvarint(body, age)
+		previousIndex = ageIndexes[i]
+	}
+
+	out := []byte{valueRecordMarker, valuesPlain}
+	if _, compressed := compress(0, body); len(compressed) < len(body) {
+		out[1] = valuesCompressed
+		return append(out, compressed...), nil
+	}
+	return append(out, body...), nil
 }
 
 func decodeValues(ctx context.Context, data []byte, seenAt time.Time) (valueSet, error) {
+	if len(data) >= 2 && data[0] == valueRecordMarker {
+		return decodeValueRecord(ctx, data[1], data[2:], seenAt)
+	}
 	out := valueSet{}
 	for len(data) > 0 {
 		id, n := binary.Uvarint(data)
@@ -211,3 +248,68 @@ func StatKeys(ctx context.Context) ([]string, error) {
 // isCoopKey and isGardenKey split a profile record between the two responses that fill it.
 func isCoopKey(key string) bool   { return strings.HasPrefix(key, "coop_collection:") }
 func isGardenKey(key string) bool { return strings.HasPrefix(key, "garden:") }
+
+func decodeValueRecord(ctx context.Context, format byte, body []byte, seenAt time.Time) (valueSet, error) {
+	if format == valuesCompressed {
+		var err error
+		if body, err = decompress(ctx, 0, body); err != nil {
+			return nil, err
+		}
+	}
+	bad := errors.New("store: bad value record")
+	next := func() (uint64, bool) {
+		value, n := binary.Uvarint(body)
+		if n <= 0 {
+			return 0, false
+		}
+		body = body[n:]
+		return value, true
+	}
+
+	count, ok := next()
+	if !ok || count > uint64(len(body)) {
+		return nil, bad
+	}
+	keys := make([]string, count)
+	out := make(valueSet, count)
+	var id uint64
+	for i := range keys {
+		delta, ok := next()
+		if !ok {
+			return nil, bad
+		}
+		id += delta
+		value, n := binary.Varint(body)
+		if n <= 0 {
+			return nil, bad
+		}
+		body = body[n:]
+		key, err := statKeyName(ctx, int32(id))
+		if err != nil {
+			return nil, err
+		}
+		keys[i] = key
+		out[key] = statValue{value: value, updatedAt: seenAt}
+	}
+
+	aged, ok := next()
+	if !ok {
+		return nil, bad
+	}
+	index := uint64(0)
+	for range aged {
+		delta, ok := next()
+		if !ok {
+			return nil, bad
+		}
+		age, ok := next()
+		index += delta
+		if !ok || index >= count {
+			return nil, bad
+		}
+		value := out[keys[index]]
+		value.updatedAt = seenAt.Add(-time.Duration(age) * time.Second)
+		out[keys[index]] = value
+	}
+	return out, nil
+}

@@ -63,7 +63,7 @@ ARG SOURCE_COMMIT=""
 #   git             Runtime NotEnoughUpdates-REPO management over HTTPS
 #   openssh-client  Same over SSH (git@github.com remotes)
 #   tzdata          Correct timezone handling in Fiber logs and Minecraft event schedules
-#   zstd            Trains the Postgres store's compression dictionaries (better than the Go fallback)
+#   zstd            Trains the Postgres store's dictionaries and recompresses its blobs at level 19
 RUN apk --no-cache add ca-certificates git openssh-client tini tzdata zstd
 
 WORKDIR /app

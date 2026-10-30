@@ -68,17 +68,7 @@ func Pack(body []byte) ([]byte, error) {
 	}
 	json = append(json, body[last:]...)
 
-	size := binary.MaxVarintLen64 + len(json)
-	for _, payload := range payloads {
-		size += binary.MaxVarintLen64 + len(payload)
-	}
-	out := make([]byte, 0, size)
-	out = binary.AppendUvarint(out, uint64(len(payloads)))
-	for _, payload := range payloads {
-		out = binary.AppendUvarint(out, uint64(len(payload)))
-		out = append(out, payload...)
-	}
-	return append(out, json...), nil
+	return buildContainer(payloads, json), nil
 }
 
 func appendRawContainer(out, body []byte) []byte {
@@ -140,30 +130,52 @@ func appendBase64(out, data []byte, marker byte) []byte {
 	return out
 }
 
-// Unpack rebuilds the JSON body from a container. Payloads are re-gzipped at gzipLevel; the bytes differ from what
-// Hypixel sent, but every gzip reader gets back the same NBT.
-func Unpack(container []byte, gzipLevel int) ([]byte, error) {
+// containerParts splits a container into its payloads and JSON. Both point into container.
+func containerParts(container []byte) ([][]byte, []byte, error) {
 	count, n := binary.Uvarint(container)
 	if n <= 0 {
-		return nil, errors.New("store: bad container header")
+		return nil, nil, errors.New("store: bad container header")
 	}
 	rest := container[n:]
-
-	payloads := make([][]byte, 0, count)
-	encodedSize := 0
+	var payloads [][]byte
 	for range count {
 		length, n := binary.Uvarint(rest)
 		if n <= 0 || uint64(len(rest)-n) < length {
-			return nil, errors.New("store: truncated container payload")
+			return nil, nil, errors.New("store: truncated container payload")
 		}
-		payload := rest[n : n+int(length)]
-		payloads = append(payloads, payload)
-		encodedSize += base64.StdEncoding.EncodedLen(len(payload)/2 + 64)
+		payloads = append(payloads, rest[n:n+int(length)])
 		rest = rest[n+int(length):]
 	}
-	json := rest
-	if count == 0 {
+	return payloads, rest, nil
+}
+
+func buildContainer(payloads [][]byte, json []byte) []byte {
+	size := binary.MaxVarintLen64 + len(json)
+	for _, payload := range payloads {
+		size += binary.MaxVarintLen64 + len(payload)
+	}
+	out := make([]byte, 0, size)
+	out = binary.AppendUvarint(out, uint64(len(payloads)))
+	for _, payload := range payloads {
+		out = binary.AppendUvarint(out, uint64(len(payload)))
+		out = append(out, payload...)
+	}
+	return append(out, json...)
+}
+
+// Unpack rebuilds the JSON body from a container. Payloads are re-gzipped at gzipLevel; the bytes differ from what
+// Hypixel sent, but every gzip reader gets back the same NBT.
+func Unpack(container []byte, gzipLevel int) ([]byte, error) {
+	payloads, json, err := containerParts(container)
+	if err != nil {
+		return nil, err
+	}
+	if len(payloads) == 0 {
 		return json, nil
+	}
+	encodedSize := 0
+	for _, payload := range payloads {
+		encodedSize += base64.StdEncoding.EncodedLen(len(payload)/2 + 64)
 	}
 
 	out := make([]byte, 0, len(json)+encodedSize)

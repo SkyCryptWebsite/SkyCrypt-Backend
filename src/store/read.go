@@ -162,6 +162,9 @@ func loadBody(ctx context.Context, codec int32, data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if packed, err = restoreTextures(ctx, packed); err != nil {
+		return nil, err
+	}
 	return Unpack(packed, rebuildGzipLevel)
 }
 
@@ -173,13 +176,14 @@ func LoadPlayer(ctx context.Context, uuidText string) ([]byte, time.Time, bool) 
 		return nil, time.Time{}, false
 	}
 
+	var codec int32
 	var data []byte
 	var fetchedAt *time.Time
-	err = pool.QueryRow(ctx, `SELECT player_data, player_fetched_at FROM players WHERE uuid = $1`, uuid).Scan(&data, &fetchedAt)
+	err = pool.QueryRow(ctx, `SELECT player_codec, player_data, player_fetched_at FROM players WHERE uuid = $1`, uuid).Scan(&codec, &data, &fetchedAt)
 	if err != nil || data == nil || fetchedAt == nil {
 		return nil, time.Time{}, false
 	}
-	body, err := decompress(ctx, 0, data)
+	body, err := decompress(ctx, codec, data)
 	if err != nil {
 		return nil, time.Time{}, false
 	}

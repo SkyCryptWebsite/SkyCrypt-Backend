@@ -18,6 +18,11 @@ import (
 // players, a 2 MB dictionary made profile bundles 45% smaller than plain zstd at the same level; 4 MB was worse.
 const (
 	dictSize = 2 << 20
+	// A trimmed player is a few hundred bytes. 32 KB made them 67% smaller; a bigger one has nothing more to learn.
+	playerDictSize = 32 << 10
+	// So many are needed to fill even that dictionary.
+	firstPlayerDictMinRows = 2000
+	trainPlayerRows        = 20000
 
 	// The first dictionary needs enough variety to be useful; later ones replace it as Hypixel adds items.
 	firstDictMinBlobs = 300
@@ -61,10 +66,16 @@ func maybeTrainDict(ctx context.Context, kind int16) error {
 	}
 
 	var blobs int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM blobs WHERE kind = $1 AND bytes > 0`, kind).Scan(&blobs); err != nil {
+	firstMin, size := firstDictMinBlobs, dictSize
+	countRow := pool.QueryRow(ctx, `SELECT count(*) FROM blobs WHERE kind = $1 AND bytes > 0`, kind)
+	if kind == kindPlayer {
+		firstMin, size = firstPlayerDictMinRows, playerDictSize
+		countRow = pool.QueryRow(ctx, `SELECT count(*) FROM players WHERE player_data IS NOT NULL`)
+	}
+	if err := countRow.Scan(&blobs); err != nil {
 		return err
 	}
-	if (!hasDict && blobs < firstDictMinBlobs) || (hasDict && blobs < retrainMinBlobs) {
+	if (!hasDict && blobs < firstMin) || (hasDict && blobs < retrainMinBlobs) {
 		return nil
 	}
 
@@ -78,7 +89,7 @@ func maybeTrainDict(ctx context.Context, kind int16) error {
 		return err
 	}
 	start := time.Now()
-	trained, err := trainDict(samples, id)
+	trained, err := trainDict(samples, id, size)
 	if err != nil {
 		return err
 	}
@@ -96,8 +107,11 @@ func maybeTrainDict(ctx context.Context, kind int16) error {
 // dictSamples returns random stored blobs of kind, unpacked to what gets compressed and cut into chunks. Both
 // trainers only look at the start of each sample, so chunks let them see whole bundles.
 func dictSamples(ctx context.Context, kind int16) ([][]byte, error) {
-	rows, err := postgres().Query(ctx,
-		`SELECT codec, data FROM blobs WHERE kind = $1 AND bytes > 0 ORDER BY random() LIMIT $2`, kind, trainSampleRows)
+	query, args := `SELECT codec, data FROM blobs WHERE kind = $1 AND bytes > 0 ORDER BY random() LIMIT $2`, []any{kind, trainSampleRows}
+	if kind == kindPlayer {
+		query, args = `SELECT player_codec, player_data FROM players WHERE player_data IS NOT NULL ORDER BY random() LIMIT $1`, []any{trainPlayerRows}
+	}
+	rows, err := postgres().Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -125,18 +139,18 @@ func dictSamples(ctx context.Context, kind int16) ([][]byte, error) {
 
 // trainDict uses the zstd command when it is installed, which made dictionaries about 10% better than the Go
 // builder in the same measurement, and the Go builder otherwise.
-func trainDict(samples [][]byte, id int32) ([]byte, error) {
+func trainDict(samples [][]byte, id int32, size int) ([]byte, error) {
 	if _, err := exec.LookPath("zstd"); err == nil {
-		if trained, err := trainWithZstdCommand(samples, id); err == nil {
+		if trained, err := trainWithZstdCommand(samples, id, size); err == nil {
 			return trained, nil
 		} else {
 			fmt.Printf("[STORE] zstd --train failed, using the Go builder: %v\n", err)
 		}
 	}
-	return dict.BuildZstdDict(samples, dict.Options{MaxDictSize: dictSize, HashBytes: 6, ZstdDictID: uint32(id)})
+	return dict.BuildZstdDict(samples, dict.Options{MaxDictSize: size, HashBytes: 6, ZstdDictID: uint32(id)})
 }
 
-func trainWithZstdCommand(samples [][]byte, id int32) ([]byte, error) {
+func trainWithZstdCommand(samples [][]byte, id int32, size int) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "skycrypt-dict")
 	if err != nil {
 		return nil, err
@@ -155,7 +169,7 @@ func trainWithZstdCommand(samples [][]byte, id int32) ([]byte, error) {
 
 	out := filepath.Join(dir, "dict")
 	cmd := exec.Command("zstd", "--train", "-q", "-r", sampleDir, "-o", out,
-		"--maxdict="+strconv.Itoa(dictSize), "--dictID="+strconv.Itoa(int(id)))
+		"--maxdict="+strconv.Itoa(size), "--dictID="+strconv.Itoa(int(id)))
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("%w: %s", err, output)
 	}

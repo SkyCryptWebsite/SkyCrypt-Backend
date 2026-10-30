@@ -101,7 +101,7 @@ func evictToBudget(ctx context.Context, pool *pgxpool.Pool) error {
 		(SELECT coalesce(sum(bytes), 0) FROM blobs),
 		pg_total_relation_size('players') + pg_total_relation_size('profiles') + pg_total_relation_size('profile_members')
 			+ pg_total_relation_size('member_values') + pg_total_relation_size('profile_values') + pg_total_relation_size('stat_keys')
-			+ pg_total_relation_size('resources') + pg_total_relation_size('codec_dicts'),
+			+ pg_total_relation_size('resources') + pg_total_relation_size('codec_dicts') + pg_total_relation_size('texture_strings'),
 		pg_database_size(current_database())`).Scan(&stored, &light, &database)
 	if err != nil {
 		return err

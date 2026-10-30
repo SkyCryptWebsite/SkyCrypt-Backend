@@ -233,7 +233,7 @@ func TestStoreRealSample(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			trained, err := trainDict(samples, 1)
+			trained, err := trainDict(samples, 1, dictSize)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -275,7 +275,7 @@ func TestStoreRealSample(t *testing.T) {
 }
 
 // assertSameProfiles checks that a rebuilt response holds the same profiles, the same requester fields and the same
-// JSON and NBT content as the original.
+// JSON and NBT content as the original, apart from droppedNBTTags.
 func assertSameProfiles(t *testing.T, original, rebuilt []byte) {
 	t.Helper()
 	var a, b struct {
@@ -304,11 +304,26 @@ func assertSameProfiles(t *testing.T, original, rebuilt []byte) {
 				isSelected(b.Profiles[i]), idA, nameA, isSelected(a.Profiles[i]))
 		}
 		packedA, _ := Pack(objectA)
+		packedA = withoutDroppedTags(t, packedA)
 		packedB, _ := Pack(objectB)
 		if !SameContent(packedA, packedB) {
 			t.Fatalf("profile %s changed", idA)
 		}
 	}
+}
+
+func withoutDroppedTags(t *testing.T, container []byte) []byte {
+	t.Helper()
+	payloads, text, err := containerParts(container)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, payload := range payloads {
+		if dropped, err := dropTags(payload, droppedNBTTags); err == nil {
+			payloads[i] = dropped
+		}
+	}
+	return buildContainer(payloads, text)
 }
 
 func mustUUID(t *testing.T, value string) [16]byte {

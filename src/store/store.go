@@ -66,6 +66,7 @@ func Init(ctx context.Context) error {
 		go runLegacyImport()
 		go runEviction()
 		go runDictTraining()
+		go runArchive()
 		warnAboutEviction(ctx)
 		go runStatsBackfill()
 		go runLeaderboards()

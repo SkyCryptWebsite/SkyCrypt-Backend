@@ -487,7 +487,7 @@ func (b blobWrite) queue(batch *pgx.Batch) {
 		batch.Queue(`INSERT INTO blobs (profile_id, kind, codec, hash, fetched_at, bytes, data) VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT (profile_id, kind) DO UPDATE SET
 				codec = excluded.codec, hash = excluded.hash, fetched_at = excluded.fetched_at,
-				bytes = excluded.bytes, data = excluded.data, accessed_on = current_date
+				bytes = excluded.bytes, data = excluded.data, accessed_on = current_date, level = 0
 			WHERE blobs.fetched_at < excluded.fetched_at`,
 			b.profileID, b.kind, b.codec, b.hash, b.fetchedAt, b.bytes, b.data)
 		return
@@ -500,7 +500,7 @@ func (b blobWrite) queue(batch *pgx.Batch) {
 }
 
 // decideBlob compares new content with what is stored and compresses it only when it will be written.
-func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte, hash int64, fetchedAt time.Time) blobWrite {
+func decideBlob(ctx context.Context, stored *blobState, profileID [16]byte, kind int16, packed []byte, hash int64, fetchedAt time.Time) blobWrite {
 	write := blobWrite{profileID: profileID, kind: kind, fetchedAt: fetchedAt, hash: hash}
 	if stored != nil && (stored.hash == hash || fetchedAt.Sub(stored.fetchedAt) < blobRewriteInterval) {
 		return write
@@ -508,7 +508,7 @@ func decideBlob(stored *blobState, profileID [16]byte, kind int16, packed []byte
 	write.replace = true
 	write.bytes = len(packed)
 	if len(packed) > 0 {
-		write.codec, write.data = compress(kind, packed)
+		write.codec, write.data = compress(kind, internTextures(ctx, packed))
 		write.bytes = len(write.data)
 	} else {
 		write.data = []byte{}
@@ -528,7 +528,7 @@ func compressProfiles(ctx context.Context, profiles []profileWrite, fetchedAt ti
 
 	writes := make([]blobWrite, len(profiles))
 	for i, p := range profiles {
-		writes[i] = decideBlob(states[p.id], p.id, kindProfile, p.packed, p.hash, fetchedAt)
+		writes[i] = decideBlob(ctx, states[p.id], p.id, kindProfile, p.packed, p.hash, fetchedAt)
 	}
 	return writes, nil
 }
@@ -571,7 +571,7 @@ func storeBlob(ctx context.Context, profileText string, kind int16, body []byte,
 	if err != nil {
 		return err
 	}
-	write := decideBlob(states[profileID], profileID, kind, packed, hash, fetchedAt)
+	write := decideBlob(ctx, states[profileID], profileID, kind, packed, hash, fetchedAt)
 
 	batch := &pgx.Batch{}
 	write.queue(batch)
@@ -587,13 +587,13 @@ func storePlayer(ctx context.Context, uuidText string, body []byte, fetchedAt ti
 	if err != nil {
 		return nil
 	}
-	_, data := compress(0, trimmed)
+	codec, data := compress(kindPlayer, trimmed)
 
-	_, err = postgres().Exec(ctx, `INSERT INTO players (uuid, player_data, player_fetched_at) VALUES ($1, $2, $3)
-		ON CONFLICT (uuid) DO UPDATE SET player_data = excluded.player_data, player_fetched_at = excluded.player_fetched_at,
-			touched_at = now()
+	_, err = postgres().Exec(ctx, `INSERT INTO players (uuid, player_codec, player_data, player_fetched_at) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (uuid) DO UPDATE SET player_codec = excluded.player_codec, player_data = excluded.player_data,
+			player_fetched_at = excluded.player_fetched_at, touched_at = now()
 		WHERE players.player_fetched_at IS NULL OR players.player_fetched_at < excluded.player_fetched_at`,
-		uuid, data, fetchedAt)
+		uuid, codec, data, fetchedAt)
 	return err
 }
 

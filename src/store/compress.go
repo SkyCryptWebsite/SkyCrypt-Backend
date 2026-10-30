@@ -18,10 +18,12 @@ const (
 	kindProfile int16 = 1
 	kindMuseum  int16 = 2
 	kindGarden  int16 = 3
+	// Trimmed players, which live in players.player_data rather than blobs.
+	kindPlayer int16 = 4
 )
 
-// Kinds that get a trained dictionary. Gardens and trimmed players are too small to need one.
-var dictKinds = []int16{kindProfile, kindMuseum}
+// Kinds that get a trained dictionary. Gardens are too small to need one.
+var dictKinds = []int16{kindProfile, kindMuseum, kindPlayer}
 
 // encoderSet compresses one kind at zstd's better level. The best level is about 7% smaller, but each of its
 // encoders holds about 34 MB of match tables whatever the input, which made the store's encoders most of the
