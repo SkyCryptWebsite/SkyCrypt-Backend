@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -223,6 +225,78 @@ func TestLeaderboardsKeepOnlyTheTop(t *testing.T) {
 	}
 	if got := rankedUUIDs(board(t, ctx, "skyblock_level", "all")); !equal(got, []string{bob, carol, alice}) {
 		t.Fatalf("rebuilt board = %v", got)
+	}
+}
+
+func TestLeaderboardsShareRanks(t *testing.T) {
+	ctx := testDatabase(t)
+	testRedis(t, ctx)
+
+	carol := "33333333333333333333333333333333"
+	dave := "44444444444444444444444444444444"
+	// Dungeon times rank lower first, so the tie is on a negated score.
+	member := func(xp, time int) string {
+		return fmt.Sprintf(`{"leveling":{"experience":%d},
+			"dungeons":{"dungeon_types":{"catacombs":{"experience":100,"fastest_time_s_plus":{"7":%d}}}}}`, xp, time)
+	}
+	members := map[string]string{
+		alice: member(300, 200000),
+		bob:   member(300, 200000),
+		carol: member(300, 100000),
+		dave:  member(100, 300000),
+	}
+	body := `{"success":true,"profiles":[` + profileJSON(coop, "Apple", "", true, members) + `]}`
+	if err := storeProfiles(ctx, alice, []byte(body), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	ranks := func(key string, offset, limit int64) []int64 {
+		t.Helper()
+		page, err := LeaderboardPage(ctx, key, "all", offset, limit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []int64{}
+		for _, entry := range page.Entries {
+			out = append(out, entry.Rank)
+		}
+		return out
+	}
+	for _, c := range []struct {
+		key           string
+		offset, limit int64
+		want          []int64
+	}{
+		{"skyblock_level", 0, 10, []int64{1, 1, 1, 4}},
+		{"skyblock_level", 1, 1, []int64{1}}, // tied with the page before
+		{"skyblock_level", 2, 2, []int64{1, 4}},
+		{"skyblock_level", 3, 1, []int64{4}},
+		{"dungeons:catacombs:7:fastest_s_plus", 0, 10, []int64{1, 2, 2, 4}},
+		{"dungeons:catacombs:7:fastest_s_plus", 2, 2, []int64{2, 4}},
+	} {
+		if got := ranks(c.key, c.offset, c.limit); !slices.Equal(got, c.want) {
+			t.Errorf("%s from %d = %v, want %v", c.key, c.offset, got, c.want)
+		}
+	}
+
+	// A player's ranks match the board, while their position still says which page they are on.
+	positions := map[int64]bool{}
+	for _, uuid := range []string{alice, bob, carol} {
+		profiles, err := PlayerRanks(ctx, uuid)
+		if err != nil || len(profiles) != 1 {
+			t.Fatalf("player ranks: %+v %v", profiles, err)
+		}
+		for _, r := range profiles[0].Ranks {
+			if r.Key == "skyblock_level" {
+				if r.Rank != 1 || r.ModeRank != 1 {
+					t.Errorf("%s: rank %d, mode rank %d, want 1 and 1", uuid, r.Rank, r.ModeRank)
+				}
+				positions[r.Position] = true
+			}
+		}
+	}
+	if len(positions) != 3 || !positions[1] || !positions[2] || !positions[3] {
+		t.Errorf("positions = %v, want 1, 2 and 3", positions)
 	}
 }
 

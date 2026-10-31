@@ -29,7 +29,7 @@ type LeaderboardPlayer struct {
 }
 
 type LeaderboardEntry struct {
-	Rank int64 `json:"rank" example:"1" doc:"Position on the board that was asked for, starting at 1."`
+	Rank int64 `json:"rank" example:"1" doc:"Rank on the board that was asked for, starting at 1. Entries with the same raw value share a rank and the next one skips ahead: 1, 1, 1, 4."`
 	// For a player on a profile; for profile boards these are empty and Members lists the profile's players.
 	UUID      string              `json:"uuid,omitempty" example:"debb9e1f6dcb4f5b83c291fd5388bb56"`
 	Username  string              `json:"username,omitempty" example:"tiltedhoney"`
@@ -57,8 +57,9 @@ type LeaderboardPage struct {
 type LeaderboardRank struct {
 	Leaderboard LeaderboardInfo `json:"leaderboard"`
 	Category    string          `json:"category" example:"skills"`
-	Rank        int64           `json:"rank" example:"3" doc:"Position among all game modes."`
-	ModeRank    int64           `json:"mode_rank" example:"3" doc:"Position among profiles of the same game mode."`
+	Rank        int64           `json:"rank" example:"3" doc:"Rank among all game modes. Entries with the same raw value share a rank."`
+	ModeRank    int64           `json:"mode_rank" example:"3" doc:"Rank among profiles of the same game mode. Entries with the same raw value share a rank."`
+	Position    int64           `json:"position" example:"5" doc:"Place on the all modes board, unique even among tied entries. Use it to find the page the entry is on."`
 	Value       float64         `json:"value" example:"60"`
 	Raw         int64           `json:"raw" example:"111672425"`
 	UpdatedAt   time.Time       `json:"updated_at"`

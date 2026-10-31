@@ -160,7 +160,7 @@ func registerLeaderboards(humaAPI huma.API) {
 					continue
 				}
 				ranks = append(ranks, models.LeaderboardRank{
-					Leaderboard: leaderboardInfo(info), Category: info.Category, Rank: r.Rank, ModeRank: r.ModeRank,
+					Leaderboard: leaderboardInfo(info), Category: info.Category, Rank: r.Rank, ModeRank: r.ModeRank, Position: r.Position,
 					Value: boardValue(info, r.Raw), Raw: r.Raw, UpdatedAt: r.UpdatedAt,
 					Outdated: r.UpdatedAt.Before(r.SeenAt),
 				})
