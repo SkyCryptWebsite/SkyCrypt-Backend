@@ -545,6 +545,12 @@ type Page struct {
 	Entries []Entry
 }
 
+// scoreAbove is the ZCOUNT bound for scores strictly above score. One more than their count is an entry's rank, which
+// entries with the same score share.
+func scoreAbove(score float64) string {
+	return "(" + strconv.FormatFloat(score, 'f', -1, 64)
+}
+
 // LeaderboardPage returns entries offset to offset+limit-1 of a board, best first.
 func LeaderboardPage(ctx context.Context, key, mode string, offset, limit int64) (Page, error) {
 	if !isMode(mode) {
@@ -567,10 +573,24 @@ func LeaderboardPage(ctx context.Context, key, mode string, offset, limit int64)
 	page := Page{Total: total.Val(), Ready: ready.Val() == readyValue()}
 	entities := make([]string, 0, len(ranked.Val()))
 	scores := map[string]float64{}
-	for _, z := range ranked.Val() {
+	ranks := make([]int64, len(ranked.Val()))
+	for i, z := range ranked.Val() {
 		entity := fmt.Sprint(z.Member)
 		entities = append(entities, entity)
 		scores[entity] = z.Score
+		switch {
+		case i > 0 && z.Score == ranked.Val()[i-1].Score:
+			ranks[i] = ranks[i-1]
+		case i > 0 || offset == 0:
+			ranks[i] = offset + int64(i) + 1
+		default:
+			// The first entry of a page may be tied with entries on the page before it.
+			above, err := client.ZCount(ctx, board, scoreAbove(z.Score), "+inf").Result()
+			if err != nil {
+				return Page{}, err
+			}
+			ranks[i] = above + 1
+		}
 	}
 
 	details, err := entryDetails(ctx, key, entities)
@@ -583,7 +603,7 @@ func LeaderboardPage(ctx context.Context, key, mode string, offset, limit int64)
 			// Purged since it was ranked; the next rebuild drops it.
 			continue
 		}
-		entry.Rank = offset + int64(i) + 1
+		entry.Rank = ranks[i]
 		entry.Raw = int64(math.Abs(scores[entity]))
 		page.Entries = append(page.Entries, entry)
 	}
@@ -740,8 +760,9 @@ type ProfileRanks struct {
 type StatRank struct {
 	Key       string
 	Profile   bool  // ranked as the whole profile (coop collections, garden)
-	Rank      int64 // among all modes
+	Rank      int64 // among all modes; tied entries share it
 	ModeRank  int64 // within the profile's game mode
+	Position  int64 // place on the all modes board, unique even among tied entries
 	Raw       int64
 	UpdatedAt time.Time
 	// SeenAt is when the record this value is in was last written; UpdatedAt before it means the value is outdated.
@@ -809,11 +830,12 @@ func PlayerRanks(ctx context.Context, uuidText string) ([]ProfileRanks, error) {
 	}
 
 	type queued struct {
-		key       string
-		profile   bool
-		all, mode *redis.IntCmd
-		value     statValue
-		seenAt    time.Time
+		key                 string
+		profile             bool
+		all, mode           *redis.IntCmd
+		aboveAll, aboveMode *redis.IntCmd
+		value               statValue
+		seenAt              time.Time
 	}
 	pipe := client.Pipeline()
 	commands := make([][]queued, len(memberships))
@@ -825,10 +847,13 @@ func PlayerRanks(ctx context.Context, uuidText string) ([]ProfileRanks, error) {
 			seenAt  time.Time
 		}{{m.member, memberEntity(m.memberID), false, m.profile.SeenAt}, {m.shared, profileEntity(m.profileID), true, m.sharedSeen}} {
 			for key, value := range side.values {
+				above := scoreAbove(boardScore(key, value.value))
 				commands[i] = append(commands[i], queued{
 					key: key, profile: side.profile, value: value, seenAt: side.seenAt,
-					all:  pipe.ZRevRank(ctx, boardKey(key, "all"), side.entity),
-					mode: pipe.ZRevRank(ctx, boardKey(key, m.mode), side.entity),
+					all:       pipe.ZRevRank(ctx, boardKey(key, "all"), side.entity),
+					mode:      pipe.ZRevRank(ctx, boardKey(key, m.mode), side.entity),
+					aboveAll:  pipe.ZCount(ctx, boardKey(key, "all"), above, "+inf"),
+					aboveMode: pipe.ZCount(ctx, boardKey(key, m.mode), above, "+inf"),
 				})
 			}
 		}
@@ -845,8 +870,8 @@ func PlayerRanks(ctx context.Context, uuidText string) ([]ProfileRanks, error) {
 				continue
 			}
 			profile.Ranks = append(profile.Ranks, StatRank{
-				Key: c.key, Profile: c.profile, Rank: c.all.Val() + 1, ModeRank: c.mode.Val() + 1,
-				Raw: c.value.value, UpdatedAt: c.value.updatedAt, SeenAt: c.seenAt,
+				Key: c.key, Profile: c.profile, Rank: c.aboveAll.Val() + 1, ModeRank: c.aboveMode.Val() + 1,
+				Position: c.all.Val() + 1, Raw: c.value.value, UpdatedAt: c.value.updatedAt, SeenAt: c.seenAt,
 			})
 		}
 		out = append(out, profile)
