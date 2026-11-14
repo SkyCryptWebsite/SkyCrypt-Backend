@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"skycrypt/src/api"
 	"skycrypt/src/db"
 	"skycrypt/src/forensics"
@@ -77,23 +78,32 @@ func cachedJSON(ctx context.Context, cacheKey responseCacheHandle) *jsonOutput {
 		ContentType:  fiber.MIMEApplicationJSONCharsetUTF8,
 		CacheControl: responseCacheControl(cacheKey.endpoint),
 		Cache:        "redis",
-		ETag:         cached.etag,
 	}
-	encoding := requestEncodingFrom(ctx)
+	if err := cached.sendAs(out, requestEncodingFrom(ctx), cached.body); err != nil {
+		return nil
+	}
+	return out
+}
+
+// sendAs fills out from a cache entry: a 304 for a matching If-None-Match, the stored gzip bytes for a client that
+// accepts them, and otherwise the plain body, which plain returns.
+func (r cachedResponse) sendAs(out *jsonOutput, encoding requestEncoding, plain func() ([]byte, error)) error {
+	out.ETag = r.etag
 	switch {
-	case etagMatches(encoding.ifNoneMatch, cached.etag):
+	case etagMatches(encoding.ifNoneMatch, r.etag):
 		out.Status = fiber.StatusNotModified
-	case cached.gzipped != nil && encoding.acceptsGzip:
+		out.Body = nil
+	case r.gzipped != nil && encoding.acceptsGzip:
 		out.ContentEncoding = "gzip"
-		out.Body = cached.gzipped
+		out.Body = r.gzipped
 	default:
-		body, err := cached.body()
+		body, err := plain()
 		if err != nil {
-			return nil
+			return err
 		}
 		out.Body = body
 	}
-	return out
+	return nil
 }
 
 func cacheJSON(ctx context.Context, cacheKey responseCacheHandle, value interface{}, ttlSeconds int) (*jsonOutput, error) {
@@ -102,25 +112,44 @@ func cacheJSON(ctx context.Context, cacheKey responseCacheHandle, value interfac
 		return nil, err
 	}
 
-	cacheBody(ctx, cacheKey, body, ttlSeconds)
-	return jsonBody(ctx, cacheKey, body), nil
+	return jsonBody(ctx, cacheKey, cacheBody(ctx, body, ttlSeconds, cacheKey)), nil
 }
 
-// cacheBody stores a response unless caching is off or it was built from stale fallback data.
-func cacheBody(ctx context.Context, cacheKey responseCacheHandle, body []byte, ttlSeconds int) {
+// builtResponse is a freshly built body, with its cache entry when it was cached. It is shared between the callers
+// of one build and must be treated as read-only.
+type builtResponse struct {
+	body []byte
+	// entry is the zero value when the body wasn't cached.
+	entry cachedResponse
+}
+
+// cacheBody stores a response under every key unless caching is off or it was built from stale fallback data. The
+// body is compressed once, for all keys and for the callers that are waiting for it.
+func cacheBody(ctx context.Context, body []byte, ttlSeconds int, cacheKeys ...responseCacheHandle) *builtResponse {
+	built := &builtResponse{body: body}
 	if !processedResponseCacheEnabled() || api.ServedStale(ctx) {
-		return
+		return built
 	}
-	recordResponseCache(ctx, cacheKey.endpoint, "cold")
+	entry := encodeCachedResponse(body)
+	built.entry, _ = decodeCachedResponse(entry)
+
 	cacheCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	_ = db.SetRawContext(cacheCtx, cacheKey.key, encodeCachedResponse(body), ttlSeconds)
+	for i, cacheKey := range cacheKeys {
+		if i > 0 && cacheKey.key == cacheKeys[0].key {
+			continue
+		}
+		recordResponseCache(ctx, cacheKey.endpoint, "cold")
+		_ = db.SetRawContext(cacheCtx, cacheKey.key, entry, ttlSeconds)
+	}
+	return built
 }
 
 // jsonBody is the output for a freshly built response. ctx decides the cache header, so pass the request's own
-// context.
-func jsonBody(ctx context.Context, cacheKey responseCacheHandle, body []byte) *jsonOutput {
-	out := &jsonOutput{Status: fiber.StatusOK, ContentType: fiber.MIMEApplicationJSONCharsetUTF8, Body: body}
+// context. A response that was cached goes out as its cache entry does on a later hit: the gzip bytes compressed for
+// the cache, with the same ETag, so the compress and etag middlewares don't process the body a second time.
+func jsonBody(ctx context.Context, cacheKey responseCacheHandle, built *builtResponse) *jsonOutput {
+	out := &jsonOutput{Status: fiber.StatusOK, ContentType: fiber.MIMEApplicationJSONCharsetUTF8, Body: built.body}
 	if fetchedAt := api.StaleFetchedAt(ctx); !fetchedAt.IsZero() {
 		out.Stale = fetchedAt.UTC().Format(time.RFC3339)
 	}
@@ -130,6 +159,9 @@ func jsonBody(ctx context.Context, cacheKey responseCacheHandle, body []byte) *j
 	}
 	out.CacheControl = responseCacheControl(cacheKey.endpoint)
 	out.Cache = "miss"
+	if built.entry.gzipped != nil {
+		_ = built.entry.sendAs(out, requestEncodingFrom(ctx), func() ([]byte, error) { return built.body, nil })
+	}
 	return out
 }
 
@@ -142,12 +174,17 @@ var buildSlots = make(chan struct{}, maxConcurrentBuilds())
 // errServerBusy is a build that waited for a slot until its deadline.
 var errServerBusy = errors.New("the server is busy; try again shortly")
 
-// maxConcurrentBuilds is SKYCRYPT_MAX_BUILDS (default 8): profile builds one process runs at once.
+// maxConcurrentBuilds is SKYCRYPT_MAX_BUILDS: profile builds one process runs at once. The default is 8 for a
+// prefork child, and twice the cores, at least 8, for a process serving alone, whose builds share all cores.
+// GOMAXPROCS is read at package init, before Fiber drops a child to one core, so a child is told apart by IsChild.
 func maxConcurrentBuilds() int {
 	if n, err := strconv.Atoi(os.Getenv("SKYCRYPT_MAX_BUILDS")); err == nil && n > 0 {
 		return n
 	}
-	return 8
+	if fiber.IsChild() {
+		return 8
+	}
+	return max(8, 2*runtime.GOMAXPROCS(0))
 }
 
 // sharedResponseTimeout bounds a shared build, which no single caller can cancel.
@@ -157,8 +194,8 @@ const sharedResponseTimeout = 60 * time.Second
 // shared on Discord doesn't make every viewer repeat the same work. The body is cached once, under cacheKey and
 // rawCacheKey (the request as given, before resolving the player), and returned to every caller, who then sends it
 // with jsonBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
-func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) ([]byte, error) {
-	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) ([]byte, error) {
+func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) (*builtResponse, error) {
+	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) (*builtResponse, error) {
 		select {
 		case buildSlots <- struct{}{}:
 			defer func() { <-buildSlots }()
@@ -169,11 +206,7 @@ func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheK
 		if err != nil {
 			return nil, err
 		}
-		cacheBody(flightCtx, cacheKey, body, ttlSeconds)
-		if rawCacheKey.key != cacheKey.key {
-			cacheBody(flightCtx, rawCacheKey, body, ttlSeconds)
-		}
-		return body, nil
+		return cacheBody(flightCtx, body, ttlSeconds, cacheKey, rawCacheKey), nil
 	})
 }
 

@@ -16,6 +16,12 @@ var skillToolCategories = map[string]map[string]bool{
 	"FISHING":  {"FISHING_ROD": true},
 }
 
+// isSkillGearCategory reports whether a museum category belongs to a skill GetSkillGear is called for.
+func isSkillGearCategory(museumCategory string) bool {
+	_, ok := skillToolCategories[strings.ToUpper(museumCategory)]
+	return ok
+}
+
 var excludedSkillGearCategories = map[string]map[string]bool{
 	"FISHING": {"FISHING_ROD_PART": true},
 }

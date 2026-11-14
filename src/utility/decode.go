@@ -8,7 +8,7 @@ import (
 	"skycrypt/src/models"
 	"sync"
 
-	"github.com/Tnze/go-mc/nbt"
+	"github.com/SkyCryptWebsite/fastnbt"
 	"github.com/klauspost/compress/gzip"
 )
 
@@ -51,10 +51,9 @@ func DecodeInventory(inventoryData *string) (*models.DecodedInventory, error) {
 		return nil, fmt.Errorf("failed to inflate inventory: %w", err)
 	}
 
+	// The decoder copies every string and array it reads, so nothing it returns points into the pooled buffer.
 	var nbtData models.DecodedInventory
-	decoder := nbt.NewDecoder(bytes.NewReader(inflated.Bytes()))
-	_, err = decoder.Decode(&nbtData)
-	if err != nil {
+	if err := fastnbt.Unmarshal(inflated.Bytes(), &nbtData); err != nil {
 		return nil, fmt.Errorf("failed to parse NBT data: %w", err)
 	}
 

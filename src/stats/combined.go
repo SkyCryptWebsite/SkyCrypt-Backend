@@ -3,6 +3,8 @@ package stats
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
 	skyhelpernetworthgo "github.com/SkyCryptWebsite/SkyHelper-Networth-Go"
+	"golang.org/x/sync/errgroup"
 )
 
 func GetCombined(
@@ -85,20 +88,15 @@ func GetCombinedContext(
 		return nil, fmt.Errorf("failed to calculate networth: %v", err)
 	}
 
-	maxInvSize, totalCap := 0, 0
+	totalCap := 0
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
 		if invType == nil {
 			continue
 		}
-		n := len(invType.Items)
-		if n > maxInvSize {
-			maxInvSize = n
-		}
-		totalCap += n
+		totalCap += len(invType.Items)
 	}
 
-	combinedBuf := make([]*skycrypttypes.Item, maxInvSize)
 	processedItems := make(map[string][]models.ProcessedItem, len(specifiedInventories))
 	allItems := make([]models.ProcessedItem, 0, totalCap)
 	skillGearItems := make([]models.ProcessedItem, 0, totalCap)
@@ -129,22 +127,27 @@ func GetCombinedContext(
 	if statsItems.ItemProcessingDebugEnabled() {
 		itemProcessingStats = statsItems.NewItemProcessingStats("combined", mowojang.UUID, profile.ProfileID, enabledPacks)
 	}
+	toProcess := make([]processedInventory, 0, len(specifiedInventories))
 	for inventoryId := range specifiedInventories {
 		invType := decodedItems.Types[inventoryId]
 		if invType == nil || len(invType.Items) == 0 {
 			continue
 		}
-		inventoryData := invType.Items
-
-		buf := combinedBuf[:len(inventoryData)]
-		for i, item := range inventoryData {
-			buf[i] = item.ItemData
-			if buf[i] != nil {
-				buf[i].Price = item.Price
+		items := make([]*skycrypttypes.Item, len(invType.Items))
+		for i, item := range invType.Items {
+			items[i] = item.ItemData
+			if items[i] != nil {
+				items[i].Price = item.Price
 			}
 		}
-
-		processed := statsItems.ProcessItemsWithNEUCacheAndStats(buf, inventoryId, neuItemCache, itemProcessingStats, enabledPacks)
+		toProcess = append(toProcess, processedInventory{id: inventoryId, items: items})
+	}
+	// In a fixed order: which of two equal items the gear sections pick depends on it, and map order changed the
+	// pick, and the response's ETag, from one build to the next.
+	slices.SortFunc(toProcess, func(a, b processedInventory) int { return strings.Compare(a.id, b.id) })
+	processedByInventory := processInventories(toProcess, neuItemCache, itemProcessingStats, enabledPacks)
+	for _, inventory := range processedByInventory {
+		inventoryId, processed := inventory.id, inventory.processed
 
 		if strings.HasPrefix(inventoryId, "loadout_armor_") {
 			setID, part := 0, ""
@@ -174,7 +177,7 @@ func GetCombinedContext(
 
 	processedItems["wardrobe"] = wardrobeSlice
 	processedItems["equipment_wardrobe"] = equipmentWardrobeSlice
-	skillGearItems = append(skillGearItems, statsItems.GetOwnedMuseumItems(museum, enabledPacks)...)
+	skillGearItems = append(skillGearItems, statsItems.GetOwnedMuseumSkillGear(museum, enabledPacks)...)
 
 	itemProcessingDuration := time.Since(timeNow)
 	if itemProcessingStats != nil {
@@ -241,4 +244,46 @@ func memberUsernameMap(members []*models.MemberStats) map[string]string {
 		usernames[member.UUID] = member.Name
 	}
 	return usernames
+}
+
+type processedInventory struct {
+	id        string
+	items     []*skycrypttypes.Item
+	processed []models.ProcessedItem
+}
+
+// processInventories processes each inventory's items, one inventory per core at a time. On one core (a prefork
+// child), or while item processing stats are on, which aren't safe for concurrent use, it runs them one after
+// another with one NEU cache, as before.
+func processInventories(inventories []processedInventory, neuItemCache map[string]models.NEUItem, itemStats *statsItems.ItemProcessingStats, enabledPacks []string) []processedInventory {
+	process := func(inventory *processedInventory, cache map[string]models.NEUItem) {
+		inventory.processed = statsItems.ProcessItemsWithNEUCacheAndStats(inventory.items, inventory.id, cache, itemStats, enabledPacks)
+	}
+
+	if runtime.GOMAXPROCS(0) == 1 || itemStats != nil || len(inventories) < 2 {
+		for i := range inventories {
+			process(&inventories[i], neuItemCache)
+		}
+		return inventories
+	}
+
+	var group errgroup.Group
+	group.SetLimit(runtime.GOMAXPROCS(0))
+	for i := range inventories {
+		group.Go(func() (err error) {
+			// errgroup does not recover: a panic here would kill the process, not just this request. It is raised
+			// again below, on the request's goroutine, where the recover middleware handles it.
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("processing inventory %s: %v", inventories[i].id, r)
+				}
+			}()
+			process(&inventories[i], map[string]models.NEUItem{})
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		panic(err)
+	}
+	return inventories
 }

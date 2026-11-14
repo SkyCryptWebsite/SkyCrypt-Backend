@@ -33,7 +33,9 @@ func TestSharedResponseBuildsOnceForConcurrentCallers(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			bodies[i] = body
+			if body != nil {
+				bodies[i] = body.body
+			}
 		}(i)
 	}
 	time.Sleep(50 * time.Millisecond) // let every caller join the build

@@ -289,11 +289,34 @@ func IndexOf(slice []string, item string) int {
 	return -1
 }
 
+// skinHashes remembers computed hashes: the same few thousand head textures come up on every profile, and each
+// computation decodes base64 and parses JSON. It is cleared when full rather than evicted entry by entry.
+var skinHashes = struct {
+	sync.RWMutex
+	hashes map[string]string
+}{hashes: map[string]string{}}
+
+const maxSkinHashes = 1 << 15
+
 func GetSkinHash(base64String string) string {
 	if base64String == "" {
 		return ""
 	}
-	return computeSkinHash(base64String)
+	skinHashes.RLock()
+	hash, ok := skinHashes.hashes[base64String]
+	skinHashes.RUnlock()
+	if ok {
+		return hash
+	}
+
+	hash = computeSkinHash(base64String)
+	skinHashes.Lock()
+	if len(skinHashes.hashes) >= maxSkinHashes {
+		skinHashes.hashes = make(map[string]string, maxSkinHashes)
+	}
+	skinHashes.hashes[base64String] = hash
+	skinHashes.Unlock()
+	return hash
 }
 
 func computeSkinHash(base64String string) string {
@@ -344,23 +367,45 @@ func Round(value float64, precision int) float64 {
 	return math.Round(value*pow) / pow
 }
 
-var replaceVarRegex = regexp.MustCompile(`\{(\w+)\}`)
-
+// ReplaceVariables replaces each {name} in template, where name is letters, digits and underscores, with the
+// rounded value of that variable; a placeholder with no variable is kept. It scans instead of using a regular
+// expression because pet lore runs it on every line; TestReplaceVariablesMatchesRegex keeps the two in step.
 func ReplaceVariables(template string, variables map[string]float64) string {
 	if !strings.Contains(template, "{") {
 		return template
 	}
-	return replaceVarRegex.ReplaceAllStringFunc(template, func(match string) string {
-		name := strings.Trim(match, "{}")
-
-		value, exists := variables[name]
-		if !exists {
-			return match
+	var out strings.Builder
+	last := 0
+	for i := 0; i < len(template); i++ {
+		if template[i] != '{' {
+			continue
 		}
+		end := i + 1
+		for end < len(template) && isWordChar(template[end]) {
+			end++
+		}
+		if end == i+1 || end >= len(template) || template[end] != '}' {
+			continue
+		}
+		value, exists := variables[template[i+1:end]]
+		if !exists {
+			i = end
+			continue
+		}
+		out.WriteString(template[last:i])
+		out.WriteString(strconv.FormatFloat(value, 'f', 0, 64))
+		last = end + 1
+		i = end
+	}
+	if last == 0 {
+		return template
+	}
+	out.WriteString(template[last:])
+	return out.String()
+}
 
-		// fmt.Printf("Replacing variable %s with value %.2f\n", name, value)
-		return fmt.Sprintf("%.0f", value)
-	})
+func isWordChar(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 func CompareInts(a, b int) int {

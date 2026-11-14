@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
@@ -21,7 +22,7 @@ import (
 	"time"
 
 	skycrypttypes "github.com/SkyCryptWebsite/SkyCrypt-Types"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/gofiber/fiber/v3"
 	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 )
@@ -37,10 +38,19 @@ var hypixelRequestTimeout = 30 * time.Second
 const parsedCacheTTL = 2 * time.Second
 
 var (
-	parsedProfiles = newParsedCache[*models.HypixelProfilesResponse](4)
-	parsedMuseums  = newParsedCache[map[string]*skycrypttypes.Museum](4)
+	parsedProfiles = newParsedCache[*models.HypixelProfilesResponse](parsedCacheEntries())
+	parsedMuseums  = newParsedCache[map[string]*skycrypttypes.Museum](parsedCacheEntries())
 	parseGroup     singleflight.Group
 )
+
+// parsedCacheEntries is 4 for a prefork child, which serves one page load at a time. A process serving alone gets
+// every page load, so it keeps room for a few per core; entries expire after parsedCacheTTL either way.
+func parsedCacheEntries() int {
+	if fiber.IsChild() {
+		return 4
+	}
+	return max(4, 4*runtime.GOMAXPROCS(0))
+}
 
 func newParsedCache[T any](maxEntries int) *localcache.LocalCache[T] {
 	cache := localcache.NewLocalCache[T](maxEntries)
@@ -137,8 +147,7 @@ func getPlayerFromCache(ctx context.Context, uuid string) (*skycrypttypes.Player
 
 func parsePlayer(body []byte) (*skycrypttypes.Player, error) {
 	var rawReponse models.HypixelPlayerResponse
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 	return &rawReponse.Player, nil
@@ -158,8 +167,7 @@ func fetchPlayerFresh(ctx context.Context, uuid string) (*skycrypttypes.Player, 
 		return &response, err
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return &rawReponse.Player, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
@@ -220,8 +228,7 @@ func getProfilesFromCache(ctx context.Context, uuid string) (*models.HypixelProf
 
 func parseProfiles(body []byte) (*models.HypixelProfilesResponse, error) {
 	var response models.HypixelProfilesResponse
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &response); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 	return &response, nil
@@ -240,8 +247,7 @@ func fetchProfilesFresh(ctx context.Context, uuid string) (*models.HypixelProfil
 		return &response, err
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &response); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &response); err != nil {
 		return &response, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
@@ -340,8 +346,7 @@ func getMuseumFromCache(ctx context.Context, profileId string) (map[string]*skyc
 
 func parseMuseum(body []byte) (map[string]*skycrypttypes.Museum, error) {
 	var rawReponse models.HypixelMuseumResponse
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 	return rawReponse.Members, nil
@@ -360,8 +365,7 @@ func fetchMuseumFresh(ctx context.Context, profileId string) (map[string]*skycry
 		return nil, err
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 
@@ -405,8 +409,7 @@ func getGardenFromCache(ctx context.Context, profileId string) (*skycrypttypes.G
 
 func parseGarden(body []byte) (*skycrypttypes.Garden, error) {
 	var rawReponse models.HypixelGardenResponse
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 	return &rawReponse.Garden, nil
@@ -433,8 +436,7 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 		return nil, fmt.Errorf("%w: profile %s has no garden", ErrGardenNotFound, profileId)
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(body, &rawReponse); err != nil {
+	if err := hypixelJSON.Unmarshal(body, &rawReponse); err != nil {
 		return nil, fmt.Errorf("%w: error parsing Hypixel JSON: %v", ErrUpstream, err)
 	}
 

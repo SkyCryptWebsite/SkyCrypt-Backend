@@ -82,20 +82,24 @@ func decodeMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]strin
 	return output
 }
 
-func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]string) []models.ProcessedItem {
+// GetOwnedMuseumSkillGear decodes the donated museum items GetSkillGear can use: the ones in a skill's museum
+// category. Every museum entry is its own gzipped NBT blob, and most of a museum is combat and dungeon gear, so
+// decoding all of it only to discard it was about a third of a combined build.
+func GetOwnedMuseumSkillGear(museumData *skycrypttypes.Museum, enabledPacks ...[]string) []models.ProcessedItem {
 	if museumData == nil {
 		return []models.ProcessedItem{}
 	}
 
 	var entries []skycrypttypes.MuseumItem
 	if museumData.Items != nil {
-		for _, itemData := range *museumData.Items {
-			if !itemData.Borrowing {
+		for itemId, itemData := range *museumData.Items {
+			if !itemData.Borrowing && museumEntryMayHoldSkillGear(itemId) {
 				entries = append(entries, itemData)
 			}
 		}
 	}
 
+	// Special items have no ID to judge them by, and there are few of them.
 	if museumData.Special != nil {
 		for _, itemData := range *museumData.Special {
 			if !itemData.Borrowing {
@@ -113,6 +117,27 @@ func GetOwnedMuseumItems(museumData *skycrypttypes.Museum, enabledPacks ...[]str
 	}
 
 	return output
+}
+
+// museumEntryMayHoldSkillGear reports whether the museum entry stored under id can hold an item GetSkillGear
+// picks, judging by the museum category of the item, or of the pieces when id is an armor set. An ID the item
+// list doesn't know is kept, so a new item is never dropped by mistake.
+func museumEntryMayHoldSkillGear(id string) bool {
+	if item, ok := constants.GetItem(id); ok {
+		return item.MuseumData == nil || isSkillGearCategory(item.MuseumData.Category)
+	}
+
+	pieces := constants.Museum().ArmorSets[id]
+	if len(pieces) == 0 {
+		return true
+	}
+	for _, piece := range pieces {
+		item, ok := constants.GetItem(piece)
+		if !ok || item.MuseumData == nil || isSkillGearCategory(item.MuseumData.Category) {
+			return true
+		}
+	}
+	return false
 }
 
 func markChildrenAsDonated(children string, output *map[string]models.ProcessedMuseumItem, decodedMuseum models.DecodedMuseumItems) {

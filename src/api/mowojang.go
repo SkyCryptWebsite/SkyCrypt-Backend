@@ -315,16 +315,25 @@ func GetUsernamesContext(ctx context.Context, uuids []string) map[string]string 
 		}
 	}
 
+	// Cache misses each need a Mojang call; make them side by side rather than one after another.
+	// uniqueUnresolvedUsernames already drops empty, resolved and repeated IDs, so the loop never reads usernames
+	// while the goroutines write to it.
+	var mu sync.Mutex
+	var g errgroup.Group
+	g.SetLimit(8)
 	for _, uuid := range uniqueUnresolvedUsernames(uuids, usernames) {
-		if uuid == "" || usernames[uuid] != "" {
-			continue
-		}
-		username, err := GetUsernameContext(ctx, uuid, false)
-		if err != nil || username == "" {
-			username = "Unknown"
-		}
-		usernames[uuid] = username
+		g.Go(func() error {
+			username, err := GetUsernameContext(ctx, uuid, false)
+			if err != nil || username == "" {
+				username = "Unknown"
+			}
+			mu.Lock()
+			usernames[uuid] = username
+			mu.Unlock()
+			return nil
+		})
 	}
+	_ = g.Wait()
 
 	return usernames
 }

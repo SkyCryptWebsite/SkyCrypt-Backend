@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"skycrypt/src/db"
+	"skycrypt/src/localcache"
 	"slices"
 	"strconv"
 	"strings"
@@ -59,12 +60,22 @@ type Verification struct {
 	Key *Key `json:"key"`
 }
 
+// localVerifications keeps verifications in the process for a few seconds, so a key's burst of requests doesn't
+// read Redis for each one. Values are shared and must be treated as read-only.
+var localVerifications = localcache.NewLocalCache[*Verification](4096)
+
+const localVerifyTTL = 10 * time.Second
+
 func Verify(ctx context.Context, rawKey string) (*Verification, error) {
 	hash := sha256.Sum256([]byte(rawKey))
 	cacheKey := "apikey:verify:" + hex.EncodeToString(hash[:])
+	if verification, ok, _ := localVerifications.Get(cacheKey); ok {
+		return verification, nil
+	}
 	if cached, err := db.GetContext(ctx, cacheKey); err == nil && cached != "" {
 		var verification Verification
 		if json.Unmarshal([]byte(cached), &verification) == nil {
+			localVerifications.Set(cacheKey, &verification, localVerifyTTL, 0)
 			return &verification, nil
 		}
 	}
@@ -80,6 +91,7 @@ func Verify(ctx context.Context, rawKey string) (*Verification, error) {
 		if encoded, err := json.Marshal(verification); err == nil {
 			_ = db.SetContext(ctx, cacheKey, string(encoded), int(verifyCacheTTL.Seconds()))
 		}
+		localVerifications.Set(cacheKey, &verification, localVerifyTTL, 0)
 		return &verification, nil
 	})
 	if err != nil {

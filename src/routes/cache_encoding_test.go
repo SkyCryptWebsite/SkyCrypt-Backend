@@ -2,6 +2,7 @@ package routes
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/gofiber/fiber/v3/middleware/etag"
@@ -74,8 +75,40 @@ func TestETagMatches(t *testing.T) {
 
 // Huma sends Status as is, so a JSON output left at 0 went out as a 500.
 func TestJSONBodyIsOK(t *testing.T) {
-	out := jsonBody(t.Context(), responseCacheHandle{endpoint: "stats", key: "response:test"}, []byte(`{}`))
+	out := jsonBody(t.Context(), responseCacheHandle{endpoint: "stats", key: "response:test"}, &builtResponse{body: []byte(`{}`)})
 	if out.Status != 200 {
 		t.Fatalf("status %d, want 200", out.Status)
+	}
+}
+
+// A freshly built response that was cached goes out like a later cache hit: the stored gzip bytes and ETag, a 304
+// for a matching If-None-Match, and the plain body for a client without gzip.
+func TestJSONBodySendsCacheEntry(t *testing.T) {
+	t.Setenv("DEV", "false")
+	body := []byte(`{"ok":true}`)
+	entry, err := decodeCachedResponse(encodeCachedResponse(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	built := &builtResponse{body: body, entry: entry}
+	handle := responseCacheHandle{endpoint: "stats", key: "response:test"}
+	with := func(encoding requestEncoding) context.Context {
+		return context.WithValue(t.Context(), requestEncodingKey{}, encoding)
+	}
+
+	out := jsonBody(with(requestEncoding{acceptsGzip: true}), handle, built)
+	if out.Status != 200 || out.ContentEncoding != "gzip" || out.ETag != entry.etag || !bytes.Equal(out.Body, entry.gzipped) {
+		t.Fatalf("gzip client got status %d encoding %q etag %q", out.Status, out.ContentEncoding, out.ETag)
+	}
+	out = jsonBody(with(requestEncoding{}), handle, built)
+	if out.Status != 200 || out.ContentEncoding != "" || out.ETag != entry.etag || !bytes.Equal(out.Body, body) {
+		t.Fatalf("plain client got status %d encoding %q body %q", out.Status, out.ContentEncoding, out.Body)
+	}
+	out = jsonBody(with(requestEncoding{acceptsGzip: true, ifNoneMatch: entry.etag}), handle, built)
+	if out.Status != 304 || len(out.Body) != 0 {
+		t.Fatalf("matching If-None-Match got status %d with %d body bytes", out.Status, len(out.Body))
+	}
+	if out = jsonBody(with(requestEncoding{acceptsGzip: true}), handle, &builtResponse{body: body}); out.ContentEncoding != "" || !bytes.Equal(out.Body, body) {
+		t.Fatalf("uncached body got encoding %q", out.ContentEncoding)
 	}
 }
