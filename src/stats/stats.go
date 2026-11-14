@@ -11,6 +11,13 @@ func GetStats(mowojang *models.MowojangResponse, profiles *models.HypixelProfile
 		userProfile.Profile = &skycrypttypes.ProfileData{}
 	}
 
+	// Banking is missing when the profile's bank API is off. GetAPISettings fills it in below, but Go doesn't say
+	// whether that call runs before the other fields of the literal are read, so don't depend on it here.
+	var bank *float64
+	if profile.Banking != nil {
+		bank = profile.Banking.Balance
+	}
+
 	return &models.StatsOutput{
 		Username:        mowojang.Name,
 		UUID:            mowojang.UUID,
@@ -26,7 +33,7 @@ func GetStats(mowojang *models.MowojangResponse, profiles *models.HypixelProfile
 		SkyBlockLevel:   GetSkyBlockLevel(userProfile),
 		Joined:          userProfile.Profile.FirstJoin,
 		Purse:           userProfile.Currencies.CoinPurse,
-		Bank:            profile.Banking.Balance,
+		Bank:            bank,
 		PersonalBank:    userProfile.Profile.BankAccount,
 		FairySouls:      GetFairySouls(userProfile, profile.GameMode),
 		APISettings:     GetAPISettings(userProfile, profile, museum),
