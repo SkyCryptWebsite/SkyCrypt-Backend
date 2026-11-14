@@ -5,7 +5,8 @@ go 1.26.4
 require (
 	github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer v0.3.1
 	github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.27
-	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.23
+	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.24
+	github.com/bytedance/sonic v1.15.4
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/gofiber/fiber/v3 v3.6.1
@@ -26,7 +27,6 @@ require (
 require (
 	github.com/HugoSmits86/nativewebp v1.3.0 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
-	github.com/bytedance/sonic v1.15.4 // indirect
 	github.com/bytedance/sonic/loader v0.5.3 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
@@ -54,7 +54,7 @@ require (
 )
 
 require (
-	github.com/Tnze/go-mc v1.20.2
+	github.com/SkyCryptWebsite/fastnbt v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.20.3
