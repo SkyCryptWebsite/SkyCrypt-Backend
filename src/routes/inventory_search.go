@@ -10,9 +10,9 @@ import (
 
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
-	jsoniter "github.com/json-iterator/go"
 )
 
 func registerInventorySearch(humaAPI huma.API) {
@@ -56,8 +56,8 @@ func searchInventory(ctx context.Context, uuid string, profileId string, searchP
 	}
 
 	var inventories []models.Inventory
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(inventory.Body, &inventories); err != nil {
+	// The inventory body is over a megabyte; sonic reads it several times faster than jsoniter.
+	if err := sonic.ConfigStd.Unmarshal(inventory.Body, &inventories); err != nil {
 		return nil, NewAPIError(fiber.StatusInternalServerError, codeInternalError, fmt.Sprintf("Failed to parse items: %v", err))
 	}
 

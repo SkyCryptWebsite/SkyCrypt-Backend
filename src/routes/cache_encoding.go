@@ -24,7 +24,10 @@ var errBadCachedResponse = errors.New("bad cached response entry")
 
 var gzipWriterPool = sync.Pool{
 	New: func() any {
-		writer, _ := gzip.NewWriterLevel(nil, gzip.DefaultCompression)
+		// The fastest level: a built response is compressed inside the request, and the default level took about
+		// twice as long (6.5 ms against 3.5 ms for a 955 KB body) for bodies 15% smaller. It is also the level the
+		// compress middleware sent responses with before they were compressed here.
+		writer, _ := gzip.NewWriterLevel(nil, gzip.BestSpeed)
 		return writer
 	},
 }

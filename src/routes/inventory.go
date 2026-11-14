@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -79,7 +80,16 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 		userProfile.Inventory = &skycrypttypes.Inventory{}
 	}
 
-	output := []models.Inventory{}
+	// Each tab is encoded on its own and joined at the end, so the museum tab can come from its cache as JSON.
+	tabs := make([][]byte, 0, len(constants.INVENTORY_ORDER))
+	addTab := func(tab models.Inventory) error {
+		encoded, err := marshalBody(tab)
+		if err != nil {
+			return err
+		}
+		tabs = append(tabs, encoded)
+		return nil
+	}
 	var itemProcessingStats *statsItems.ItemProcessingStats
 	if statsItems.ItemProcessingDebugEnabled() {
 		itemProcessingStats = statsItems.NewItemProcessingStats("inventory", uuid, profile.ProfileID, enabledPacks)
@@ -88,34 +98,46 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 
 	// The museum tab is built separately; run it alongside decoding the other inventories, which happens in one
 	// batched call.
-	museumCh := make(chan []models.ProcessedItem, 1)
+	type museumTabResult struct {
+		body  []byte
+		strip time.Duration
+		err   error
+	}
+	museumCh := make(chan museumTabResult, 1)
 	go func() {
-		var museumItems []models.ProcessedItem
+		var result museumTabResult
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("[INVENTORY] museum tab failed: %v\n", r)
-				api.SkipCaching(ctx)
+				result.err = fmt.Errorf("panic: %v", r)
 			}
-			museumCh <- museumItems
+			museumCh <- result
 		}()
-		museumItems = statsItems.GetMuseum(profileMuseum[uuid], enabledPacks)
+		result.body, result.strip, result.err = museumTab(ctx, profileMuseum[uuid], enabledPacks)
 	}()
 	decodedInventories := stats.GetInventories(&userProfile, constants.INVENTORY_ORDER)
 
 	for _, inventoryId := range constants.INVENTORY_ORDER {
 		inventoryData := constants.INVENTORY[inventoryId]
 		if inventoryId == "museum" {
-			museumItems := <-museumCh
-			stripStart := time.Now()
-			strippedItems := statsItems.StripItems(&museumItems)
-			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
-
-			output = append(output, models.Inventory{
-				Name:           inventoryData.Name,
-				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
-				SeparatorAfter: inventoryData.SeparatorAfter,
-				Items:          strippedItems,
-			})
+			museum := <-museumCh
+			if museum.err != nil {
+				// The page still loads, with an empty museum tab, and isn't cached that way.
+				fmt.Printf("[INVENTORY] museum tab failed: %v\n", museum.err)
+				api.SkipCaching(ctx)
+				if err := addTab(models.Inventory{
+					Name:           inventoryData.Name,
+					Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
+					SeparatorAfter: inventoryData.SeparatorAfter,
+					Items:          []models.StrippedItem{},
+				}); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if museum.strip > 0 {
+				itemProcessingStats.RecordStripDuration(museum.strip)
+			}
+			tabs = append(tabs, museum.body)
 			continue
 		} else if inventoryId == "sacks" {
 			itemSlice := decodedInventories["sacks"]
@@ -129,12 +151,14 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 			})
 			itemProcessingStats.RecordStripDuration(time.Since(stripStart))
 
-			output = append(output, models.Inventory{
+			if err := addTab(models.Inventory{
 				Name:           inventoryData.Name,
 				Texture:        fmt.Sprintf("%s%s", utility.GetDomain(), inventoryData.Texture),
 				SeparatorAfter: inventoryData.SeparatorAfter,
 				Items:          strippedItems,
-			})
+			}); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -154,21 +178,23 @@ func buildInventory(ctx context.Context, uuid string, profileId string, enabledP
 			}
 		}
 
-		output = append(output, models.Inventory{
+		if err := addTab(models.Inventory{
 			Name:           inventoryData.Name,
 			Texture:        texture,
 			SeparatorAfter: inventoryData.SeparatorAfter,
 			Items:          strippedItems,
-		})
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	if itemProcessingStats != nil {
 		itemProcessingStats.LogIfEnabled(time.Since(itemProcessingStats.Started))
 	}
-	body, err := marshalBody(output)
-	if err != nil {
-		return nil, err
-	}
+	return joinJSONArray(tabs), nil
+}
 
-	return body, nil
+// joinJSONArray makes a JSON array of already encoded values: the same bytes as encoding them as one list.
+func joinJSONArray(values [][]byte) []byte {
+	return append(append([]byte{'['}, bytes.Join(values, []byte{','})...), ']')
 }
