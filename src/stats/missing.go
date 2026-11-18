@@ -70,25 +70,21 @@ func getAccessory(accessories *[]models.InsertAccessory, id string) (*models.Ins
 	return &models.InsertAccessory{}, false
 }
 
-func getEnrichments(accessories []models.InsertAccessory) map[string]int {
-	output := make(map[string]int)
+// getEnrichments counts enrichable accessories with and without an enrichment. Since 0.27.3 every enrichment
+// grants +1 Tuning Point whatever its type, so only the counts matter.
+func getEnrichments(accessories []models.InsertAccessory) models.EnrichmentsOutput {
+	output := models.EnrichmentsOutput{}
 	for _, item := range accessories {
 		specialAccessory, exists := constants.SPECIAL_ACCESSORIES[item.Id]
 		if slices.Index(constants.RARITIES, item.Rarity) < slices.Index(constants.RARITIES, "legendary") || (exists && !specialAccessory.AllowsEnrichment) || item.IsInactive {
 			continue
 		}
 
-		enrichmentKey := item.Tag.ExtraAttributes.TalismanEnrichment
-		if enrichmentKey == "" {
-			enrichmentKey = "missing"
+		if item.Tag.ExtraAttributes.TalismanEnrichment == "" {
+			output.Missing++
+		} else {
+			output.Applied++
 		}
-
-		enrichment := constants.ENRICHMENT_TO_STAT[enrichmentKey]
-		if enrichment == "" {
-			enrichment = enrichmentKey
-		}
-
-		output[enrichment]++
 	}
 
 	return output
@@ -113,10 +109,6 @@ func GetRecombobulatedCount(accessories []models.InsertAccessory) int {
 func GetMagicalPower(rarity string, id string) int {
 	if id == "HEGEMONY_ARTIFACT" {
 		return (2 * constants.MAGICAL_POWER[rarity])
-	}
-
-	if id == "RIFT_PRISM" {
-		return 11
 	}
 
 	return constants.MAGICAL_POWER[rarity]
@@ -162,10 +154,6 @@ func getMagicalPowerData(accessories *[]models.InsertAccessory, userProfile *sky
 			output.Hegemony.Rarity = accessory.Rarity
 			output.Hegemony.Amount += magicalPower
 		}
-	}
-
-	if userProfile.Rift.Access.ConsumedPrism {
-		output.RiftPrism += 11
 	}
 
 	return output

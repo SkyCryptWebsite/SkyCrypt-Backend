@@ -148,7 +148,6 @@ var AccessoryUpgrades = [][]string{
 	{"BAT_TALISMAN", "BAT_RING", "BAT_ARTIFACT"},
 	{"BROKEN_PIGGY_BANK", "CRACKED_PIGGY_BANK", "PIGGY_BANK"},
 	{"SPEED_TALISMAN", "SPEED_RING", "SPEED_ARTIFACT", "SPEED_RELIC"},
-	{"PERSONAL_COMPACTOR_4000", "PERSONAL_COMPACTOR_5000", "PERSONAL_COMPACTOR_6000", "PERSONAL_COMPACTOR_7000"},
 	{"PERSONAL_DELETOR_4000", "PERSONAL_DELETOR_5000", "PERSONAL_DELETOR_6000", "PERSONAL_DELETOR_7000"},
 	{"SCARF_STUDIES", "SCARF_THESIS", "SCARF_GRIMOIRE"},
 	{"CAT_TALISMAN", "LYNX_TALISMAN", "CHEETAH_TALISMAN"},
@@ -230,6 +229,8 @@ var ignoredAccessories = []string{
 	"BINGO_HEIRLOOM", "LUCK_TALISMAN", "TALISMAN_OF_SPACE", "RING_OF_SPACE",
 	"MASTER_SKULL_TIER_8", "MASTER_SKULL_TIER_9", "MASTER_SKULL_TIER_10",
 	"COMPASS_TALISMAN", "ARTIFACT_OF_SPACE", "GRIZZLY_PAW", "ETERNAL_CRYSTAL", "OLD_BOOT",
+	// Legacy since 0.27.3: reclaimed for the per-skill Personal Compactors.
+	"PERSONAL_COMPACTOR_4000", "PERSONAL_COMPACTOR_5000", "PERSONAL_COMPACTOR_6000", "PERSONAL_COMPACTOR_7000",
 }
 
 var ACCESSORY_ALIASES = map[string][]string{
@@ -299,7 +300,7 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 		AllowsEnrichment: true,
 	},
 	"RIFT_PRISM": {
-		AllowsRecomb:     false,
+		AllowsRecomb:     true,
 		AllowsEnrichment: true,
 	},
 	"HOCUS_POCUS_CIPHER": {
@@ -315,7 +316,7 @@ var SPECIAL_ACCESSORIES = map[string]specialAccessoryConstant{
 		AllowsEnrichment: true,
 	},
 	"SAFETY_BADGE": {
-		AllowsRecomb:     false,
+		AllowsRecomb:     true,
 		AllowsEnrichment: true,
 	},
 }
@@ -327,12 +328,8 @@ var MAGICAL_POWER = map[string]int{
 	"epic":         12,
 	"legendary":    16,
 	"mythic":       22,
-	"special":      3,
+	"special":      0,
 	"very_special": 5,
-}
-
-var ENRICHMENT_TO_STAT = map[string]string{
-	"walk_speed": "speed",
 }
 
 func findInAliases(id string) bool {

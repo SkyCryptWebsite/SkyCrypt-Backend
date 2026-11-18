@@ -2,7 +2,6 @@ package stats
 
 import (
 	"fmt"
-	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	stats "skycrypt/src/stats/items"
@@ -86,34 +85,6 @@ func GetAccessories(useProfile *skycrypttypes.Member, processedItems map[string]
 	}
 
 	markInactiveAccessories(accessories)
-
-	if useProfile.Rift.Access.ConsumedPrism {
-		riftPrismItem, _ := notenoughupdates.GetItem("RIFT_PRISM")
-
-		itemId := 397
-		processedItem := stats.ProcessItem(&skycrypttypes.Item{
-			Tag:    &riftPrismItem.NBT,
-			ID:     &itemId,
-			Damage: &riftPrismItem.Damage,
-		}, "Rift", enabledPacks...)
-		processedItem.Lore = slices.Clone(processedItem.Lore)
-
-		// Remove the three lines from the lore which say that player should use the prism in Wizard Portal
-		for i, lore := range processedItem.Lore {
-			if strings.TrimSpace(lore) == "" {
-				processedItem.Lore = append(processedItem.Lore[:i], processedItem.Lore[i+3:]...)
-				break
-			}
-		}
-
-		accessoryIds = append(accessoryIds, models.AccessoryIds{Id: "RIFT_PRISM", Rarity: "rare"})
-		accessories = append(accessories, models.InsertAccessory{
-			ProcessedItem: processedItem,
-			Id:            "RIFT_PRISM",
-			Rarity:        "rare",
-			IsInactive:    false,
-		})
-	}
 
 	sort.Sort(itemSorter(accessories))
 

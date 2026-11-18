@@ -35,4 +35,5 @@ type NEUConstant struct {
 	HeartOfTheForest   neu.HOTFConstants     `json:"hotf,omitempty"`
 	AttributeShards    neu.FormattedShards   `json:"attribute_shards,omitempty"`
 	Sacks              neu.FormattedSack     `json:"sacks,omitempty"`
+	MaxEnchants        []string              `json:"max_enchants,omitempty"`
 }

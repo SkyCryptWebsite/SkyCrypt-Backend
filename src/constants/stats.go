@@ -789,8 +789,8 @@ var STATS_DATA = []models.StatData{
 		Suffix:      "",
 		Color:       "b",
 		Category:    "misc",
-		Description: "Increases the chance to find rare items from monsters and bosses.",
-		Cap:         intPtr(900),
+		Description: "Increases the chance of monsters and bosses dropping items. Past 100% drop chance it grants a chance at double drops.",
+		Cap:         intPtr(500),
 	},
 	{
 		ID:          "pet_luck",
@@ -1138,7 +1138,11 @@ var STATS_BONUS = map[string]map[int]map[string]float64{
 		15: {"defense": 2, "mining_fortune": 4},
 	},
 	"skill_combat": {
-		1: {"critical_chance": 0.5},
+		1:  {"critical_chance": 0.5, "magic_find": 0.1},
+		11: {"critical_chance": 0.5, "magic_find": 0.2},
+		21: {"critical_chance": 0.5, "magic_find": 0.3},
+		31: {"critical_chance": 0.5, "magic_find": 0.4},
+		41: {"critical_chance": 0.5, "magic_find": 0.5},
 	},
 	"skill_foraging": {
 		1:  {"strength": 1, "foraging_fortune": 4},
@@ -1237,11 +1241,8 @@ func GetBonusStats(level int, statsBonus map[int]map[string]float64) map[string]
 		return bonus
 	}
 
-	for x := steps[0]; x <= len(statsBonus); x++ {
-		if level < x {
-			break
-		}
-
+	// Every level up to the current one adds the bonus of the last step at or below it.
+	for x := steps[0]; x <= level; x++ {
 		step := steps[0]
 		for _, s := range steps {
 			if s <= x {

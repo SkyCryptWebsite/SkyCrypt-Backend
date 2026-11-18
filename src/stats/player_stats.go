@@ -3,6 +3,7 @@ package stats
 import (
 	"fmt"
 	"maps"
+	"math"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
 	statsItems "skycrypt/src/stats/items"
@@ -37,7 +38,7 @@ func GetPlayerStats(
 			continue
 		}
 
-		stats[statName]["armor"] += int(statValue)
+		stats[statName]["armor"] += statValue
 	}
 
 	equipmentStats := statsItems.GetStatsFromItems(processedItems["equipment"])
@@ -46,13 +47,13 @@ func GetPlayerStats(
 			continue
 		}
 
-		stats[statName]["equipment"] += int(statValue)
+		stats[statName]["equipment"] += statValue
 	}
 
 	skyblockLevel := GetSkyBlockLevel(userProfile)
 	if skyblockLevel.Level > 0 {
-		stats["health"]["skyblock_level"] = int(skyblockLevel.Level * 5)
-		stats["strength"]["skyblock_level"] = int(skyblockLevel.Level / 5)
+		stats["health"]["skyblock_level"] = float64(skyblockLevel.Level * 5)
+		stats["strength"]["skyblock_level"] = float64(skyblockLevel.Level / 5)
 	}
 
 	slayerStats := GetSlayers(userProfile).Stats
@@ -61,7 +62,7 @@ func GetPlayerStats(
 			continue
 		}
 
-		stats[statName]["slayers"] += int(statValue)
+		stats[statName]["slayers"] += statValue
 	}
 
 	if activePetStats, petScore, hasPets := getActivePetStats(userProfile); hasPets {
@@ -70,7 +71,7 @@ func GetPlayerStats(
 				continue
 			}
 
-			stats[statName]["active_pet"] += int(statValue)
+			stats[statName]["active_pet"] += statValue
 		}
 
 		for statName, statValue := range petScore.Stats {
@@ -78,7 +79,7 @@ func GetPlayerStats(
 				continue
 			}
 
-			stats[statName]["pet_score"] += int(statValue)
+			stats[statName]["pet_score"] += statValue
 		}
 	}
 
@@ -106,7 +107,7 @@ func GetPlayerStats(
 				continue
 			}
 
-			stats[statName]["skills"] += int(value)
+			stats[statName]["skills"] += value
 		}
 	}
 
@@ -131,24 +132,27 @@ func GetPlayerStats(
 				continue
 			}
 
-			stats[statName]["dungeons"] += int(value)
+			stats[statName]["dungeons"] += value
 		}
 	}
 
 	bestiaryData := GetBestiary(userProfile)
 	if bestiaryData.Level > 0 {
-		stats["health"]["bestiary"] = int(bestiaryData.Level)
+		stats["health"]["bestiary"] = math.Floor(bestiaryData.Level)
 	}
 
 	// Calculate totals while the data is still a map.
 	for statName, statInfo := range stats {
-		total := 0
+		total := 0.0
 
-		for _, value := range statInfo {
+		// Fractional sources (Combat levels give 0.1 Magic Find) would otherwise show float noise like 1.2000000000000002.
+		for source, value := range statInfo {
+			value = math.Round(value*100) / 100
+			statInfo[source] = value
 			total += value
 		}
 
-		stats[statName]["total"] = total
+		stats[statName]["total"] = math.Round(total*100) / 100
 	}
 
 	output := make([]models.PlayerStat, 0, len(stats))

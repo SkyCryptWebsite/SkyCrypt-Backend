@@ -68,6 +68,16 @@ func getSlayerLevel(experience int, slayerId string) models.SlayerLevel {
 	}
 }
 
+// getSlayerMagicFind returns the Magic Find a slayer's levels grant against its own bosses: +1 per level and +2 at
+// the max level (9, or 5 for the Rift slayer).
+func getSlayerMagicFind(level models.SlayerLevel) float64 {
+	magicFind := float64(level.Level)
+	if level.MaxLevel > 0 && level.Level >= level.MaxLevel {
+		magicFind++
+	}
+	return magicFind
+}
+
 func GetSlayers(userProfile *skycrypttypes.Member) *models.SlayersOutput {
 	output := &models.SlayersOutput{
 		Data:  make(map[string]models.SlayerData),
@@ -78,11 +88,13 @@ func GetSlayers(userProfile *skycrypttypes.Member) *models.SlayersOutput {
 	for slayerId, slayerData := range userProfile.Slayer.SlayerBosses {
 		texture := fmt.Sprintf("%s%s", utility.GetDomain(), constants.SLAYER_INFO[slayerId].Head)
 
+		level := getSlayerLevel(int(slayerData.Experience), slayerId)
 		output.Data[slayerId] = models.SlayerData{
-			Name:    constants.SLAYER_INFO[slayerId].Name,
-			Texture: texture,
-			Kills:   getSlayerKills(slayerData),
-			Level:   getSlayerLevel(int(slayerData.Experience), slayerId),
+			Name:      constants.SLAYER_INFO[slayerId].Name,
+			Texture:   texture,
+			Kills:     getSlayerKills(slayerData),
+			Level:     level,
+			MagicFind: getSlayerMagicFind(level),
 		}
 
 		totalExperience += int(slayerData.Experience)

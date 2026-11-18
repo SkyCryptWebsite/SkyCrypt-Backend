@@ -28,3 +28,22 @@ func TestGetStatsWithoutBanking(t *testing.T) {
 		t.Fatalf("bank = %v, err = %v, want %v", out.Bank, err, balance)
 	}
 }
+
+func TestSlayerMagicFind(t *testing.T) {
+	cases := []struct {
+		level, maxLevel int
+		want            float64
+	}{
+		{0, 9, 0},
+		{8, 9, 8},
+		{9, 9, 10},
+		{4, 5, 4},
+		{5, 5, 6},
+	}
+	for _, tc := range cases {
+		got := getSlayerMagicFind(models.SlayerLevel{Level: tc.level, MaxLevel: tc.maxLevel})
+		if got != tc.want {
+			t.Errorf("getSlayerMagicFind(%d/%d) = %v, want %v", tc.level, tc.maxLevel, got, tc.want)
+		}
+	}
+}

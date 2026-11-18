@@ -1,6 +1,6 @@
 package models
 
-type StatsInfo map[string]int
+type StatsInfo map[string]float64
 
 type PlayerStat struct {
 	ID                      string `json:"id" binding:"required"`

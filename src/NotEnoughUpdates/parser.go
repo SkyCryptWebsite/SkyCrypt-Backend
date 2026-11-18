@@ -159,6 +159,26 @@ func ParseNEURepository() error {
 			}
 
 			parsed.Sacks = neustats.FormatSacks(sacks)
+		} else if constant.Name() == "parents.json" {
+			filePath := fmt.Sprintf("%s/%s", constantsPath, constant.Name())
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", filePath, err)
+			}
+
+			var parents map[string][]string
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err = json.Unmarshal(data, &parents)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal JSON from %s: %w", filePath, err)
+			}
+
+			maxEnchants, err := parseMaxEnchants(parents)
+			if err != nil {
+				return err
+			}
+
+			parsed.MaxEnchants = maxEnchants
 		}
 	}
 

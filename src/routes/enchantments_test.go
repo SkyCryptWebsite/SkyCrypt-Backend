@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"skycrypt/src/constants"
+	notenoughupdates "skycrypt/src/NotEnoughUpdates"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -35,7 +35,11 @@ func TestEnchantmentsConstantsHandler(t *testing.T) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if !reflect.DeepEqual(got, constants.MAX_ENCHANTS) {
-		t.Fatalf("enchantments = %#v, want %#v", got, constants.MAX_ENCHANTS)
+	want := notenoughupdates.Constants().MaxEnchants
+	if want == nil {
+		want = []string{}
+	}
+	if got == nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("enchantments = %#v, want %#v", got, want)
 	}
 }

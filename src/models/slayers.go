@@ -11,6 +11,8 @@ type SlayerData struct {
 	Texture string         `json:"texture"`
 	Kills   map[string]int `json:"kills"`
 	Level   SlayerLevel    `json:"level"`
+	// MagicFind only applies against this slayer's bosses, so it is not part of the player's Magic Find stat.
+	MagicFind float64 `json:"magicFind"`
 }
 
 type SlayerLevel struct {
