@@ -86,26 +86,38 @@ func compressSource(value interface{}) ([]byte, bool) {
 }
 
 // Compressed values only live until the SET that sends them returns, so their buffers are reused. A new buffer per
-// SET was about an eighth of all allocation in production: Hypixel bodies are megabytes each.
-var compressBuffers sync.Pool
+// SET was about an eighth of all allocation in production: Hypixel bodies are megabytes each. A sync.Pool didn't
+// do: the GC empties it, and a busy process collects every few seconds, so most SETs still found it empty. This
+// list survives collections and holds at most compressBufferSlots buffers.
+var compressBuffers = make(chan []byte, compressBufferSlots)
 
-// Buffers bigger than this are dropped rather than pooled, so one huge value doesn't stay pinned.
-const maxPooledCompressBuffer = 16 << 20
+const (
+	// compressBufferSlots covers the SETs that run at once in a busy process.
+	compressBufferSlots = 32
+	// Buffers bigger than this are dropped rather than kept, so a rare huge value doesn't stay pinned. Together
+	// the list holds at most 32 x 4 MB.
+	maxPooledCompressBuffer = 4 << 20
+)
 
-// compressValuePooled is compressValue into a pooled buffer. Call release once nothing reads the value any more.
+// compressValuePooled is compressValue into a reused buffer. Call release once nothing reads the value any more.
 func compressValuePooled(value interface{}) (out interface{}, release func()) {
 	src, ok := compressSource(value)
 	if !ok {
 		return value, func() {}
 	}
-	buf, _ := compressBuffers.Get().(*[]byte)
-	if buf == nil {
-		buf = new([]byte)
+	var buf []byte
+	select {
+	case buf = <-compressBuffers:
+	default:
 	}
-	*buf = zstdEncoder.EncodeAll(src, (*buf)[:0])
-	return *buf, func() {
-		if cap(*buf) <= maxPooledCompressBuffer {
-			compressBuffers.Put(buf)
+	buf = zstdEncoder.EncodeAll(src, buf[:0])
+	return buf, func() {
+		if cap(buf) > maxPooledCompressBuffer {
+			return
+		}
+		select {
+		case compressBuffers <- buf:
+		default:
 		}
 	}
 }

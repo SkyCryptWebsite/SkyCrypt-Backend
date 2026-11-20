@@ -15,7 +15,6 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -226,7 +225,7 @@ func formatUUID(id [16]byte) string {
 
 var gameModes = map[string]int16{"": 0, "ironman": 1, "island": 2, "stranded": 2, "bingo": 3}
 
-// profileLight is what the light tables need from a profile. jsoniter skips everything else.
+// profileLight is what the light tables need from a profile. The decoder skips everything else.
 type profileLight struct {
 	GameMode string                `json:"game_mode"`
 	Members  map[string]memberJSON `json:"members"`
@@ -281,7 +280,6 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 		}
 	}
 
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	profiles := make([]profileWrite, 0, len(rawProfiles))
 	order := make([][16]byte, 0, len(rawProfiles))
 	var selected *[16]byte
@@ -299,7 +297,7 @@ func storeProfiles(ctx context.Context, uuidText string, body []byte, fetchedAt 
 		}
 
 		var light profileLight
-		if err := json.Unmarshal(object, &light); err != nil {
+		if err := profileDecoder.Unmarshal(object, &light); err != nil {
 			return err
 		}
 		write := profileWrite{id: id, cuteName: cuteName, gameMode: gameModes[light.GameMode]}

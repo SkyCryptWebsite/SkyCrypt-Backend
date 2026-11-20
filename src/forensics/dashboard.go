@@ -110,10 +110,8 @@ type cacheReport struct {
 	Hits               uint64  `json:"hits"`
 	Misses             uint64  `json:"misses"`
 	HitRate            float64 `json:"hit_rate_percent"`
-	ResponseRAMHits    uint64  `json:"response_ram_hits"`
 	ResponseRedisHits  uint64  `json:"response_redis_hits"`
 	ResponseCold       uint64  `json:"response_cold"`
-	ResponseRAMHitRate float64 `json:"response_ram_hit_rate_percent"`
 	ResponseHitRate    float64 `json:"response_hit_rate_percent"`
 	AllCachedAvgMs     float64 `json:"all_cached_avg_ms"`
 	AllCachedP95Ms     float64 `json:"all_cached_p95_ms"`
@@ -154,19 +152,17 @@ type cacheLatencyEntry struct {
 }
 
 type responseCacheEntry struct {
-	Endpoint   string  `json:"endpoint"`
-	Route      string  `json:"route"`
-	Method     string  `json:"method"`
-	Count      int     `json:"count"`
-	RAMHits    int     `json:"ram_hits"`
-	RedisHits  int     `json:"redis_hits"`
-	Cold       int     `json:"cold"`
-	RAMHitRate float64 `json:"ram_hit_rate_percent"`
-	HitRate    float64 `json:"hit_rate_percent"`
-	AvgMs      float64 `json:"avg_ms"`
-	P50Ms      float64 `json:"p50_ms"`
-	P95Ms      float64 `json:"p95_ms"`
-	MaxMs      float64 `json:"max_ms"`
+	Endpoint  string  `json:"endpoint"`
+	Route     string  `json:"route"`
+	Method    string  `json:"method"`
+	Count     int     `json:"count"`
+	RedisHits int     `json:"redis_hits"`
+	Cold      int     `json:"cold"`
+	HitRate   float64 `json:"hit_rate_percent"`
+	AvgMs     float64 `json:"avg_ms"`
+	P50Ms     float64 `json:"p50_ms"`
+	P95Ms     float64 `json:"p95_ms"`
+	MaxMs     float64 `json:"max_ms"`
 }
 
 type recentRequestEntry struct {
@@ -290,7 +286,6 @@ type responseCacheAgg struct {
 	Route     string
 	Method    string
 	Durations []int64
-	RAMHits   int
 	RedisHits int
 	Cold      int
 }
@@ -377,8 +372,7 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	var allCachedDurations, mixedDurations, coldDurations []int64
 	var cacheHits, cacheMisses uint64
 	var legacyCacheHits, legacyCacheMisses uint64
-	var responseRAMHits, responseRedisHits, responseCold uint64
-	var responseRAMEligibleHits, responseRAMEligibleTotal uint64
+	var responseRedisHits, responseCold uint64
 	var slowest []slowRequestEntry
 	var slowestMinMs int64
 	var recent []recentRequestEntry
@@ -457,22 +451,14 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 					responseCache[responseKey] = responseAgg
 				}
 				responseAgg.Durations = append(responseAgg.Durations, entry.DurationMs)
+				// The response cache lives in Redis only; there is no in-memory layer to count.
 				switch entry.ResponseCacheStatus {
-				case "ram":
-					responseAgg.RAMHits++
-					responseRAMHits++
 				case "redis":
 					responseAgg.RedisHits++
 					responseRedisHits++
 				case "cold":
 					responseAgg.Cold++
 					responseCold++
-				}
-				if responseCacheRAMEligibleEndpoint(endpoint) {
-					responseRAMEligibleTotal++
-					if entry.ResponseCacheStatus == "ram" {
-						responseRAMEligibleHits++
-					}
 				}
 			}
 
@@ -612,7 +598,7 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 		cacheHits = legacyCacheHits
 		cacheMisses = legacyCacheMisses
 	}
-	finalizeCacheStats(report, cacheHits, cacheMisses, responseRAMHits, responseRedisHits, responseCold, responseRAMEligibleHits, responseRAMEligibleTotal, allCachedDurations, mixedDurations, coldDurations)
+	finalizeCacheStats(report, cacheHits, cacheMisses, responseRedisHits, responseCold, allCachedDurations, mixedDurations, coldDurations)
 	report.TopSpans = buildSpanEntries(spans)
 	report.CacheLatencyByEndpoint = buildLatencyEntries(latency)
 	report.ResponseCacheByEndpoint = buildResponseCacheEntries(responseCache)
@@ -635,21 +621,17 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	report.LogStats.ParseTimeMs = time.Since(parseStart).Milliseconds()
 }
 
-func finalizeCacheStats(report *dashboardReport, hits, misses, responseRAMHits, responseRedisHits, responseCold, responseRAMEligibleHits, responseRAMEligibleTotal uint64, allCached, mixed, cold []int64) {
+func finalizeCacheStats(report *dashboardReport, hits, misses, responseRedisHits, responseCold uint64, allCached, mixed, cold []int64) {
 	total := hits + misses
 	if total > 0 {
 		report.CacheStats.HitRate = float64(hits) / float64(total) * 100
 	}
-	responseTotal := responseRAMHits + responseRedisHits + responseCold
+	responseTotal := responseRedisHits + responseCold
 	if responseTotal > 0 {
-		report.CacheStats.ResponseHitRate = float64(responseRAMHits+responseRedisHits) / float64(responseTotal) * 100
-	}
-	if responseRAMEligibleTotal > 0 {
-		report.CacheStats.ResponseRAMHitRate = float64(responseRAMEligibleHits) / float64(responseRAMEligibleTotal) * 100
+		report.CacheStats.ResponseHitRate = float64(responseRedisHits) / float64(responseTotal) * 100
 	}
 	report.CacheStats.Hits = hits
 	report.CacheStats.Misses = misses
-	report.CacheStats.ResponseRAMHits = responseRAMHits
 	report.CacheStats.ResponseRedisHits = responseRedisHits
 	report.CacheStats.ResponseCold = responseCold
 	report.CacheStats.AllCachedAvgMs = avgDuration(allCached)
@@ -734,21 +716,19 @@ func buildResponseCacheEntries(responseCache map[string]*responseCacheAgg) []res
 		if count == 0 {
 			continue
 		}
-		hits := agg.RAMHits + agg.RedisHits
+		hits := agg.RedisHits
 		entries = append(entries, responseCacheEntry{
-			Endpoint:   agg.Endpoint,
-			Route:      agg.Route,
-			Method:     agg.Method,
-			Count:      count,
-			RAMHits:    agg.RAMHits,
-			RedisHits:  agg.RedisHits,
-			Cold:       agg.Cold,
-			RAMHitRate: float64(agg.RAMHits) / float64(count) * 100,
-			HitRate:    float64(hits) / float64(count) * 100,
-			AvgMs:      avgDuration(agg.Durations),
-			P50Ms:      percentileDuration(agg.Durations, 0.50),
-			P95Ms:      percentileDuration(agg.Durations, 0.95),
-			MaxMs:      float64(maxDuration(agg.Durations)),
+			Endpoint:  agg.Endpoint,
+			Route:     agg.Route,
+			Method:    agg.Method,
+			Count:     count,
+			RedisHits: agg.RedisHits,
+			Cold:      agg.Cold,
+			HitRate:   float64(hits) / float64(count) * 100,
+			AvgMs:     avgDuration(agg.Durations),
+			P50Ms:     percentileDuration(agg.Durations, 0.50),
+			P95Ms:     percentileDuration(agg.Durations, 0.95),
+			MaxMs:     float64(maxDuration(agg.Durations)),
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool {
@@ -758,15 +738,6 @@ func buildResponseCacheEntries(responseCache map[string]*responseCacheAgg) []res
 		return entries[i].Count > entries[j].Count
 	})
 	return entries
-}
-
-func responseCacheRAMEligibleEndpoint(endpoint string) bool {
-	switch endpoint {
-	case "embed", "stats", "combined", "uuid", "username":
-		return true
-	default:
-		return false
-	}
 }
 
 func addSlowest(slowest *[]slowRequestEntry, slowestMinMs *int64, req slowRequestEntry) {
@@ -800,7 +771,27 @@ func addSlowest(slowest *[]slowRequestEntry, slowestMinMs *int64, req slowReques
 	}
 }
 
+// playerLookupHosts answer per-player URLs (a name or UUID as the last path segment). Summed per URL they made one
+// row per player, so a slow host never showed up as one; the summaries count them as one name per host.
+var playerLookupHosts = []string{"mowojang.matdoes.dev/", "sessionserver.mojang.com/", "api.mojang.com/"}
+
+// dependencyGroupName is the name a dependency is summed under across requests.
+func dependencyGroupName(dep DependencySummary) string {
+	if dep.Kind != "http" {
+		return dep.Name
+	}
+	for _, host := range playerLookupHosts {
+		if strings.HasPrefix(dep.Name, host) {
+			if i := strings.LastIndexByte(dep.Name, '/'); i >= 0 {
+				return dep.Name[:i+1] + ":player"
+			}
+		}
+	}
+	return dep.Name
+}
+
 func addDependency(target map[string]*dependencyReportEntry, dep DependencySummary) {
+	dep.Name = dependencyGroupName(dep)
 	key := dep.Kind + "|" + dep.Operation + "|" + dep.Name
 	entry := target[key]
 	if entry == nil {
@@ -955,9 +946,8 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
   <div class="card"><div class="label">Mixed Avg / P95</div><div class="value">%.1f / %.1f ms</div></div>
   <div class="card"><div class="label">Cold Avg / P95</div><div class="value">%.1f / %.1f ms</div></div>
   <div class="card"><div class="label">Redis Hit Rate</div><div class="value">%.1f%%</div></div>
-  <div class="card"><div class="label">Response RAM Hit Rate (RAM Routes)</div><div class="value">%.1f%%</div></div>
   <div class="card"><div class="label">Response Total Hit Rate</div><div class="value">%.1f%%</div></div>
-  <div class="card"><div class="label">Response RAM / Redis / Cold</div><div class="value">%d / %d / %d</div></div>
+  <div class="card"><div class="label">Response Redis / Cold</div><div class="value">%d / %d</div></div>
   <div class="card"><div class="label">Upstream Errors</div><div class="value">%d</div></div>
   <div class="card"><div class="label">Rate Limits</div><div class="value">%d</div></div>
 </div>`,
@@ -966,8 +956,8 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 		r.CacheStats.MixedAvgMs, r.CacheStats.MixedP95Ms,
 		r.CacheStats.ColdAvgMs, r.CacheStats.ColdP95Ms,
 		r.CacheStats.HitRate,
-		r.CacheStats.ResponseRAMHitRate, r.CacheStats.ResponseHitRate,
-		r.CacheStats.ResponseRAMHits, r.CacheStats.ResponseRedisHits, r.CacheStats.ResponseCold,
+		r.CacheStats.ResponseHitRate,
+		r.CacheStats.ResponseRedisHits, r.CacheStats.ResponseCold,
 		r.CacheStats.UpstreamErrors, r.CacheStats.UpstreamRateLimits,
 	)
 
@@ -1131,10 +1121,10 @@ func renderResponseCacheTable(entries []responseCacheEntry) string {
 	if len(entries) == 0 {
 		return out + `<div class="empty">No response-cache summaries recorded yet.</div>`
 	}
-	out += `<table id="response-cache-table"><tr><th>Endpoint</th><th>Route</th><th>Method</th><th>Count</th><th>RAM</th><th>Redis</th><th>Cold</th><th>RAM Hit</th><th>Total Hit</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th></tr>`
+	out += `<table id="response-cache-table"><tr><th>Endpoint</th><th>Route</th><th>Method</th><th>Count</th><th>Redis</th><th>Cold</th><th>Hit</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th></tr>`
 	for _, e := range entries {
-		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f%%</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
-			esc(e.Endpoint), esc(e.Route), esc(e.Method), e.Count, e.RAMHits, e.RedisHits, e.Cold, e.RAMHitRate, e.HitRate, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs)
+		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
+			esc(e.Endpoint), esc(e.Route), esc(e.Method), e.Count, e.RedisHits, e.Cold, e.HitRate, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs)
 	}
 	return out + `</table>`
 }
@@ -1236,8 +1226,6 @@ func cacheBadge(status string) string {
 
 func responseCacheBadge(status string) string {
 	switch status {
-	case "ram":
-		return `<span class="badge badge-green">ram</span>`
 	case "redis":
 		return `<span class="badge badge-blue">redis</span>`
 	case "cold":

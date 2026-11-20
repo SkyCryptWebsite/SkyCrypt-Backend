@@ -92,7 +92,7 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 			"level": "info", "timestamp": now, "msg": "forensic_request_summary",
 			"request_id": "req-1", "method": "GET", "path": "/api/stats/ducky/Kiwi", "route": "/api/stats/:uuid/:profileId",
 			"cache_status": "all_cached", "status_code": 200, "duration_ms": 20, "response_size": 100,
-			"response_cache_status": "ram", "response_cache_endpoint": "stats",
+			"response_cache_status": "redis", "response_cache_endpoint": "stats",
 			"cache_hits": 3, "cache_misses": 0, "redis_calls": 3, "redis_ms": 5.0,
 			"dependencies": []DependencySummary{
 				{Kind: "redis", Operation: "GET", Name: "profiles", Count: 3, TotalMs: 5, AvgMs: 1.6},
@@ -140,11 +140,11 @@ func TestDashboardParsesForensicSummariesAndLegacyLogs(t *testing.T) {
 	if len(report.CacheLatencyByEndpoint) != 2 {
 		t.Fatalf("CacheLatencyByEndpoint len = %d, want 2", len(report.CacheLatencyByEndpoint))
 	}
-	if report.CacheStats.ResponseRAMHits != 1 || report.CacheStats.ResponseRedisHits != 0 || report.CacheStats.ResponseCold != 1 {
-		t.Fatalf("response cache stats = ram:%d redis:%d cold:%d, want 1/0/1", report.CacheStats.ResponseRAMHits, report.CacheStats.ResponseRedisHits, report.CacheStats.ResponseCold)
+	if report.CacheStats.ResponseRedisHits != 1 || report.CacheStats.ResponseCold != 1 {
+		t.Fatalf("response cache stats = redis:%d cold:%d, want 1/1", report.CacheStats.ResponseRedisHits, report.CacheStats.ResponseCold)
 	}
-	if report.CacheStats.ResponseRAMHitRate != 50 || report.CacheStats.ResponseHitRate != 50 {
-		t.Fatalf("response hit rates = ram:%.1f total:%.1f, want 50/50", report.CacheStats.ResponseRAMHitRate, report.CacheStats.ResponseHitRate)
+	if report.CacheStats.ResponseHitRate != 50 {
+		t.Fatalf("response hit rate = %.1f, want 50", report.CacheStats.ResponseHitRate)
 	}
 	if len(report.ResponseCacheByEndpoint) != 1 || report.ResponseCacheByEndpoint[0].Endpoint != "stats" {
 		t.Fatalf("unexpected ResponseCacheByEndpoint: %+v", report.ResponseCacheByEndpoint)
@@ -228,5 +228,22 @@ func TestDashboardHTMLServesProfilesThroughDownloadQuery(t *testing.T) {
 	}
 	if contentType := htmlResponse.Header.Get("Content-Type"); !strings.Contains(contentType, "text/html") {
 		t.Fatalf("dashboard content type = %q", contentType)
+	}
+}
+
+func TestDependencyGroupNameFoldsPlayerLookups(t *testing.T) {
+	tests := map[string]string{
+		"mowojang.matdoes.dev/yuuze": "mowojang.matdoes.dev/:player",
+		"sessionserver.mojang.com/session/minecraft/profile/0123456789abcdef0123456789abcdef": "sessionserver.mojang.com/session/minecraft/profile/:player",
+		"api.mojang.com/users/profiles/minecraft/Sledgehog":                                   "api.mojang.com/users/profiles/minecraft/:player",
+		"api.hypixel.net/v2/skyblock/profiles":                                                "api.hypixel.net/v2/skyblock/profiles",
+	}
+	for name, want := range tests {
+		if got := dependencyGroupName(DependencySummary{Kind: "http", Name: name}); got != want {
+			t.Errorf("%s: got %q, want %q", name, got, want)
+		}
+	}
+	if got := dependencyGroupName(DependencySummary{Kind: "redis", Name: "mowojang.matdoes.dev/x"}); got != "mowojang.matdoes.dev/x" {
+		t.Errorf("non-HTTP dependency was renamed to %q", got)
 	}
 }

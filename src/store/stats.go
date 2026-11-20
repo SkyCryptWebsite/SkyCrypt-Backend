@@ -39,7 +39,7 @@ func Ascending(key string) bool {
 	return strings.HasSuffix(key, ":fastest") || strings.HasSuffix(key, ":fastest_s") || strings.HasSuffix(key, ":fastest_s_plus")
 }
 
-// memberJSON is the part of a profile member the light tables and leaderboards read. jsoniter skips the rest.
+// memberJSON is the part of a profile member the light tables and leaderboards read. The decoder skips the rest.
 type memberJSON struct {
 	Profile *struct {
 		DeletionNotice *struct{} `json:"deletion_notice"`

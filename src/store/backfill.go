@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 // New stats are filled in from the stored profiles, which keep every field, so they don't wait for each player to
@@ -91,7 +89,7 @@ func recomputeProfile(ctx context.Context, profileID [16]byte, gameMode int16) e
 	}
 
 	var light profileLight
-	if err := jsoniter.ConfigCompatibleWithStandardLibrary.Unmarshal(object, &light); err != nil {
+	if err := profileDecoder.Unmarshal(object, &light); err != nil {
 		return err
 	}
 	update := profileValueUpdate{id: profileID, gameMode: gameMode, networth: profileNetworth(ctx, profileID, object)}

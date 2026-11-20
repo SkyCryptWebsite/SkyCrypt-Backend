@@ -237,8 +237,7 @@ func profileNetworth(ctx context.Context, profileID [16]byte, object []byte) map
 		Members map[string]skycrypttypes.Member `json:"members"`
 		Banking *skycrypttypes.Banking          `json:"banking"`
 	}
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(object, &profile); err != nil {
+	if err := profileDecoder.Unmarshal(object, &profile); err != nil {
 		return nil
 	}
 	var bank float64
@@ -249,7 +248,7 @@ func profileNetworth(ctx context.Context, profileID [16]byte, object []byte) map
 	var museums map[string]*skycrypttypes.Museum
 	if body, _, ok := readBlob(ctx, formatUUID(profileID), kindMuseum); ok && len(body) > 0 {
 		var response models.HypixelMuseumResponse
-		if json.Unmarshal(body, &response) == nil {
+		if profileDecoder.Unmarshal(body, &response) == nil {
 			museums = response.Members
 		}
 	}

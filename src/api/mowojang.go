@@ -35,6 +35,35 @@ var (
 	uuidLookupGroup    singleflight.Group
 )
 
+// mowojangTimeout bounds one call to the mowojang mirror. It usually answers quickly, but in production it sometimes
+// stalled for 1 to 8 s, and every build waiting on a name stalled with it. The official API is the fallback.
+var mowojangTimeout = 1500 * time.Millisecond
+
+// getMowojang fetches path (a username or UUID) from the mowojang mirror within mowojangTimeout. ok is false when
+// the mirror failed, timed out or doesn't know the player; the caller then asks Mojang.
+func getMowojang(ctx context.Context, path string) (body []byte, ok bool) {
+	ctx, cancel := context.WithTimeout(ctx, mowojangTimeout)
+	defer cancel()
+
+	resp, err := getContext(ctx, "https://mowojang.matdoes.dev/"+path)
+	if err != nil {
+		return nil, false
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		return nil, false
+	}
+
+	// Read before cancel: the timeout covers the body too.
+	body, err = io.ReadAll(resp.Body)
+	if err != nil || string(body) == "player not found" {
+		return nil, false
+	}
+	return body, true
+}
+
 func GetUUID(username string, throwAnError ...bool) (string, error) {
 	return GetUUIDContext(context.Background(), username, throwAnError...)
 }
@@ -68,27 +97,8 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 func fetchUUID(ctx context.Context, username string, shouldThrowError bool) (string, error) {
 	var post models.MowojangResponse
 
-	resp, err := getContext(ctx, fmt.Sprintf("https://mowojang.matdoes.dev/%s", username))
-	if err != nil || resp.StatusCode != http.StatusOK {
-		// Fallback to official Mojang API
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return getUUIDFromMojangContext(ctx, username, shouldThrowError)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		if shouldThrowError {
-			return post.UUID, upstreamError("Mojang", err)
-		}
-		return "", nil
-	}
-
-	if string(body) == "player not found" {
+	body, ok := getMowojang(ctx, username)
+	if !ok {
 		// Fallback to official Mojang API
 		return getUUIDFromMojangContext(ctx, username, shouldThrowError)
 	}
@@ -101,7 +111,7 @@ func fetchUUID(ctx context.Context, username string, shouldThrowError bool) (str
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(body, &post)
+	err := json.Unmarshal(body, &post)
 	if err != nil {
 		if shouldThrowError {
 			return post.UUID, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
@@ -366,24 +376,8 @@ func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.Mowoj
 func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
 	var post models.MowojangResponse
 
-	resp, err := getContext(ctx, fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
-	if err != nil || resp.StatusCode != http.StatusOK {
-		// Fallback to official Mojang API
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return resolvePlayerFromMojangContext(ctx, uuid)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &post, upstreamError("Mojang", err)
-	}
-
-	if string(body) == "player not found" {
+	body, ok := getMowojang(ctx, uuid)
+	if !ok {
 		// Fallback to official Mojang API
 		return resolvePlayerFromMojangContext(ctx, uuid)
 	}
@@ -393,7 +387,7 @@ func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.
 	}
 
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(body, &post)
+	err := json.Unmarshal(body, &post)
 	if err != nil {
 		return &post, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
 	}

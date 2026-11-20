@@ -102,3 +102,34 @@ func TestResolvePlayerAndGetUsernameShareOneFetch(t *testing.T) {
 		t.Fatalf("sessionserver called %d times after the name was cached, want 1", got)
 	}
 }
+
+// A stalled mirror must not hold the lookup: after mowojangTimeout it falls back to Mojang.
+func TestResolvePlayerFallsBackWhenMirrorStalls(t *testing.T) {
+	const uuid = "fedcba9876543210fedcba9876543210"
+
+	originalClient, originalTimeout := HTTPClient, mowojangTimeout
+	t.Cleanup(func() { HTTPClient, mowojangTimeout = originalClient, originalTimeout })
+	mowojangTimeout = 50 * time.Millisecond
+
+	HTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "sessionserver.mojang.com") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte(`{"id":"` + uuid + `","name":"Fallback"}`))),
+				}, nil
+			}
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		}),
+	}
+
+	start := time.Now()
+	resolved, err := ResolvePlayerContext(context.Background(), uuid)
+	if err != nil || resolved.Name != "Fallback" {
+		t.Fatalf("got %#v, %v; want the fallback name", resolved, err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("lookup took %s with a stalled mirror", elapsed)
+	}
+}

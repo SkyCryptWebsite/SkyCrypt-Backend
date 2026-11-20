@@ -1,6 +1,7 @@
 package db
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -49,5 +50,24 @@ func TestCompressValuePooledReusesBuffers(t *testing.T) {
 	releaseSmall()
 	if value != small {
 		t.Fatalf("small value should be stored as-is, got %v", value)
+	}
+}
+
+func TestCompressBuffersSurviveGC(t *testing.T) {
+	for len(compressBuffers) > 0 {
+		<-compressBuffers
+	}
+	value := strings.Repeat(`{"profiles":[{"profile_id":"kept"}]}`, 100)
+
+	compressed, release := compressValuePooled(value)
+	first := compressed.([]byte)
+	release()
+	runtime.GC()
+	runtime.GC()
+
+	compressed, release = compressValuePooled(value)
+	defer release()
+	if second := compressed.([]byte); &first[0] != &second[0] {
+		t.Fatal("buffer was not reused after a GC")
 	}
 }

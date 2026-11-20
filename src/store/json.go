@@ -3,7 +3,14 @@ package store
 import (
 	"encoding/json"
 	"errors"
+
+	"github.com/bytedance/sonic"
 )
+
+// profileDecoder decodes stored profile objects. jsoniter's string reader takes a byte-by-byte path for the escaped
+// "=" ending every Hypixel inventory string, which made decoding profiles for the light tables and networth about a
+// twentieth of all allocation once the store ran in the serving process. sonic.ConfigStd decodes the same values.
+var profileDecoder = sonic.ConfigStd
 
 // Small helpers for walking raw JSON without decoding it, so stored bodies keep every byte Hypixel sent.
 
