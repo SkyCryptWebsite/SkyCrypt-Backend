@@ -24,3 +24,30 @@ func TestCompressValueRoundTrip(t *testing.T) {
 		t.Fatalf("plain values written before compression must pass through")
 	}
 }
+
+func TestCompressValuePooledReusesBuffers(t *testing.T) {
+	first := strings.Repeat(`{"profiles":[{"profile_id":"first"}]}`, 100)
+	second := strings.Repeat(`{"member":"second","coins":12345}`, 200)
+
+	compressed, release := compressValuePooled(first)
+	got, err := decompressValue(string(compressed.([]byte)))
+	if err != nil || got != first {
+		t.Fatalf("first round trip failed: %v", err)
+	}
+	release()
+
+	// The second value may land in the first one's buffer; it must not keep any of its bytes.
+	compressed, release = compressValuePooled([]byte(second))
+	defer release()
+	got, err = decompressValue(string(compressed.([]byte)))
+	if err != nil || got != second {
+		t.Fatalf("second round trip failed: %v", err)
+	}
+
+	small := "4855c53ee4fb4100997600a92fc50984"
+	value, releaseSmall := compressValuePooled(small)
+	releaseSmall()
+	if value != small {
+		t.Fatalf("small value should be stored as-is, got %v", value)
+	}
+}

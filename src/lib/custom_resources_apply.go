@@ -719,6 +719,7 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 			if stats != nil {
 				stats.RenderHits++
 			}
+			noteRenderedTexture(texture)
 			return finishFallback(reason, "", texture)
 		}
 	} else if canRuntimeRender {
@@ -731,6 +732,7 @@ func ApplyTextureInput(input ItemTextureInput, textureCtx TextureApplyContext) A
 		if renderer == nil {
 			recordRuntimeRenderSkip(stats, renderer, textureCtx, isGenericSkullInput)
 		} else if texture, reason, ok := runtimeRenderTexture(renderer, input, textureCtx, stats); ok {
+			noteRenderedTexture(texture)
 			return finishFallback(reason, "", texture)
 		}
 	} else {

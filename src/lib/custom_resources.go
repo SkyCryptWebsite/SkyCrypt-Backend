@@ -45,7 +45,9 @@ var vanillaAssetsMu sync.RWMutex
 var vanillaAssets *vanillaAssetIndex
 var itemTextureResolutionGroup singleflight.Group
 
-var renderedTextureIndexLazyReloadInterval = 5 * time.Second
+// Runtime renders are indexed as they arrive (noteRenderedTexture), so the directory scan only has to catch files
+// written some other way, such as the master's pre-render. Every scan lists the whole directory.
+var renderedTextureIndexLazyReloadInterval = 2 * time.Minute
 var loadRenderedTextureIndexForRefresh = refreshRenderedTextureIndex
 
 const (

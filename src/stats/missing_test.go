@@ -30,3 +30,33 @@ func TestOwnedAccessoriesMatchesHasAccessory(t *testing.T) {
 		}
 	}
 }
+
+func TestGetMissingListsUnownedAccessories(t *testing.T) {
+	previous := constants.ItemsSnapshot()
+	t.Cleanup(func() { constants.SetItems(previous) })
+	constants.SetItems(map[string]models.ProcessedHypixelItem{
+		"WOLF_TALISMAN":            {SkyblockID: "WOLF_TALISMAN", Category: "accessory", Rarity: "common", Name: "Wolf Talisman"},
+		"WOLF_RING":                {SkyblockID: "WOLF_RING", Category: "accessory", Rarity: "rare", Name: "Wolf Ring"},
+		"FEATHER_TALISMAN":         {SkyblockID: "FEATHER_TALISMAN", Category: "accessory", Rarity: "common", Name: "Feather Talisman"},
+		"POTION_AFFINITY_TALISMAN": {SkyblockID: "POTION_AFFINITY_TALISMAN", Category: "accessory", Rarity: "common", Name: "Potion Affinity Talisman"},
+		"NOT_AN_ACCESSORY":         {SkyblockID: "NOT_AN_ACCESSORY", Category: "sword", Rarity: "common"},
+	})
+
+	// The wolf ring covers the wolf talisman it upgrades, and the feather talisman is owned.
+	owned := []models.InsertAccessory{
+		{Id: "WOLF_RING", Rarity: "rare"},
+		{Id: "FEATHER_TALISMAN", Rarity: "common"},
+	}
+	output := getMissing(&owned, nil)
+
+	var ids []string
+	for _, item := range append(output.Upgrades, output.Other...) {
+		ids = append(ids, item.Id)
+	}
+	if len(ids) != 1 || ids[0] != "POTION_AFFINITY_TALISMAN" {
+		t.Fatalf("missing = %v, want [POTION_AFFINITY_TALISMAN]", ids)
+	}
+	if item := append(output.Upgrades, output.Other...)[0]; item.Rarity != "common" || item.DisplayName != "Potion Affinity Talisman" {
+		t.Fatalf("missing item = %#v", item)
+	}
+}

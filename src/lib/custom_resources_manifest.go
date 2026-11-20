@@ -578,8 +578,13 @@ func refreshRenderedTextureIndex(cacheDir string) (int, error) {
 		// Some files are gone (the cache was cleared or rebuilt): entries may point at them, so start over.
 		return LoadRenderedTextureIndex(cacheDir)
 	}
+	return indexAddedRenderedTextures(renderedDir, added), nil
+}
+
+// indexAddedRenderedTextures indexes rendered files that weren't in the index yet and marks them seen.
+func indexAddedRenderedTextures(renderedDir string, added []string) int {
 	if len(added) == 0 {
-		return 0, nil
+		return 0
 	}
 
 	batch := newTextureCacheBatch()
@@ -599,10 +604,54 @@ func refreshRenderedTextureIndex(cacheDir string) (int, error) {
 		renderedTextureIndexSeen.names[name] = struct{}{}
 	}
 	renderedTextureIndexSeen.Unlock()
-	return loaded, nil
+	return loaded
 }
 
-// readRenderedTextureNames lists the .webp files in renderedDir. Readdirnames skips the per-entry structs and the
+// noteRenderedTexture indexes a runtime render as soon as this process learns of it, whether it rendered the item
+// itself or read the prefork master's result from Redis. Before this, new renders only reached the index through
+// the directory scan, which listed every file in rendered/ every few seconds in every process: about an eighth of
+// all allocation in production.
+func noteRenderedTexture(texture AppliedItemTexture) {
+	const marker = "/cache/rendered/"
+	index := strings.LastIndex(texture.Texture, marker)
+	if index < 0 {
+		return
+	}
+	fileName := texture.Texture[index+len(marker):]
+	if !isRenderedTextureName(fileName) || strings.Contains(fileName, "/") {
+		return
+	}
+
+	renderedTextureIndexSeen.Lock()
+	_, seen := renderedTextureIndexSeen.names[fileName]
+	renderedTextureIndexSeen.Unlock()
+	if seen {
+		return
+	}
+
+	renderedTextureIndexReloadMu.Lock()
+	cacheDir := renderedTextureIndexCacheDir
+	renderedTextureIndexReloadMu.Unlock()
+	if strings.TrimSpace(cacheDir) == "" {
+		return
+	}
+	// Only files on disk: a seen name that a scan can't find makes it reload the whole index. A Redis result can
+	// outlive its file when the cache directory is cleared.
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if _, err := os.Stat(filepath.Join(renderedDir, fileName)); err != nil {
+		return
+	}
+	indexAddedRenderedTextures(renderedDir, []string{fileName})
+}
+
+// isRenderedTextureName reports whether name is a finished render. The renderer writes through temporary
+// ".imagecache-*.webp" files in the same directory; listing one mid-write put it in the seen set, and once it was
+// renamed away the next refresh saw a file missing and reloaded the whole index.
+func isRenderedTextureName(name string) bool {
+	return !strings.HasPrefix(name, ".") && strings.EqualFold(filepath.Ext(name), ".webp")
+}
+
+// readRenderedTextureNames lists the finished .webp renders in renderedDir. Readdirnames skips the per-entry structs and the
 // sort os.ReadDir does, which add up for a directory this size.
 func readRenderedTextureNames(renderedDir string) ([]string, error) {
 	dir, err := os.Open(renderedDir)
@@ -616,7 +665,7 @@ func readRenderedTextureNames(renderedDir string) ([]string, error) {
 	}
 	out := names[:0]
 	for _, name := range names {
-		if strings.EqualFold(filepath.Ext(name), ".webp") {
+		if isRenderedTextureName(name) {
 			out = append(out, name)
 		}
 	}

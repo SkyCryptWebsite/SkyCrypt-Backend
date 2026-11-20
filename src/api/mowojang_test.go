@@ -1,8 +1,16 @@
 package api
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
 	"skycrypt/src/models"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestUniqueUnresolvedUUIDs(t *testing.T) {
@@ -36,5 +44,61 @@ func TestUniqueUnresolvedUsernames(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("got[%d] = %q, want %q: %v", i, got[i], want[i], got)
 		}
+	}
+}
+
+// A build resolves the player and looks up member names at the same time; both must share one Mojang fetch.
+func TestResolvePlayerAndGetUsernameShareOneFetch(t *testing.T) {
+	const uuid = "0123456789abcdef0123456789abcdef"
+
+	originalClient := HTTPClient
+	t.Cleanup(func() { HTTPClient = originalClient })
+
+	var sessionCalls atomic.Int32
+	release := make(chan struct{})
+	HTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "sessionserver.mojang.com") {
+				sessionCalls.Add(1)
+				<-release
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte(`{"id":"` + uuid + `","name":"Shared"}`))),
+				}, nil
+			}
+			// The mirror is down, as it was in production.
+			return &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(bytes.NewReader(nil))}, nil
+		}),
+	}
+
+	var wg sync.WaitGroup
+	var resolvedName, username string
+	wg.Go(func() {
+		resolved, err := ResolvePlayerContext(context.Background(), uuid)
+		if err == nil {
+			resolvedName = resolved.Name
+		}
+	})
+	wg.Go(func() {
+		username, _ = GetUsernameContext(context.Background(), uuid)
+	})
+	// Give both callers time to reach the fetch before Mojang answers.
+	time.Sleep(100 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if resolvedName != "Shared" || username != "Shared" {
+		t.Fatalf("got names %q and %q, want Shared", resolvedName, username)
+	}
+	if got := sessionCalls.Load(); got != 1 {
+		t.Fatalf("sessionserver called %d times, want 1", got)
+	}
+
+	// The name is now known to this process: neither call asks Mojang again.
+	if _, err := ResolvePlayerContext(context.Background(), uuid); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionCalls.Load(); got != 1 {
+		t.Fatalf("sessionserver called %d times after the name was cached, want 1", got)
 	}
 }

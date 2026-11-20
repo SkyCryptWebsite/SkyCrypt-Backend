@@ -159,18 +159,23 @@ func getMagicalPowerData(accessories *[]models.InsertAccessory, userProfile *sky
 	return output
 }
 
+// accessoryRef is the part of a known accessory getMissing compares. The catalog's ~700 entries used to be copied
+// into full InsertAccessory values (each carrying an empty ProcessedItem) three times per build: about 2% of all
+// allocation in production.
+type accessoryRef struct {
+	id     string
+	rarity string
+}
+
 func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.AccessoryIds) models.MissingOutput {
 	ACCESSORIES := constants.GetAllAccessories()
-	unique := make([]models.InsertAccessory, 0)
-	for _, acc := range ACCESSORIES {
-		unique = append(unique, models.InsertAccessory{
-			Id:     acc.SkyBlockID,
-			Rarity: acc.Rarity,
-		})
+	unique := make([]accessoryRef, len(ACCESSORIES))
+	for i, acc := range ACCESSORIES {
+		unique[i] = accessoryRef{id: acc.SkyBlockID, rarity: acc.Rarity}
 	}
 
 	for _, item := range unique {
-		var aliases, exists = constants.ACCESSORY_ALIASES[item.Id]
+		var aliases, exists = constants.ACCESSORY_ALIASES[item.id]
 		if !exists {
 			continue
 		}
@@ -179,7 +184,7 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 			if hasAccessory(accessories, duplicate, "", true) {
 				accessory, found := getAccessory(accessories, duplicate)
 				if found {
-					accessory.Id = item.Id
+					accessory.Id = item.id
 				}
 			}
 		}
@@ -189,24 +194,15 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 	// for each of the ~700 known accessories.
 	owned := ownedAccessories(*accessories)
 
-	missing := make([]models.InsertAccessory, 0)
-	for _, accessory := range unique {
-		if !owned.has(accessory.Id, accessory.Rarity, true) {
-			missing = append(missing, accessory)
-		}
-	}
-
-	filteredMissing := make([]models.InsertAccessory, 0)
-	for _, missingAccessory := range missing {
-		upgrades := constants.GetUpgradeList(missingAccessory.Id)
-		if len(upgrades) == 0 {
-			filteredMissing = append(filteredMissing, missingAccessory)
+	filteredMissing := make([]accessoryRef, 0, len(unique))
+	for _, missingAccessory := range unique {
+		if owned.has(missingAccessory.id, missingAccessory.rarity, true) {
 			continue
 		}
 
 		shouldKeep := true
-		for _, upgrade := range upgrades {
-			if owned.has(upgrade, missingAccessory.Rarity, false) {
+		for _, upgrade := range constants.GetUpgradeList(missingAccessory.id) {
+			if owned.has(upgrade, missingAccessory.rarity, false) {
 				shouldKeep = false
 				break
 			}
@@ -220,16 +216,16 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 	upgrades := make([]models.ProcessedItem, 0)
 	other := make([]models.ProcessedItem, 0)
 	for _, missingAccessory := range filteredMissing {
-		accessory, _ := constants.GetItem(missingAccessory.Id)
+		accessory, _ := constants.GetItem(missingAccessory.id)
 		object := models.ProcessedItem{
 			Texture:     accessory.Texture,
 			DisplayName: accessory.Name,
-			Rarity:      missingAccessory.Rarity,
-			Id:          missingAccessory.Id,
+			Rarity:      missingAccessory.rarity,
+			Id:          missingAccessory.id,
 		}
 
 		// Wiki links
-		NEUItem, err := notenoughupdates.GetItem(missingAccessory.Id)
+		NEUItem, err := notenoughupdates.GetItem(missingAccessory.id)
 		if err == nil && len(NEUItem.Wiki) > 0 {
 			if len(NEUItem.Wiki) == 1 {
 				if !strings.HasPrefix(NEUItem.Wiki[0], "https://wiki.hypixel.net/") {
@@ -244,10 +240,10 @@ func getMissing(accessories *[]models.InsertAccessory, accessoryIds []models.Acc
 			}
 		}
 
-		upgradeList := constants.GetUpgradeList(missingAccessory.Id)
-		specialAccessory, isSpecial := constants.SPECIAL_ACCESSORIES[missingAccessory.Id]
+		upgradeList := constants.GetUpgradeList(missingAccessory.id)
+		specialAccessory, isSpecial := constants.SPECIAL_ACCESSORIES[missingAccessory.id]
 
-		if (len(upgradeList) > 0 && upgradeList[0] != missingAccessory.Id) || (isSpecial && len(specialAccessory.Rarities) > 0) {
+		if (len(upgradeList) > 0 && upgradeList[0] != missingAccessory.id) || (isSpecial && len(specialAccessory.Rarities) > 0) {
 			upgrades = append(upgrades, object)
 		} else {
 			other = append(other, object)

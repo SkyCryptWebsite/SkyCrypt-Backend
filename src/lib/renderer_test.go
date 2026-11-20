@@ -1171,3 +1171,55 @@ func TestRefreshRenderedTextureIndexOnlyIndexesNewFiles(t *testing.T) {
 		t.Fatalf("refresh after a removal indexed %d (%v), want a full reload of 2", loaded, err)
 	}
 }
+
+func TestNoteRenderedTextureIndexesWithoutScan(t *testing.T) {
+	withRenderItemGlobals(t)
+
+	cacheDir := t.TempDir()
+	renderedDir := filepath.Join(cacheDir, "rendered")
+	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reloadRenderedTextureIndex(cacheDir); err != nil {
+		t.Fatal(err)
+	}
+	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
+
+	// A result whose file isn't on disk is skipped: a scan would miss it and reload everything.
+	missing := "skyblock=MISSING_ITEM__pack=HYPIXEL_PLUS__hash=gone.webp"
+	noteRenderedTexture(AppliedItemTexture{Texture: publicCacheTextureURL(filepath.Join(renderedDir, missing)), TexturePack: "HYPIXEL_PLUS"})
+	if _, ok := cachedStableSkyBlockTexture("MISSING_ITEM", context); ok {
+		t.Fatal("render without a file was indexed")
+	}
+
+	fileName := "skyblock=NEW_ITEM__pack=HYPIXEL_PLUS__hash=new.webp"
+	if err := os.WriteFile(filepath.Join(renderedDir, fileName), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	noteRenderedTexture(AppliedItemTexture{Texture: publicCacheTextureURL(filepath.Join(renderedDir, fileName)), TexturePack: "HYPIXEL_PLUS"})
+	texture, ok := cachedStableSkyBlockTexture("NEW_ITEM", context)
+	if !ok || texture.TexturePack != "HYPIXEL_PLUS" {
+		t.Fatalf("noted render was not indexed: %#v", texture)
+	}
+
+	// The scan that follows finds nothing new and nothing gone, so it doesn't reload the index.
+	if loaded, err := refreshRenderedTextureIndex(cacheDir); err != nil || loaded != 0 {
+		t.Fatalf("refresh after note loaded %d, err %v", loaded, err)
+	}
+}
+
+func TestRenderedTextureNamesSkipRendererTempFiles(t *testing.T) {
+	renderedDir := t.TempDir()
+	for _, name := range []string{"skyblock=A__pack=HYPIXEL_PLUS__hash=a.webp", ".imagecache-123.webp", "notes.txt"} {
+		if err := os.WriteFile(filepath.Join(renderedDir, name), []byte("test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names, err := readRenderedTextureNames(renderedDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 || names[0] != "skyblock=A__pack=HYPIXEL_PLUS__hash=a.webp" {
+		t.Fatalf("got %v, want only the finished render", names)
+	}
+}

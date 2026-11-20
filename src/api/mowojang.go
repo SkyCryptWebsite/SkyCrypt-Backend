@@ -25,6 +25,10 @@ var resolvePlayerGroup singleflight.Group
 
 const identityCacheTTL = 24 * time.Hour
 
+// storedNameCacheTTL keeps a name read from the store while Mojang failed: long enough to cover one build and a
+// burst of requests, short enough that a renamed player shows up soon.
+const storedNameCacheTTL = 5 * time.Minute
+
 var (
 	usernameLocalCache = localcache.NewLocalCache[string](8192)
 	uuidLocalCache     = localcache.NewLocalCache[string](8192)
@@ -124,8 +128,6 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 		shouldThrowError = throwAnError[0]
 	}
 
-	var post models.MowojangResponse
-
 	key := fmt.Sprintf("username:%s", uuid)
 	if cachedUsername, ok, _ := usernameLocalCache.Get(key); ok {
 		return cachedUsername, nil
@@ -136,54 +138,16 @@ func GetUsernameContext(ctx context.Context, uuid string, throwAnError ...bool) 
 		return cachedUsername, nil
 	}
 
-	resp, err := getContext(ctx, fmt.Sprintf("https://mowojang.matdoes.dev/%s", uuid))
-	if err != nil || resp.StatusCode != http.StatusOK {
-		// Fallback to official Mojang API
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		return getUsernameFromMojangContext(ctx, uuid, shouldThrowError)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
+	// The same fetch ResolvePlayer makes, through the same singleflight: a stats build resolves the player, its
+	// members and its collection contributors at once, and each used to fetch the same UUID separately.
+	resolved, err := resolvePlayerByUUIDShared(ctx, uuid)
 	if err != nil {
 		if shouldThrowError {
-			return post.Name, upstreamError("Mojang", err)
+			return "", err
 		}
 		return "", nil
 	}
-
-	if string(body) == "player not found" {
-		// Fallback to official Mojang API
-		return getUsernameFromMojangContext(ctx, uuid, shouldThrowError)
-	}
-
-	if len(body) == 0 {
-		if shouldThrowError {
-			return post.Name, fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
-		}
-		return "", nil
-	}
-
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(body, &post)
-	if err != nil {
-		if shouldThrowError {
-			return post.Name, fmt.Errorf("%w: error parsing Mojang JSON: %v", ErrUpstream, err)
-		}
-		return "", nil
-	}
-
-	identityUUID := post.UUID
-	if identityUUID == "" {
-		identityUUID = uuid
-	}
-	cacheMowojangIdentity(ctx, post.Name, identityUUID, string(body), true)
-
-	return post.Name, nil
+	return resolved.Name, nil
 }
 
 func ResolvePlayer(input string, throwAnError ...bool) (*models.MowojangResponse, error) {
@@ -213,11 +177,7 @@ func ResolvePlayerContext(ctx context.Context, input string, throwAnError ...boo
 		uuid = tempUUID
 	}
 
-	// Singleflight: deduplicate concurrent resolutions for the same UUID
-	// (e.g. handler + FormatMembers resolving the same player simultaneously)
-	resultIface, err, _ := resolvePlayerGroup.Do(uuid, func() (interface{}, error) {
-		return resolvePlayerByUUIDContext(ctx, uuid)
-	})
+	resolved, err := resolvePlayerByUUIDShared(ctx, uuid)
 	if err != nil {
 		if shouldThrowError {
 			return &post, err
@@ -225,6 +185,18 @@ func ResolvePlayerContext(ctx context.Context, input string, throwAnError ...boo
 		return &post, nil
 	}
 
+	return resolved, nil
+}
+
+// resolvePlayerByUUIDShared resolves a UUID once however many callers ask for it at the same time (e.g. the handler
+// and FormatMembers resolving the same player).
+func resolvePlayerByUUIDShared(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
+	resultIface, err, _ := resolvePlayerGroup.Do(uuid, func() (interface{}, error) {
+		return resolvePlayerByUUIDContext(ctx, uuid)
+	})
+	if err != nil {
+		return nil, err
+	}
 	return resultIface.(*models.MowojangResponse), nil
 }
 
@@ -373,6 +345,11 @@ func uniqueUnresolvedUsernames(uuids []string, usernames map[string]string) []st
 func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
 	var post models.MowojangResponse
 
+	// A UUID and its name are the whole answer, so a name this process already knows needs no Redis or Mojang call.
+	if name, ok, _ := usernameLocalCache.Get(fmt.Sprintf("username:%s", uuid)); ok && name != "" {
+		return &models.MowojangResponse{UUID: uuid, Name: name}, nil
+	}
+
 	key := fmt.Sprintf("mowojangUUID:%s", uuid)
 	cache, err := redis.GetContext(ctx, key)
 	if err == nil && cache != "" {
@@ -490,72 +467,6 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 	return mojangResp.ID, nil
 }
 
-func getUsernameFromMojangContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
-	return getUsernameFreshContext(ctx, uuid, shouldThrowError)
-}
-
-func getUsernameFreshContext(ctx context.Context, uuid string, shouldThrowError bool) (string, error) {
-	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
-	if err != nil || resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusTooManyRequests {
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-		if name, ok := store.LookupName(ctx, uuid); ok {
-			return name, nil
-		}
-		if err == nil {
-			err = fmt.Errorf("status code %d", resp.StatusCode)
-		}
-		if shouldThrowError {
-			return "", upstreamError("Mojang", err)
-		}
-		return "", nil
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		if shouldThrowError {
-			return "", upstreamError("Mojang", err)
-		}
-		return "", nil
-	}
-
-	if mojangNotFound(resp.StatusCode) {
-		if shouldThrowError {
-			return "", fmt.Errorf("%w: no Minecraft player has UUID %s", ErrPlayerNotFound, uuid)
-		}
-		return "", nil
-	}
-
-	if len(body) == 0 {
-		if shouldThrowError {
-			return "", fmt.Errorf("%w: Mojang sent an empty response", ErrUpstream)
-		}
-		return "", nil
-	}
-
-	var mojangResp struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}
-
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(body, &mojangResp)
-	if err != nil {
-		if shouldThrowError {
-			return "", fmt.Errorf("error parsing Mojang API response: %v", err)
-		}
-		return "", nil
-	}
-
-	cacheMowojangIdentity(ctx, mojangResp.Name, uuid, "", true)
-
-	return mojangResp.Name, nil
-}
-
 func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
 	resp, err := getContext(ctx, fmt.Sprintf("https://sessionserver.mojang.com/session/minecraft/profile/%s", uuid))
 	if err != nil || resp.StatusCode >= http.StatusInternalServerError || resp.StatusCode == http.StatusTooManyRequests {
@@ -563,6 +474,9 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 			_ = resp.Body.Close()
 		}
 		if name, ok := store.LookupName(ctx, uuid); ok {
+			// Kept briefly, so the rest of this build and the next few requests don't ask Mojang again while it is
+			// failing or rate limiting.
+			usernameLocalCache.Set(fmt.Sprintf("username:%s", uuid), name, storedNameCacheTTL, storedNameCacheTTL)
 			return &models.MowojangResponse{UUID: uuid, Name: name}, nil
 		}
 		if err == nil {

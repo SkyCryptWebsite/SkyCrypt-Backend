@@ -63,17 +63,51 @@ var zstdDecoder, _ = zstd.NewReader(nil,
 const zstdMagic = "\x28\xb5\x2f\xfd"
 
 func compressValue(value interface{}) interface{} {
+	if src, ok := compressSource(value); ok {
+		return zstdEncoder.EncodeAll(src, nil)
+	}
+	return value
+}
+
+// compressSource returns the bytes of a value big enough to compress. A string's bytes are read in place: EncodeAll
+// only reads its input.
+func compressSource(value interface{}) ([]byte, bool) {
 	switch v := value.(type) {
 	case string:
 		if len(v) >= compressMinBytes {
-			return zstdEncoder.EncodeAll([]byte(v), nil)
+			return unsafe.Slice(unsafe.StringData(v), len(v)), true
 		}
 	case []byte:
 		if len(v) >= compressMinBytes {
-			return zstdEncoder.EncodeAll(v, nil)
+			return v, true
 		}
 	}
-	return value
+	return nil, false
+}
+
+// Compressed values only live until the SET that sends them returns, so their buffers are reused. A new buffer per
+// SET was about an eighth of all allocation in production: Hypixel bodies are megabytes each.
+var compressBuffers sync.Pool
+
+// Buffers bigger than this are dropped rather than pooled, so one huge value doesn't stay pinned.
+const maxPooledCompressBuffer = 16 << 20
+
+// compressValuePooled is compressValue into a pooled buffer. Call release once nothing reads the value any more.
+func compressValuePooled(value interface{}) (out interface{}, release func()) {
+	src, ok := compressSource(value)
+	if !ok {
+		return value, func() {}
+	}
+	buf, _ := compressBuffers.Get().(*[]byte)
+	if buf == nil {
+		buf = new([]byte)
+	}
+	*buf = zstdEncoder.EncodeAll(src, (*buf)[:0])
+	return *buf, func() {
+		if cap(*buf) <= maxPooledCompressBuffer {
+			compressBuffers.Put(buf)
+		}
+	}
 }
 
 // decompressValue passes plain values through, so keys written before compression still read fine.
@@ -407,7 +441,10 @@ func SetManyContext(ctx context.Context, values map[string]interface{}, expirati
 }
 
 func SetContext(ctx context.Context, key string, value interface{}, expirationSeconds int) error {
-	return setContext(ctx, key, compressValue(value), expirationSeconds)
+	// go-redis writes the command on this goroutine, retries included, so the buffer is free once Set returns.
+	compressed, release := compressValuePooled(value)
+	defer release()
+	return setContext(ctx, key, compressed, expirationSeconds)
 }
 
 // SetRawContext stores value as is, for values already compressed in another format.
