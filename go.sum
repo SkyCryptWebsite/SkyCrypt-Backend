@@ -2,8 +2,8 @@ github.com/HugoSmits86/nativewebp v1.3.0 h1:n1egtEzSV4KwFtealr7dzdYq1wI/uj/bOQ/Q
 github.com/HugoSmits86/nativewebp v1.3.0/go.mod h1:YNQuWenlVmSUUASVNhTDwf4d7FwYQGbGhklC8p72Vr8=
 github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer v0.3.1 h1:8wXBcoMfZgyy/FcNFmK4y5qNhne/L3UV/LkPmgBtmCw=
 github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer v0.3.1/go.mod h1:Iajz9FUz3vd0K9LyxgcLmdaGwnaSbiMQi9n3MHzTLzA=
-github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.27 h1:4Camojrr8mYuL9ON17reYhMV3wuVRj4kioL0ODzd2GQ=
-github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.27/go.mod h1:u8E2tx0VQegMEQ/WZM4wx6D9wVWOkdum1cb1Ez9dTsk=
+github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.28 h1:3NirML4v8hXKRgllEEDZEXaua8JK7FU9p7DBGfo+iDg=
+github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.28/go.mod h1:u8E2tx0VQegMEQ/WZM4wx6D9wVWOkdum1cb1Ez9dTsk=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.24 h1:s0VV3+2qfMV4rF6UyRvnPaaJCR0k4fBKncbxjS0j8a8=
 github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.24/go.mod h1:dNkyNi605ZnV4h11feN2M4Rt4nB5LfI89P6i8rIPMXw=
 github.com/SkyCryptWebsite/fastnbt v0.1.0 h1:hn2E+q90fslAa9llhtAtQIHHqwKcclj8IsJpyxUw8RM=

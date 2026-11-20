@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/SkyCryptWebsite/SkyCrypt-Assets-Renderer v0.3.1
-	github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.27
+	github.com/SkyCryptWebsite/SkyCrypt-Types v0.1.28
 	github.com/SkyCryptWebsite/SkyHelper-Networth-Go v1.2.24
 	github.com/bytedance/sonic v1.15.4
 	github.com/cespare/xxhash/v2 v2.3.0
