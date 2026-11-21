@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"runtime"
 	"runtime/pprof"
@@ -114,49 +115,104 @@ func profileSites(name string) []memoryProfileSite {
 	if profile == nil {
 		return nil
 	}
-
-	reader, writer := io.Pipe()
-	writeDone := make(chan error, 1)
-	go func() {
-		err := profile.WriteTo(writer, 1)
-		_ = writer.CloseWithError(err)
-		writeDone <- err
-	}()
-
-	sites, parseErr := parseProfileSites(reader)
-	if parseErr != nil {
-		_ = reader.CloseWithError(parseErr)
-		if err := <-writeDone; err != nil {
-			return nil
-		}
-		return nil
-	}
-	if err := <-writeDone; err != nil {
+	sites, err := topProfileSites(func() (io.ReadCloser, error) {
+		reader, writer := io.Pipe()
+		go func() {
+			_ = writer.CloseWithError(profile.WriteTo(writer, 1))
+		}()
+		return reader, nil
+	})
+	if err != nil {
 		return nil
 	}
 	return sites
 }
 
-func parseProfileSites(reader io.Reader) ([]memoryProfileSite, error) {
+const maxProfileSites = 15
+
+type siteCounts struct {
+	inUseObjects, inUseBytes, cumulativeObjects, cumulativeBytes int64
+}
+
+// topProfileSites returns the profile's largest sites by live bytes, adding up records whose stacks name the same
+// functions. It reads the profile twice: once summing counts per stack hash, then once more for the winners'
+// stack text. Keeping every stack as a string instead held a few hundred MB for a long-running process's
+// allocation profile, each time the dashboard was built.
+func topProfileSites(open func() (io.ReadCloser, error)) ([]memoryProfileSite, error) {
+	counts := map[uint64]*siteCounts{}
+	err := scanProfileFile(open, func(record siteCounts, frames []string) {
+		key := hashFrames(frames)
+		total := counts[key]
+		if total == nil {
+			total = &siteCounts{}
+			counts[key] = total
+		}
+		total.inUseObjects += record.inUseObjects
+		total.inUseBytes += record.inUseBytes
+		total.cumulativeObjects += record.cumulativeObjects
+		total.cumulativeBytes += record.cumulativeBytes
+	})
+	if err != nil || len(counts) == 0 {
+		return nil, err
+	}
+
+	keys := make([]uint64, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return counts[keys[i]].inUseBytes > counts[keys[j]].inUseBytes })
+	if len(keys) > maxProfileSites {
+		keys = keys[:maxProfileSites]
+	}
+	stacks := make(map[uint64]string, len(keys))
+	for _, key := range keys {
+		stacks[key] = ""
+	}
+	err = scanProfileFile(open, func(_ siteCounts, frames []string) {
+		key := hashFrames(frames)
+		if stack, wanted := stacks[key]; wanted && stack == "" {
+			stacks[key] = strings.Join(frames, "\n")
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	sites := make([]memoryProfileSite, 0, len(keys))
+	for _, key := range keys {
+		total := counts[key]
+		sites = append(sites, memoryProfileSite{
+			InUseObjects: total.inUseObjects, InUseBytes: total.inUseBytes,
+			CumulativeObjects: total.cumulativeObjects, CumulativeBytes: total.cumulativeBytes,
+			Stack: stacks[key],
+		})
+	}
+	return sites, nil
+}
+
+func scanProfileFile(open func() (io.ReadCloser, error), visit func(siteCounts, []string)) error {
+	reader, err := open()
+	if err != nil {
+		return err
+	}
+	err = scanProfile(reader, visit)
+	_ = reader.Close()
+	return err
+}
+
+// scanProfile calls visit once per record of a text (debug=1) heap profile, with its counts and frame names. The
+// frames slice is reused between records.
+func scanProfile(reader io.Reader, visit func(siteCounts, []string)) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
-	sitesByStack := make(map[string]*memoryProfileSite)
-	var pending *memoryProfileSite
-	var stackLines []string
+	var pending *siteCounts
+	var frames []string
 	flush := func() {
-		if pending != nil && len(stackLines) > 0 {
-			pending.Stack = strings.Join(stackLines, "\n")
-			if existing := sitesByStack[pending.Stack]; existing != nil {
-				existing.InUseObjects += pending.InUseObjects
-				existing.InUseBytes += pending.InUseBytes
-				existing.CumulativeObjects += pending.CumulativeObjects
-				existing.CumulativeBytes += pending.CumulativeBytes
-			} else {
-				sitesByStack[pending.Stack] = pending
-			}
+		if pending != nil && len(frames) > 0 {
+			visit(*pending, frames)
 		}
 		pending = nil
-		stackLines = nil
+		frames = frames[:0]
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -164,7 +220,7 @@ func parseProfileSites(reader io.Reader) ([]memoryProfileSite, error) {
 		if len(fields) < 2 || !strings.HasSuffix(fields[0], ":") {
 			if pending != nil && strings.HasPrefix(strings.TrimSpace(line), "#") {
 				if frame := profileStackName(line); frame != "" {
-					stackLines = append(stackLines, frame)
+					frames = append(frames, frame)
 				}
 			}
 			continue
@@ -175,28 +231,25 @@ func parseProfileSites(reader io.Reader) ([]memoryProfileSite, error) {
 			continue
 		}
 		flush()
-		pending = &memoryProfileSite{InUseObjects: objects, InUseBytes: bytesUsed}
+		pending = &siteCounts{inUseObjects: objects, inUseBytes: bytesUsed}
 		if len(fields) >= 4 {
 			cumulativeObjects := strings.TrimSuffix(strings.TrimPrefix(fields[2], "["), ":")
-			pending.CumulativeObjects, _ = strconv.ParseInt(cumulativeObjects, 10, 64)
-			pending.CumulativeBytes, _ = strconv.ParseInt(strings.TrimSuffix(fields[3], "]"), 10, 64)
+			pending.cumulativeObjects, _ = strconv.ParseInt(cumulativeObjects, 10, 64)
+			pending.cumulativeBytes, _ = strconv.ParseInt(strings.TrimSuffix(fields[3], "]"), 10, 64)
 		}
 	}
 	flush()
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	return scanner.Err()
+}
+
+// hashFrames identifies a stack by its frame names.
+func hashFrames(frames []string) uint64 {
+	h := fnv.New64a()
+	for _, frame := range frames {
+		_, _ = h.Write([]byte(frame))
+		_, _ = h.Write([]byte{'\n'})
 	}
-	sites := make([]memoryProfileSite, 0, len(sitesByStack))
-	for _, site := range sitesByStack {
-		sites = append(sites, *site)
-	}
-	sort.Slice(sites, func(i, j int) bool {
-		return sites[i].InUseBytes > sites[j].InUseBytes
-	})
-	if len(sites) > 15 {
-		sites = sites[:15]
-	}
-	return sites, nil
+	return h.Sum64()
 }
 
 func profileStackName(line string) string {
@@ -207,17 +260,54 @@ func profileStackName(line string) string {
 	return strings.Join(fields[2:], " ")
 }
 
-func writeMemoryProfile(c fiber.Ctx, profileName string) error {
-	if profileName != "heap" && profileName != "allocs" && profileName != "goroutine" {
-		return c.Status(400).SendString("unsupported profile; use heap, allocs, or goroutine")
-	}
-	profile := pprof.Lookup(profileName)
-	if profile == nil {
-		return c.Status(404).SendString(fmt.Sprintf("profile %q is unavailable", profileName))
-	}
+// Sampling rates for the contention profiles, set only while forensics is on. One in mutexProfileFraction
+// contended lock waits is recorded; a blocking wait of blockProfileRate or longer always is, shorter ones in
+// proportion, so the overhead stays small.
+const (
+	mutexProfileFraction = 100
+	blockProfileRate     = int(time.Millisecond)
+)
+
+// EnableContentionProfiles turns on the mutex and block profiles the dashboard serves, which show requests
+// waiting on each other's locks and channels in one process.
+func EnableContentionProfiles() {
+	runtime.SetMutexProfileFraction(mutexProfileFraction)
+	runtime.SetBlockProfileRate(blockProfileRate)
+}
+
+// CPU profiles are taken one at a time, for this long unless the request asks otherwise.
+const (
+	defaultCPUProfileSeconds = 30
+	maxCPUProfileSeconds     = 120
+)
+
+// writeProfile sends a profile for pprof: heap, allocs, goroutine, mutex and block as they stand, and cpu sampled
+// for ?seconds=N (default 30).
+func writeProfile(c fiber.Ctx, profileName string) error {
 	var output bytes.Buffer
-	if err := profile.WriteTo(&output, 0); err != nil {
-		return c.Status(500).SendString("unable to write profile")
+	switch profileName {
+	case "cpu":
+		seconds := defaultCPUProfileSeconds
+		if raw := c.Query("seconds"); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+				seconds = min(n, maxCPUProfileSeconds)
+			}
+		}
+		if err := pprof.StartCPUProfile(&output); err != nil {
+			return c.Status(409).SendString("a CPU profile is already being taken; try again when it finishes")
+		}
+		time.Sleep(time.Duration(seconds) * time.Second)
+		pprof.StopCPUProfile()
+	case "heap", "allocs", "goroutine", "mutex", "block":
+		profile := pprof.Lookup(profileName)
+		if profile == nil {
+			return c.Status(404).SendString(fmt.Sprintf("profile %q is unavailable", profileName))
+		}
+		if err := profile.WriteTo(&output, 0); err != nil {
+			return c.Status(500).SendString("unable to write profile")
+		}
+	default:
+		return c.Status(400).SendString("unsupported profile; use heap, allocs, goroutine, mutex, block or cpu")
 	}
 	c.Set("Content-Type", "application/octet-stream")
 	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pprof", profileName))

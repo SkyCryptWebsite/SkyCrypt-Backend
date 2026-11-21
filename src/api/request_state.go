@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"errors"
+	"skycrypt/src/forensics"
+	"skycrypt/src/utility"
 	"sync/atomic"
 	"time"
 
@@ -94,7 +96,10 @@ type flightResult[T any] struct {
 // context no single caller can cancel, bounded by timeout; its stale and notCached flags (and the stale data's age) are copied onto every
 // caller's state, not just the caller that happened to start it.
 func Share[T any](ctx context.Context, group *singleflight.Group, key string, timeout time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
+	start := time.Now()
+	led := false
 	result, err, _ := group.Do(flightKey(ctx, key), func() (interface{}, error) {
+		led = true
 		flightState := &RequestState{CacheOnly: isCacheOnly(ctx)}
 		flightCtx, cancel := context.WithTimeout(context.WithoutCancel(WithRequestState(ctx, flightState)), timeout)
 		defer cancel()
@@ -105,6 +110,11 @@ func Share[T any](ctx context.Context, group *singleflight.Group, key string, ti
 			staleFetchedAt: flightState.staleFetchedAt.Load(),
 		}, err
 	})
+
+	if !led && utility.IsForensicsEnabled() {
+		// Joined a call another request started: the time is spent waiting on that request's work.
+		forensics.RecordSharedWait(ctx, time.Since(start))
+	}
 
 	flight, _ := result.(flightResult[T])
 	if state := requestState(ctx); state != nil {

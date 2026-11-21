@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	redis "skycrypt/src/db"
 	"skycrypt/src/forensics"
 	"skycrypt/src/localcache"
@@ -35,14 +36,27 @@ var (
 	uuidLookupGroup    singleflight.Group
 )
 
-// mowojangTimeout bounds one call to the mowojang mirror. It usually answers quickly, but in production it sometimes
-// stalled for 1 to 8 s, and every build waiting on a name stalled with it. The official API is the fallback.
-var mowojangTimeout = 1500 * time.Millisecond
+// defaultMowojangTimeout bounds one call to the mowojang mirror. It usually answers quickly, but in production it
+// sometimes stalled for 1 to 8 s, and every build waiting on a name stalled with it. The official API is the
+// fallback.
+const defaultMowojangTimeout = 1500 * time.Millisecond
 
-// getMowojang fetches path (a username or UUID) from the mowojang mirror within mowojangTimeout. ok is false when
+// mowojangTimeout is SKYCRYPT_MOWOJANG_TIMEOUT (such as "800ms"), or the default. It is read on first use rather
+// than at package init, which runs before main loads .env.
+var mowojangTimeout = sync.OnceValue(func() time.Duration {
+	if value := strings.TrimSpace(os.Getenv("SKYCRYPT_MOWOJANG_TIMEOUT")); value != "" {
+		if timeout, err := time.ParseDuration(value); err == nil && timeout > 0 {
+			return timeout
+		}
+		fmt.Printf("[MOJANG] invalid SKYCRYPT_MOWOJANG_TIMEOUT %q; using %s\n", value, defaultMowojangTimeout)
+	}
+	return defaultMowojangTimeout
+})
+
+// getMowojang fetches path (a username or UUID) from the mowojang mirror within mowojangTimeout(). ok is false when
 // the mirror failed, timed out or doesn't know the player; the caller then asks Mojang.
 func getMowojang(ctx context.Context, path string) (body []byte, ok bool) {
-	ctx, cancel := context.WithTimeout(ctx, mowojangTimeout)
+	ctx, cancel := context.WithTimeout(ctx, mowojangTimeout())
 	defer cancel()
 
 	resp, err := getContext(ctx, "https://mowojang.matdoes.dev/"+path)

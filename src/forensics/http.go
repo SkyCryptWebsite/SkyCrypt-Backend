@@ -146,7 +146,8 @@ func (lrt *loggingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 
 	if err != nil {
 		redactedErr := security.RedactError(err)
-		RecordHTTPDependency(req.Context(), req.Method, redactedURL, 0, duration, redactedErr)
+		// The raw error only feeds counters (a timeout is told apart from other failures); logs get the redacted one.
+		RecordHTTPDependency(req.Context(), req.Method, redactedURL, 0, duration, err)
 		Logger.Error("http_roundtrip_error",
 			zap.String("method", req.Method),
 			zap.String("url", redactedURL),
