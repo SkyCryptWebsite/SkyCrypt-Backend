@@ -196,11 +196,15 @@ const sharedResponseTimeout = 60 * time.Second
 // with jsonBody. Callers that joined under another spelling get no copy of their own; they still hit cacheKey.
 func sharedResponse(ctx context.Context, cacheKey responseCacheHandle, rawCacheKey responseCacheHandle, ttlSeconds int, build func(ctx context.Context) ([]byte, error)) (*builtResponse, error) {
 	return api.Share(ctx, &responseGroup, cacheKey.key, sharedResponseTimeout, func(flightCtx context.Context) (*builtResponse, error) {
+		waitStart := time.Now()
 		select {
 		case buildSlots <- struct{}{}:
 			defer func() { <-buildSlots }()
 		case <-flightCtx.Done():
 			return nil, errServerBusy
+		}
+		if utility.IsForensicsEnabled() {
+			forensics.RecordBuildWait(flightCtx, time.Since(waitStart))
 		}
 		body, err := build(flightCtx)
 		if err != nil {

@@ -2,8 +2,11 @@ package forensics
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/url"
 	"skycrypt/src/security"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +23,10 @@ type DependencySummary struct {
 	Count     int     `json:"count"`
 	TotalMs   float64 `json:"total_ms"`
 	AvgMs     float64 `json:"avg_ms"`
+	// HTTP outcomes, so errors and rate limits can be told apart per host.
+	Errors     int `json:"errors,omitempty"`
+	RateLimits int `json:"rate_limits,omitempty"`
+	Timeouts   int `json:"timeouts,omitempty"`
 }
 
 type RepeatedDependency struct {
@@ -33,30 +40,38 @@ type RepeatedDependency struct {
 }
 
 type RequestSummary struct {
-	RequestID             string               `json:"request_id"`
-	Method                string               `json:"method"`
-	Path                  string               `json:"path"`
-	Route                 string               `json:"route"`
-	CacheStatus           string               `json:"cache_status"`
-	ResponseCacheStatus   string               `json:"response_cache_status,omitempty"`
-	ResponseCacheEndpoint string               `json:"response_cache_endpoint,omitempty"`
-	StatusCode            int                  `json:"status_code"`
-	DurationMs            int64                `json:"duration_ms"`
-	ResponseSize          int                  `json:"response_size"`
-	AllocDeltaBytes       int64                `json:"alloc_delta_bytes"`
-	CacheHits             int                  `json:"cache_hits"`
-	CacheMisses           int                  `json:"cache_misses"`
-	CacheSets             int                  `json:"cache_sets"`
-	RedisCalls            int                  `json:"redis_calls"`
-	RedisMs               float64              `json:"redis_ms"`
-	HTTPCalls             int                  `json:"http_calls"`
-	HTTPMs                float64              `json:"http_ms"`
-	HTTPErrors            int                  `json:"http_errors"`
-	HTTPRateLimits        int                  `json:"http_rate_limits"`
-	PostgresCalls         int                  `json:"postgres_calls"`
-	PostgresMs            float64              `json:"postgres_ms"`
-	Dependencies          []DependencySummary  `json:"dependencies"`
-	RepeatedDependencies  []RepeatedDependency `json:"repeated_dependencies"`
+	RequestID             string  `json:"request_id"`
+	Method                string  `json:"method"`
+	Path                  string  `json:"path"`
+	Route                 string  `json:"route"`
+	CacheStatus           string  `json:"cache_status"`
+	ResponseCacheStatus   string  `json:"response_cache_status,omitempty"`
+	ResponseCacheEndpoint string  `json:"response_cache_endpoint,omitempty"`
+	StatusCode            int     `json:"status_code"`
+	DurationMs            int64   `json:"duration_ms"`
+	ResponseSize          int     `json:"response_size"`
+	AllocDeltaBytes       int64   `json:"alloc_delta_bytes"`
+	CacheHits             int     `json:"cache_hits"`
+	CacheMisses           int     `json:"cache_misses"`
+	CacheSets             int     `json:"cache_sets"`
+	RedisCalls            int     `json:"redis_calls"`
+	RedisMs               float64 `json:"redis_ms"`
+	HTTPCalls             int     `json:"http_calls"`
+	HTTPMs                float64 `json:"http_ms"`
+	HTTPErrors            int     `json:"http_errors"`
+	HTTPRateLimits        int     `json:"http_rate_limits"`
+	PostgresCalls         int     `json:"postgres_calls"`
+	PostgresMs            float64 `json:"postgres_ms"`
+	// UpstreamWallMs is how long the request had at least one upstream call open. HTTPMs adds calls that ran side
+	// by side, so it can exceed the whole request; this can't. UpstreamWallByHost splits it per host.
+	UpstreamWallMs     float64            `json:"upstream_wall_ms"`
+	UpstreamWallByHost map[string]float64 `json:"upstream_wall_by_host,omitempty"`
+	// BuildWaitMs is time spent waiting for a free build slot; SharedWaitMs is time spent waiting on a build or
+	// lookup another request had already started.
+	BuildWaitMs          float64              `json:"build_wait_ms,omitempty"`
+	SharedWaitMs         float64              `json:"shared_wait_ms,omitempty"`
+	Dependencies         []DependencySummary  `json:"dependencies"`
+	RepeatedDependencies []RepeatedDependency `json:"repeated_dependencies"`
 }
 
 type RequestMetrics struct {
@@ -85,7 +100,35 @@ type RequestMetrics struct {
 	postgresCalls int
 	postgresMs    float64
 
+	httpIntervals []httpInterval
+	buildWaitMs   float64
+	sharedWaitMs  float64
+
 	dependencies map[string]*DependencySummary
+}
+
+// httpInterval is when one upstream call was open.
+type httpInterval struct {
+	start, end time.Time
+	host       string
+}
+
+// RecordBuildWait records time a request waited for a free build slot.
+func RecordBuildWait(ctx context.Context, duration time.Duration) {
+	if metrics := MetricsFromContext(ctx); metrics != nil {
+		metrics.mu.Lock()
+		metrics.buildWaitMs += durationToMs(duration)
+		metrics.mu.Unlock()
+	}
+}
+
+// RecordSharedWait records time a request waited on work another request had started.
+func RecordSharedWait(ctx context.Context, duration time.Duration) {
+	if metrics := MetricsFromContext(ctx); metrics != nil {
+		metrics.mu.Lock()
+		metrics.sharedWaitMs += durationToMs(duration)
+		metrics.mu.Unlock()
+	}
 }
 
 func RecordResponseCache(ctx context.Context, endpoint, status string) {
@@ -205,19 +248,76 @@ func RecordHTTPDependency(ctx context.Context, method, rawURL string, statusCode
 	}
 
 	name := HTTPDependencyName(rawURL)
+	end := time.Now()
 	metrics.mu.Lock()
 	defer metrics.mu.Unlock()
 
 	metrics.httpCalls++
 	metrics.httpMs += durationToMs(duration)
+	metrics.httpIntervals = append(metrics.httpIntervals, httpInterval{start: end.Add(-duration), end: end, host: dependencyHost(name)})
+	dep := metrics.addDependencyLocked("http", method, name, duration)
 	if err != nil || statusCode >= 500 {
 		metrics.httpErrors++
+		dep.Errors++
 	}
 	if statusCode == 429 {
 		metrics.httpRateLimits++
+		dep.RateLimits++
 	}
+	if isTimeout(err) {
+		dep.Timeouts++
+	}
+}
 
-	metrics.addDependencyLocked("http", method, name, duration)
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	return errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout())
+}
+
+// dependencyHost is the host part of an HTTP dependency name (host + path).
+func dependencyHost(name string) string {
+	if i := strings.IndexByte(name, '/'); i >= 0 {
+		return name[:i]
+	}
+	return name
+}
+
+// upstreamWall returns how long at least one call was open, overall and per host: overlapping calls count once.
+func upstreamWall(intervals []httpInterval) (float64, map[string]float64) {
+	if len(intervals) == 0 {
+		return 0, nil
+	}
+	byHost := map[string][]httpInterval{}
+	for _, interval := range intervals {
+		byHost[interval.host] = append(byHost[interval.host], interval)
+	}
+	perHost := make(map[string]float64, len(byHost))
+	for host, hostIntervals := range byHost {
+		perHost[host] = unionMs(hostIntervals)
+	}
+	return unionMs(intervals), perHost
+}
+
+func unionMs(intervals []httpInterval) float64 {
+	sorted := slices.Clone(intervals)
+	slices.SortFunc(sorted, func(a, b httpInterval) int { return a.start.Compare(b.start) })
+	var total time.Duration
+	start, end := sorted[0].start, sorted[0].end
+	for _, interval := range sorted[1:] {
+		if interval.start.After(end) {
+			total += end.Sub(start)
+			start, end = interval.start, interval.end
+			continue
+		}
+		if interval.end.After(end) {
+			end = interval.end
+		}
+	}
+	total += end.Sub(start)
+	return durationToMs(total)
 }
 
 func RecordPostgresDependency(ctx context.Context, table, operation string, duration time.Duration, err error) {
@@ -271,6 +371,7 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 	}
 
 	cacheStatus := classifyCacheStatus(metrics.cacheHits, metrics.cacheMisses, metrics.httpCalls)
+	wallMs, wallByHost := upstreamWall(metrics.httpIntervals)
 	summary := RequestSummary{
 		RequestID:             metrics.requestID,
 		Method:                metrics.method,
@@ -294,6 +395,10 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 		HTTPRateLimits:        metrics.httpRateLimits,
 		PostgresCalls:         metrics.postgresCalls,
 		PostgresMs:            metrics.postgresMs,
+		UpstreamWallMs:        wallMs,
+		UpstreamWallByHost:    wallByHost,
+		BuildWaitMs:           metrics.buildWaitMs,
+		SharedWaitMs:          metrics.sharedWaitMs,
 		Dependencies:          deps,
 		RepeatedDependencies:  repeated,
 	}
@@ -322,6 +427,10 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 			zap.Int("http_rate_limits", summary.HTTPRateLimits),
 			zap.Int("postgres_calls", summary.PostgresCalls),
 			zap.Float64("postgres_ms", summary.PostgresMs),
+			zap.Float64("upstream_wall_ms", summary.UpstreamWallMs),
+			zap.Any("upstream_wall_by_host", summary.UpstreamWallByHost),
+			zap.Float64("build_wait_ms", summary.BuildWaitMs),
+			zap.Float64("shared_wait_ms", summary.SharedWaitMs),
 			zap.Any("dependencies", summary.Dependencies),
 			zap.Any("repeated_dependencies", summary.RepeatedDependencies),
 		)
@@ -330,7 +439,7 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 	return summary
 }
 
-func (m *RequestMetrics) addDependencyLocked(kind, operation, name string, duration time.Duration) {
+func (m *RequestMetrics) addDependencyLocked(kind, operation, name string, duration time.Duration) *DependencySummary {
 	key := kind + "|" + operation + "|" + name
 	dep := m.dependencies[key]
 	if dep == nil {
@@ -343,6 +452,7 @@ func (m *RequestMetrics) addDependencyLocked(kind, operation, name string, durat
 	}
 	dep.Count++
 	dep.TotalMs += durationToMs(duration)
+	return dep
 }
 
 func classifyCacheStatus(hits, misses, httpCalls int) string {

@@ -34,10 +34,11 @@ type encoderSet struct {
 }
 
 func newEncoderSet(dictID int32, dict []byte) (*encoderSet, error) {
-	// One encoder state per worker that compresses at once (ingest and the legacy import), so they don't queue
-	// behind each other. Encoders are only built when first used, which is in the parent alone.
+	// One encoder state per ingest worker. Each state holds about 13 MB of history and match tables per kind, and
+	// these encoders live in the serving process. The legacy import, which runs once and then drops its table,
+	// shares the states and waits for a free one. Encoders are only built when first used.
 	options := []zstd.EOption{
-		zstd.WithEncoderLevel(zstd.SpeedBetterCompression), zstd.WithEncoderConcurrency(ingestWorkers + importWorkers),
+		zstd.WithEncoderLevel(zstd.SpeedBetterCompression), zstd.WithEncoderConcurrency(ingestWorkers),
 		zstd.WithLowerEncoderMem(true),
 	}
 	if dict != nil {

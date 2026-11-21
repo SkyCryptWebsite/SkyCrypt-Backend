@@ -3,6 +3,7 @@ package forensics
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -245,5 +246,127 @@ func TestDependencyGroupNameFoldsPlayerLookups(t *testing.T) {
 	}
 	if got := dependencyGroupName(DependencySummary{Kind: "redis", Name: "mowojang.matdoes.dev/x"}); got != "mowojang.matdoes.dev/x" {
 		t.Errorf("non-HTTP dependency was renamed to %q", got)
+	}
+}
+
+func TestUpstreamWallCountsOverlapsOnce(t *testing.T) {
+	base := time.Unix(1000, 0)
+	at := func(ms int) time.Time { return base.Add(time.Duration(ms) * time.Millisecond) }
+	intervals := []httpInterval{
+		{start: at(0), end: at(100), host: "api.hypixel.net"},
+		{start: at(50), end: at(150), host: "api.hypixel.net"},
+		{start: at(300), end: at(400), host: "mowojang.matdoes.dev"},
+	}
+	total, byHost := upstreamWall(intervals)
+	if total != 250 {
+		t.Fatalf("total = %.1f ms, want 250", total)
+	}
+	if byHost["api.hypixel.net"] != 150 || byHost["mowojang.matdoes.dev"] != 100 {
+		t.Fatalf("by host = %v", byHost)
+	}
+}
+
+func TestDashboardKeepsNewestSummariesAndCountsRepeats(t *testing.T) {
+	tmp := t.TempDir()
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(previousWD) })
+	if err := os.MkdirAll("logs", 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	start := time.Now().Add(-time.Hour)
+	summary := func(minute int, path string) map[string]interface{} {
+		return map[string]interface{}{
+			"level": "info", "timestamp": start.Add(time.Duration(minute) * time.Minute).Format(time.RFC3339Nano),
+			"msg": "forensic_request_summary", "method": "GET", "path": path, "route": "/api/embed/:uuid",
+			"cache_status": "cold", "status_code": 200, "duration_ms": 100,
+			"response_cache_status": "cold", "response_cache_endpoint": "embed",
+			"upstream_wall_ms": 60.0, "upstream_wall_by_host": map[string]float64{"api.hypixel.net": 60},
+			"build_wait_ms": 10.0,
+		}
+	}
+	lines := []map[string]interface{}{
+		summary(0, "/api/embed/Dropped"), // oldest: skipped by the limit of 3
+		summary(10, "/api/embed/Ducky"),
+		summary(12, "/api/embed/ducky"), // the same player 2 minutes later
+		summary(50, "/api/embed/Other"),
+	}
+	var b strings.Builder
+	for _, line := range lines {
+		payload, _ := json.Marshal(line)
+		b.Write(payload)
+		b.WriteByte('\n')
+	}
+	if err := os.WriteFile(filepath.Join("logs", "app.log"), []byte(b.String()), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	report := generateDashboardReport(dashboardOptions{Window: 2 * time.Hour, Limit: 3})
+	if !report.Coverage.LimitReached || report.Coverage.SummariesInWindow != 4 || report.Coverage.SummariesUsed != 3 {
+		t.Fatalf("coverage = %+v", report.Coverage)
+	}
+	if report.Coverage.Span != "40m0s" {
+		t.Fatalf("span = %q, want 40m0s (the newest three summaries)", report.Coverage.Span)
+	}
+	if len(report.RepeatVisits) != 1 {
+		t.Fatalf("repeat visits = %+v", report.RepeatVisits)
+	}
+	repeat := report.RepeatVisits[0]
+	if repeat.Requests != 3 || repeat.Players != 2 || repeat.FirstInWindow != 2 || repeat.Within5m != 1 || repeat.Within60m != 1 {
+		t.Fatalf("repeat = %+v", repeat)
+	}
+	if len(report.CacheLatencyByEndpoint) != 1 {
+		t.Fatalf("latency = %+v", report.CacheLatencyByEndpoint)
+	}
+	latency := report.CacheLatencyByEndpoint[0]
+	if latency.AvgUpstreamWallMs != 60 || latency.AvgBuildWaitMs != 10 || latency.AvgOwnMs != 30 || latency.AvgUpstreamWallByHost["api.hypixel.net"] != 60 {
+		t.Fatalf("phases = %+v", latency)
+	}
+}
+
+func TestHTTPDependencyCountsOutcomesPerHost(t *testing.T) {
+	metrics := NewRequestMetrics("req", "GET", "/api/embed/x")
+	ctx := WithRequestMetrics(context.Background(), metrics)
+	RecordHTTPDependency(ctx, "GET", "https://api.hypixel.net/v2/player?uuid=x", 429, 10*time.Millisecond, nil)
+	RecordHTTPDependency(ctx, "GET", "https://mowojang.matdoes.dev/x", 0, 1500*time.Millisecond, context.DeadlineExceeded)
+
+	summary := FinalizeRequestMetrics(ctx, 200, 2*time.Second, 0, 0)
+	byName := map[string]DependencySummary{}
+	for _, dep := range summary.Dependencies {
+		byName[dep.Name] = dep
+	}
+	if dep := byName["api.hypixel.net/v2/player"]; dep.RateLimits != 1 || dep.Errors != 0 {
+		t.Fatalf("hypixel = %+v", dep)
+	}
+	if dep := byName["mowojang.matdoes.dev/x"]; dep.Timeouts != 1 || dep.Errors != 1 {
+		t.Fatalf("mirror = %+v", dep)
+	}
+}
+
+func TestDashboardServesContentionAndCPUProfiles(t *testing.T) {
+	app := fiber.New()
+	app.Get("/api/forensics/dashboard", DashboardHTMLHandler())
+	for _, target := range []string{"download=mutex", "download=block", "download=cpu&seconds=1"} {
+		response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/forensics/dashboard?"+target, nil), fiber.TestConfig{Timeout: 5 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		if response.StatusCode != http.StatusOK || len(body) == 0 {
+			t.Fatalf("%s: status %d, %d bytes", target, response.StatusCode, len(body))
+		}
+	}
+	response, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/forensics/dashboard?download=trace", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown profile status = %d, want 400", response.StatusCode)
 	}
 }

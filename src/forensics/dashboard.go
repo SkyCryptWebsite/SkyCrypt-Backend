@@ -2,9 +2,11 @@ package forensics
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"os"
 	"runtime"
 	"sort"
@@ -32,7 +34,7 @@ func DashboardHandler() fiber.Handler {
 func DashboardHTMLHandler() fiber.Handler {
 	return func(c fiber.Ctx) error {
 		if profile := c.Query("download"); profile != "" {
-			return writeMemoryProfile(c, profile)
+			return writeProfile(c, profile)
 		}
 		opts := dashboardOptionsFromCtx(c)
 		report := generateDashboardReport(opts)
@@ -65,6 +67,8 @@ type dashboardReport struct {
 	UpstreamSummary         []dependencyReportEntry   `json:"upstream_summary"`
 	RedisSummary            []dependencyReportEntry   `json:"redis_summary"`
 	PostgresSummary         []dependencyReportEntry   `json:"postgres_summary"`
+	RepeatVisits            []repeatVisitEntry        `json:"repeat_visits"`
+	Coverage                coverageReport            `json:"coverage"`
 	ResourceUsage           resourceReport            `json:"resource_usage"`
 	Memory                  memoryAnalysis            `json:"memory_analysis"`
 	LogStats                logStatsReport            `json:"log_stats"`
@@ -149,6 +153,13 @@ type cacheLatencyEntry struct {
 	AvgPostgresMs  float64 `json:"avg_postgres_ms"`
 	AvgCacheHits   float64 `json:"avg_cache_hits"`
 	AvgCacheMisses float64 `json:"avg_cache_misses"`
+	// Where the time went: open upstream calls (overlaps counted once, also per host), waiting for a build slot,
+	// and waiting on another request's build. The rest of AvgMs is this process's own work and Redis.
+	AvgUpstreamWallMs     float64            `json:"avg_upstream_wall_ms"`
+	AvgUpstreamWallByHost map[string]float64 `json:"avg_upstream_wall_by_host,omitempty"`
+	AvgBuildWaitMs        float64            `json:"avg_build_wait_ms"`
+	AvgSharedWaitMs       float64            `json:"avg_shared_wait_ms"`
+	AvgOwnMs              float64            `json:"avg_own_ms"`
 }
 
 type responseCacheEntry struct {
@@ -186,12 +197,15 @@ type recentRequestEntry struct {
 }
 
 type dependencyReportEntry struct {
-	Kind      string  `json:"kind"`
-	Operation string  `json:"operation"`
-	Name      string  `json:"name"`
-	Count     int     `json:"count"`
-	TotalMs   float64 `json:"total_ms"`
-	AvgMs     float64 `json:"avg_ms"`
+	Kind       string  `json:"kind"`
+	Operation  string  `json:"operation"`
+	Name       string  `json:"name"`
+	Count      int     `json:"count"`
+	TotalMs    float64 `json:"total_ms"`
+	AvgMs      float64 `json:"avg_ms"`
+	Errors     int     `json:"errors,omitempty"`
+	RateLimits int     `json:"rate_limits,omitempty"`
+	Timeouts   int     `json:"timeouts,omitempty"`
 }
 
 type repeatedDependencyEntry struct {
@@ -204,6 +218,110 @@ type repeatedDependencyEntry struct {
 	TotalMs    float64 `json:"total_ms"`
 	AvgMs      float64 `json:"avg_ms"`
 	Suggestion string  `json:"suggestion"`
+}
+
+// coverageReport is the stretch of time the request numbers actually cover: the log rotates, so it can be shorter
+// than the window, and the limit keeps only the newest summaries.
+type coverageReport struct {
+	From              string `json:"from"`
+	To                string `json:"to"`
+	Span              string `json:"span"`
+	SummariesInWindow int    `json:"summaries_in_window"`
+	SummariesUsed     int    `json:"summaries_used"`
+	LimitReached      bool   `json:"limit_reached"`
+}
+
+// repeatVisitEntry says how soon the same player was asked for again on one endpoint, which is what a longer
+// response cache TTL could turn into hits. The within_* counts are cumulative.
+type repeatVisitEntry struct {
+	Endpoint      string  `json:"endpoint"`
+	Requests      int     `json:"requests"`
+	Players       int     `json:"players"`
+	FirstInWindow int     `json:"first_in_window"`
+	Within5m      int     `json:"within_5m"`
+	Within15m     int     `json:"within_15m"`
+	Within60m     int     `json:"within_60m"`
+	Within6h      int     `json:"within_6h"`
+	RepeatPercent float64 `json:"repeat_percent"`
+}
+
+type repeatVisitAgg struct {
+	requests, first, within5m, within15m, within60m, within6h int
+	lastSeen                                                  map[string]time.Time
+}
+
+// repeatPlayerKey is the player a request path names: the segment after /api/<endpoint>/, lowercased.
+func repeatPlayerKey(path string) string {
+	parts := strings.SplitN(strings.TrimPrefix(path, "/api/"), "/", 3)
+	if len(parts) < 2 || parts[1] == "" {
+		return ""
+	}
+	return strings.ToLower(parts[1])
+}
+
+func (agg *repeatVisitAgg) add(player string, at time.Time) {
+	agg.requests++
+	last, seen := agg.lastSeen[player]
+	agg.lastSeen[player] = at
+	if !seen {
+		agg.first++
+		return
+	}
+	gap := at.Sub(last)
+	if gap <= 5*time.Minute {
+		agg.within5m++
+	}
+	if gap <= 15*time.Minute {
+		agg.within15m++
+	}
+	if gap <= time.Hour {
+		agg.within60m++
+	}
+	if gap <= 6*time.Hour {
+		agg.within6h++
+	}
+}
+
+func buildRepeatVisitEntries(aggs map[string]*repeatVisitAgg) []repeatVisitEntry {
+	entries := make([]repeatVisitEntry, 0, len(aggs))
+	for endpoint, agg := range aggs {
+		entry := repeatVisitEntry{
+			Endpoint: endpoint, Requests: agg.requests, Players: len(agg.lastSeen), FirstInWindow: agg.first,
+			Within5m: agg.within5m, Within15m: agg.within15m, Within60m: agg.within60m, Within6h: agg.within6h,
+		}
+		if agg.requests > 0 {
+			entry.RepeatPercent = float64(agg.requests-agg.first) / float64(agg.requests) * 100
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Requests > entries[j].Requests })
+	return entries
+}
+
+// countWindowSummaries counts the request summaries logged at or after cutoff, reading only each line's timestamp,
+// so the full parse can skip the oldest and keep the newest when there are more than the limit.
+func countWindowSummaries(reader io.Reader, cutoff time.Time) int {
+	marker := []byte(`"forensic_request_summary"`)
+	stampKey := []byte(`"timestamp":"`)
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 512*1024), 1024*1024)
+	count := 0
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if !bytes.Contains(line, marker) {
+			continue
+		}
+		if i := bytes.Index(line, stampKey); i >= 0 {
+			rest := line[i+len(stampKey):]
+			if end := bytes.IndexByte(rest, '"'); end >= 0 {
+				if ts, err := parseLogTimestamp(string(rest[:end])); err == nil && ts.Before(cutoff) {
+					continue
+				}
+			}
+		}
+		count++
+	}
+	return count
 }
 
 type logStatsReport struct {
@@ -243,6 +361,10 @@ type logLine struct {
 	PostgresCalls         int                    `json:"postgres_calls,omitempty"`
 	PostgresMs            float64                `json:"postgres_ms,omitempty"`
 	AllocDeltaBytes       int64                  `json:"alloc_delta_bytes,omitempty"`
+	UpstreamWallMs        float64                `json:"upstream_wall_ms,omitempty"`
+	UpstreamWallByHost    map[string]float64     `json:"upstream_wall_by_host,omitempty"`
+	BuildWaitMs           float64                `json:"build_wait_ms,omitempty"`
+	SharedWaitMs          float64                `json:"shared_wait_ms,omitempty"`
 	Dependencies          []DependencySummary    `json:"dependencies,omitempty"`
 	RepeatedDeps          []RepeatedDependency   `json:"repeated_dependencies,omitempty"`
 	PID                   int                    `json:"pid,omitempty"`
@@ -279,6 +401,11 @@ type latencyAgg struct {
 	PostgresMs  float64
 	CacheHits   int
 	CacheMisses int
+
+	UpstreamWallMs     float64
+	UpstreamWallByHost map[string]float64
+	BuildWaitMs        float64
+	SharedWaitMs       float64
 }
 
 type responseCacheAgg struct {
@@ -361,6 +488,19 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	}
 
 	cutoff := time.Now().Add(-opts.Window)
+	inWindow := countWindowSummaries(f, cutoff)
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return
+	}
+	// The limit keeps the newest summaries: skip the oldest ones past it.
+	skip := 0
+	if opts.Limit > 0 && inWindow > opts.Limit {
+		skip = inWindow - opts.Limit
+	}
+	report.Coverage.SummariesInWindow = inWindow
+	report.Coverage.LimitReached = skip > 0
+	repeats := make(map[string]*repeatVisitAgg)
+	var coveredFrom, coveredTo time.Time
 	spans := make(map[string]*spanAgg)
 	latency := make(map[string]*latencyAgg)
 	responseCache := make(map[string]*responseCacheAgg)
@@ -393,16 +533,20 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 		}
 		report.LogStats.LinesProcessed++
 
+		var ts time.Time
 		if entry.Timestamp != "" {
-			if ts, err := parseLogTimestamp(entry.Timestamp); err == nil && ts.Before(cutoff) {
-				continue
+			if parsed, err := parseLogTimestamp(entry.Timestamp); err == nil {
+				if parsed.Before(cutoff) {
+					continue
+				}
+				ts = parsed
 			}
 		}
 
 		switch entry.Msg {
 		case "forensic_request_summary":
 			summaryCount++
-			if opts.Limit > 0 && summaryCount > opts.Limit {
+			if summaryCount <= skip {
 				continue
 			}
 			route := entry.Route
@@ -411,6 +555,25 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			}
 			if route == "/api/forensics/dashboard" || route == "/api/forensics" {
 				continue
+			}
+			report.Coverage.SummariesUsed++
+			if !ts.IsZero() {
+				if coveredFrom.IsZero() || ts.Before(coveredFrom) {
+					coveredFrom = ts
+				}
+				if ts.After(coveredTo) {
+					coveredTo = ts
+				}
+				if entry.ResponseCacheEndpoint != "" {
+					if player := repeatPlayerKey(entry.Path); player != "" {
+						agg := repeats[entry.ResponseCacheEndpoint]
+						if agg == nil {
+							agg = &repeatVisitAgg{lastSeen: map[string]time.Time{}}
+							repeats[entry.ResponseCacheEndpoint] = agg
+						}
+						agg.add(player, ts)
+					}
+				}
 			}
 
 			cacheHits += uint64(entry.CacheHits)
@@ -438,6 +601,15 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 			agg.PostgresMs += entry.PostgresMs
 			agg.CacheHits += entry.CacheHits
 			agg.CacheMisses += entry.CacheMisses
+			agg.UpstreamWallMs += entry.UpstreamWallMs
+			agg.BuildWaitMs += entry.BuildWaitMs
+			agg.SharedWaitMs += entry.SharedWaitMs
+			for host, ms := range entry.UpstreamWallByHost {
+				if agg.UpstreamWallByHost == nil {
+					agg.UpstreamWallByHost = map[string]float64{}
+				}
+				agg.UpstreamWallByHost[host] += ms
+			}
 
 			if entry.ResponseCacheStatus != "" {
 				endpoint := entry.ResponseCacheEndpoint
@@ -603,6 +775,12 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 	report.CacheLatencyByEndpoint = buildLatencyEntries(latency)
 	report.ResponseCacheByEndpoint = buildResponseCacheEntries(responseCache)
 	report.RecentRequests = recent
+	report.RepeatVisits = buildRepeatVisitEntries(repeats)
+	if !coveredFrom.IsZero() {
+		report.Coverage.From = coveredFrom.UTC().Format(time.RFC3339)
+		report.Coverage.To = coveredTo.UTC().Format(time.RFC3339)
+		report.Coverage.Span = coveredTo.Sub(coveredFrom).Round(time.Second).String()
+	}
 	report.DependencySummary = dependencyEntries(deps, 40)
 	report.CacheKeySummary = dependencyEntries(cacheDeps, 25)
 	report.UpstreamSummary = dependencyEntries(upstreamDeps, 25)
@@ -700,6 +878,12 @@ func buildLatencyEntries(latency map[string]*latencyAgg) []cacheLatencyEntry {
 			AvgPostgresMs:  agg.PostgresMs / float64(count),
 			AvgCacheHits:   float64(agg.CacheHits) / float64(count),
 			AvgCacheMisses: float64(agg.CacheMisses) / float64(count),
+
+			AvgUpstreamWallMs:     agg.UpstreamWallMs / float64(count),
+			AvgUpstreamWallByHost: averageByKey(agg.UpstreamWallByHost, count),
+			AvgBuildWaitMs:        agg.BuildWaitMs / float64(count),
+			AvgSharedWaitMs:       agg.SharedWaitMs / float64(count),
+			AvgOwnMs:              max(0, avgDuration(agg.Durations)-(agg.UpstreamWallMs+agg.BuildWaitMs+agg.SharedWaitMs)/float64(count)),
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].P95Ms > entries[j].P95Ms })
@@ -707,6 +891,17 @@ func buildLatencyEntries(latency map[string]*latencyAgg) []cacheLatencyEntry {
 		entries = entries[:50]
 	}
 	return entries
+}
+
+func averageByKey(sums map[string]float64, count int) map[string]float64 {
+	if len(sums) == 0 || count == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(sums))
+	for key, sum := range sums {
+		out[key] = sum / float64(count)
+	}
+	return out
 }
 
 func buildResponseCacheEntries(responseCache map[string]*responseCacheAgg) []responseCacheEntry {
@@ -804,6 +999,9 @@ func addDependency(target map[string]*dependencyReportEntry, dep DependencySumma
 	}
 	entry.Count += dep.Count
 	entry.TotalMs += dep.TotalMs
+	entry.Errors += dep.Errors
+	entry.RateLimits += dep.RateLimits
+	entry.Timeouts += dep.Timeouts
 	if entry.Count > 0 {
 		entry.AvgMs = entry.TotalMs / float64(entry.Count)
 	}
@@ -918,9 +1116,12 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 <body>
 <h1>SkyCrypt Forensic Dashboard</h1>
 <div class="meta">Generated: %s &nbsp;|&nbsp; Uptime: %s &nbsp;|&nbsp; PID: %d &nbsp;|&nbsp; Window: %s &nbsp;|&nbsp; Limit: %d
-<br>Log: %s (%d lines parsed in %dms)</div>`,
+<br>Log: %s (%d lines parsed in %dms)
+<br>Requests covered: %s to %s (%s), %d of %d summaries in the window%s</div>`,
 		esc(r.GeneratedAt), esc(r.Uptime), r.Runtime.PID, window, limit,
 		esc(r.LogStats.LogFileSize), r.LogStats.LinesProcessed, r.LogStats.ParseTimeMs,
+		esc(r.Coverage.From), esc(r.Coverage.To), esc(r.Coverage.Span), r.Coverage.SummariesUsed, r.Coverage.SummariesInWindow,
+		map[bool]string{true: ", oldest skipped by the limit", false: ""}[r.Coverage.LimitReached],
 	)
 
 	out += `<nav class="tabs" aria-label="Dashboard sections">
@@ -963,6 +1164,7 @@ func renderDashboardHTML(r dashboardReport, opts dashboardOptions) string {
 
 	out += renderCacheLatencyTable(r.CacheLatencyByEndpoint)
 	out += renderResponseCacheTable(r.ResponseCacheByEndpoint)
+	out += renderRepeatVisitsTable(r.RepeatVisits)
 	out += renderRecentRequestsTable(r.RecentRequests)
 	out += renderRepeatedTable(r.RepeatedDependencyCalls)
 	out += renderDependencyTable("Slow External APIs", "upstream-table", r.UpstreamSummary)
@@ -1032,6 +1234,9 @@ func renderMemoryAnalysis(analysis memoryAnalysis) string {
 	<a class="btn" href="/api/forensics/dashboard?download=heap">Download Live Heap Profile</a>
 	<a class="btn" href="/api/forensics/dashboard?download=allocs">Download Allocation Profile</a>
 	<a class="btn" href="/api/forensics/dashboard?download=goroutine">Download Goroutine Profile</a>
+	<a class="btn" href="/api/forensics/dashboard?download=cpu&seconds=30">Download CPU Profile (30 s)</a>
+	<a class="btn" href="/api/forensics/dashboard?download=mutex">Download Mutex Profile</a>
+	<a class="btn" href="/api/forensics/dashboard?download=block">Download Block Profile</a>
 </div>
 <h3>Largest Live Object Size Classes</h3>
 <table id="memory-size-classes"><tr><th>Object Size</th><th>Live Objects</th><th>Estimated Live Bytes</th></tr>`,
@@ -1108,10 +1313,10 @@ func renderCacheLatencyTable(entries []cacheLatencyEntry) string {
 	if len(entries) == 0 {
 		return out + `<div class="empty">No request summaries recorded yet.</div>`
 	}
-	out += `<table id="cache-latency-table"><tr><th>Route</th><th>Method</th><th>Cache</th><th>Count</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th><th>Redis</th><th>HTTP</th><th>Postgres</th><th>Hits</th><th>Misses</th></tr>`
+	out += `<table id="cache-latency-table"><tr><th>Route</th><th>Method</th><th>Cache</th><th>Count</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th><th>Redis</th><th>Upstream (wall)</th><th>Build wait</th><th>Shared wait</th><th>Own</th><th>Postgres</th><th>Hits</th><th>Misses</th></tr>`
 	for _, e := range entries {
-		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
-			esc(e.Route), esc(e.Method), cacheBadge(e.CacheStatus), e.Count, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs, e.AvgRedisMs, e.AvgHTTPMs, e.AvgPostgresMs, e.AvgCacheHits, e.AvgCacheMisses)
+		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
+			esc(e.Route), esc(e.Method), cacheBadge(e.CacheStatus), e.Count, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs, e.AvgRedisMs, e.AvgUpstreamWallMs, e.AvgBuildWaitMs, e.AvgSharedWaitMs, e.AvgOwnMs, e.AvgPostgresMs, e.AvgCacheHits, e.AvgCacheMisses)
 	}
 	return out + `</table>`
 }
@@ -1125,6 +1330,19 @@ func renderResponseCacheTable(entries []responseCacheEntry) string {
 	for _, e := range entries {
 		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
 			esc(e.Endpoint), esc(e.Route), esc(e.Method), e.Count, e.RedisHits, e.Cold, e.HitRate, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs)
+	}
+	return out + `</table>`
+}
+
+func renderRepeatVisitsTable(entries []repeatVisitEntry) string {
+	out := `<div class="section-header"><h2>Repeat Requests per Player</h2><div class="btn-group"><button class="btn" onclick="exportTable('repeat-visits-table','repeat_visits.csv')">Export CSV</button></div></div>`
+	if len(entries) == 0 {
+		return out + `<div class="empty">No cacheable requests recorded yet.</div>`
+	}
+	out += `<table id="repeat-visits-table"><tr><th>Endpoint</th><th>Requests</th><th>Players</th><th>First</th><th>Again within 5m</th><th>15m</th><th>60m</th><th>6h</th><th>Repeat</th></tr>`
+	for _, e := range entries {
+		out += fmt.Sprintf(`<tr><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td></tr>`,
+			esc(e.Endpoint), e.Requests, e.Players, e.FirstInWindow, e.Within5m, e.Within15m, e.Within60m, e.Within6h, e.RepeatPercent)
 	}
 	return out + `</table>`
 }
@@ -1161,10 +1379,10 @@ func renderDependencyTable(title, tableID string, entries []dependencyReportEntr
 	if len(entries) == 0 {
 		return out + `<div class="empty">No dependency data recorded.</div>`
 	}
-	out += fmt.Sprintf(`<table id="%s"><tr><th>Kind</th><th>Operation</th><th>Name</th><th>Calls</th><th>Total</th><th>Avg</th></tr>`, esc(tableID))
+	out += fmt.Sprintf(`<table id="%s"><tr><th>Kind</th><th>Operation</th><th>Name</th><th>Calls</th><th>Total</th><th>Avg</th><th>Errors</th><th>Rate limited</th><th>Timeouts</th></tr>`, esc(tableID))
 	for _, e := range entries {
-		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%.1f ms</td><td>%.1f ms</td></tr>`,
-			esc(e.Kind), esc(e.Operation), esc(e.Name), e.Count, e.TotalMs, e.AvgMs)
+		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%.1f ms</td><td>%.1f ms</td><td>%d</td><td>%d</td><td>%d</td></tr>`,
+			esc(e.Kind), esc(e.Operation), esc(e.Name), e.Count, e.TotalMs, e.AvgMs, e.Errors, e.RateLimits, e.Timeouts)
 	}
 	return out + `</table>`
 }

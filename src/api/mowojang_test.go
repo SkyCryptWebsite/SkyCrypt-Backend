@@ -103,13 +103,13 @@ func TestResolvePlayerAndGetUsernameShareOneFetch(t *testing.T) {
 	}
 }
 
-// A stalled mirror must not hold the lookup: after mowojangTimeout it falls back to Mojang.
+// A stalled mirror must not hold the lookup: after mowojangTimeout() it falls back to Mojang.
 func TestResolvePlayerFallsBackWhenMirrorStalls(t *testing.T) {
 	const uuid = "fedcba9876543210fedcba9876543210"
 
 	originalClient, originalTimeout := HTTPClient, mowojangTimeout
 	t.Cleanup(func() { HTTPClient, mowojangTimeout = originalClient, originalTimeout })
-	mowojangTimeout = 50 * time.Millisecond
+	mowojangTimeout = func() time.Duration { return 50 * time.Millisecond }
 
 	HTTPClient = &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

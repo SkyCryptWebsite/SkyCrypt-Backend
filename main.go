@@ -40,6 +40,7 @@ func main() {
 		forensics.InitErrorTracker()
 		forensics.InitCriticalPathAnalyzer()
 		forensics.InitNPlus1Detector()
+		forensics.EnableContentionProfiles()
 
 		forensics.Logger.Info("application_starting",
 			zap.String("phase", "init"),
