@@ -68,8 +68,10 @@ type RequestSummary struct {
 	UpstreamWallByHost map[string]float64 `json:"upstream_wall_by_host,omitempty"`
 	// BuildWaitMs is time spent waiting for a free build slot; SharedWaitMs is time spent waiting on a build or
 	// lookup another request had already started.
-	BuildWaitMs          float64              `json:"build_wait_ms,omitempty"`
-	SharedWaitMs         float64              `json:"shared_wait_ms,omitempty"`
+	BuildWaitMs  float64 `json:"build_wait_ms,omitempty"`
+	SharedWaitMs float64 `json:"shared_wait_ms,omitempty"`
+	// KnownBot is set for crawlers and link previews Cloudflare verified (X-Known-Bot).
+	KnownBot             bool                 `json:"known_bot,omitempty"`
 	Dependencies         []DependencySummary  `json:"dependencies"`
 	RepeatedDependencies []RepeatedDependency `json:"repeated_dependencies"`
 }
@@ -103,6 +105,7 @@ type RequestMetrics struct {
 	httpIntervals []httpInterval
 	buildWaitMs   float64
 	sharedWaitMs  float64
+	knownBot      bool
 
 	dependencies map[string]*DependencySummary
 }
@@ -399,6 +402,7 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 		UpstreamWallByHost:    wallByHost,
 		BuildWaitMs:           metrics.buildWaitMs,
 		SharedWaitMs:          metrics.sharedWaitMs,
+		KnownBot:              metrics.knownBot,
 		Dependencies:          deps,
 		RepeatedDependencies:  repeated,
 	}
@@ -431,6 +435,7 @@ func FinalizeRequestMetrics(ctx context.Context, statusCode int, duration time.D
 			zap.Any("upstream_wall_by_host", summary.UpstreamWallByHost),
 			zap.Float64("build_wait_ms", summary.BuildWaitMs),
 			zap.Float64("shared_wait_ms", summary.SharedWaitMs),
+			zap.Bool("known_bot", summary.KnownBot),
 			zap.Any("dependencies", summary.Dependencies),
 			zap.Any("repeated_dependencies", summary.RepeatedDependencies),
 		)

@@ -125,3 +125,46 @@ func TestHypixelCooldownFromHeaders(t *testing.T) {
 		t.Fatalf("a request during the cooldown should fail at once as ErrUpstream, got %v", err)
 	}
 }
+
+func TestWithFallbackPreferStored(t *testing.T) {
+	stored := func(age time.Duration, ok bool) func(context.Context) ([]byte, time.Time, bool) {
+		return func(context.Context) ([]byte, time.Time, bool) {
+			return []byte(`"stored"`), time.Now().Add(-age), ok
+		}
+	}
+	fetch := func(called *bool) func() ([]byte, error) {
+		return func() ([]byte, error) { *called = true; return []byte(`"fresh"`), nil }
+	}
+
+	t.Run("recent stored copy skips Hypixel", func(t *testing.T) {
+		ctx := WithRequestState(context.Background(), &RequestState{PreferStored: true})
+		fetched := false
+		body, fresh, err := withFallback(ctx, "profiles:x", fetch(&fetched), stored(time.Hour, true))
+		if err != nil || fresh || fetched || string(body) != `"stored"` {
+			t.Fatalf("got body=%q fresh=%v fetched=%v err=%v", body, fresh, fetched, err)
+		}
+		if !ServedStale(ctx) || StaleFetchedAt(ctx).IsZero() {
+			t.Fatal("stored data must be marked stale so the response isn't cached as fresh")
+		}
+	})
+
+	for name, load := range map[string]func(context.Context) ([]byte, time.Time, bool){
+		"old stored copy": stored(preferStoredMaxAge+time.Hour, true),
+		"no stored copy":  stored(0, false),
+	} {
+		t.Run(name+" asks Hypixel", func(t *testing.T) {
+			ctx := WithRequestState(context.Background(), &RequestState{PreferStored: true})
+			fetched := false
+			body, fresh, err := withFallback(ctx, "profiles:x", fetch(&fetched), load)
+			if err != nil || !fresh || !fetched || string(body) != `"fresh"` || ServedStale(ctx) {
+				t.Fatalf("got body=%q fresh=%v fetched=%v err=%v", body, fresh, fetched, err)
+			}
+		})
+	}
+
+	people := WithRequestState(context.Background(), &RequestState{})
+	bots := WithRequestState(context.Background(), &RequestState{PreferStored: true})
+	if flightKey(people, "profiles:x") == flightKey(bots, "profiles:x") {
+		t.Fatal("a person must never join a bot's stored-first call")
+	}
+}

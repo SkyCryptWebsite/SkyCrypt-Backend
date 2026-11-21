@@ -18,8 +18,12 @@ var ErrNotCached = errors.New("data isn't cached and the caller may not fetch it
 type RequestState struct {
 	// CacheOnly stops requests to Hypixel: Hypixel's policy forbids proxying it for third parties.
 	CacheOnly bool
-	stale     atomic.Bool
-	notCached atomic.Bool
+	// PreferStored serves the last stored copy when it is younger than preferStoredMaxAge, and only asks Hypixel
+	// without one. Set for crawlers and link previews Cloudflare verified (X-Known-Bot), which made most cold
+	// builds: a preview doesn't need data fresher than a day, and the stored copy costs no Hypixel request.
+	PreferStored bool
+	stale        atomic.Bool
+	notCached    atomic.Bool
 	// staleFetchedAt is when the oldest stored data the request fell back to was fetched (Unix ms), 0 for none.
 	staleFetchedAt atomic.Int64
 }
@@ -100,7 +104,7 @@ func Share[T any](ctx context.Context, group *singleflight.Group, key string, ti
 	led := false
 	result, err, _ := group.Do(flightKey(ctx, key), func() (interface{}, error) {
 		led = true
-		flightState := &RequestState{CacheOnly: isCacheOnly(ctx)}
+		flightState := &RequestState{CacheOnly: isCacheOnly(ctx), PreferStored: prefersStored(ctx)}
 		flightCtx, cancel := context.WithTimeout(context.WithoutCancel(WithRequestState(ctx, flightState)), timeout)
 		defer cancel()
 
@@ -138,10 +142,19 @@ func sharedFetch[T any](ctx context.Context, key string, fetch func(fetchCtx con
 	return Share(ctx, &hypixelFetchGroup, key, hypixelRequestTimeout, fetch)
 }
 
-// flightKey keeps cache-only and fetching callers out of each other's singleflight calls.
+func prefersStored(ctx context.Context) bool {
+	state := requestState(ctx)
+	return state != nil && state.PreferStored
+}
+
+// flightKey keeps cache-only, stored-first and fetching callers out of each other's singleflight calls, so a person
+// never gets the day-old data a bot's call was built from.
 func flightKey(ctx context.Context, key string) string {
 	if isCacheOnly(ctx) {
 		return key + ":cache-only"
+	}
+	if prefersStored(ctx) {
+		return key + ":stored"
 	}
 	return key
 }

@@ -52,7 +52,10 @@ func apiKeyMiddleware(ctx huma.Context, next func(huma.Context)) {
 			apiKeyError(c, fiber.StatusUnauthorized, "INVALID_API_TOKEN", "Invalid X-API-Token.")
 			return
 		}
-		next(huma.WithContext(ctx, api.WithRequestState(ctx.Context(), &api.RequestState{})))
+		// Cloudflare adds X-Known-Bot: true for verified bots (Discordbot, Googlebot, ...), and the frontend forwards
+		// the visitor's headers. Only trusted behind the frontend's token, so a direct caller can't set it.
+		state := &api.RequestState{PreferStored: c.Get("X-Known-Bot") == "true"}
+		next(huma.WithContext(ctx, api.WithRequestState(ctx.Context(), state)))
 		return
 	}
 
