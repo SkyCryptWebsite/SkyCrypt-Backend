@@ -24,6 +24,11 @@ import (
 var customResourceRenderer *mr.Renderer
 
 var itemTextureCache = make(map[string]AppliedItemTexture)
+
+// orderedTextureCache holds the answers for ordered pack stacks (keys starting with orderedPackSignaturePrefix).
+// Every new render drops them, so they live apart from itemTextureCache: dropping them is then a new map instead of
+// a scan of the whole cache under the write lock, which held up every texture lookup in production.
+var orderedTextureCache = make(map[string]AppliedItemTexture)
 var itemTextureCacheMu sync.RWMutex
 var renderedSkyBlockIndex = make(map[string]struct{})
 var renderedSkyBlockIndexMu sync.RWMutex

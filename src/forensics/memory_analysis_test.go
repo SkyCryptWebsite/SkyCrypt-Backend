@@ -1,66 +1,79 @@
 package forensics
 
 import (
-	"errors"
-	"io"
+	"runtime"
 	"strings"
 	"testing"
 )
 
-// readerOnce opens the same text on every pass, as topProfileSites reads a profile twice.
-func readerOnce(reader *strings.Reader) func() (io.ReadCloser, error) {
-	text, _ := io.ReadAll(reader)
-	return func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(string(text))), nil }
+func testStack(t *testing.T) [32]uintptr {
+	t.Helper()
+	var stack [32]uintptr
+	runtime.Callers(1, stack[:])
+	return stack
 }
 
-func TestTopProfileSitesAggregatesStacks(t *testing.T) {
-	profile := strings.NewReader(`2: 200 [4: 400]
-	#	0x1	test.first
-	#	0x2	test.second
-1: 50 [1: 50]
-	#	0x1	test.first
-	#	0x2	test.second
-`)
+func TestTopMemorySitesRanksAndSymbolizes(t *testing.T) {
+	first, second := testStack(t), [32]uintptr{}
+	copy(second[:], first[1:])
+	sites := map[[32]uintptr]*memoryProfileSite{
+		first:  {InUseBytes: 100, CumulativeBytes: 900},
+		second: {InUseBytes: 500, CumulativeBytes: 600},
+	}
 
-	sites, err := topProfileSites(readerOnce(profile))
-	if err != nil {
-		t.Fatal(err)
+	heap := topMemorySites(sites, func(site *memoryProfileSite) int64 { return site.InUseBytes })
+	if len(heap) != 2 || heap[0].InUseBytes != 500 || heap[1].InUseBytes != 100 {
+		t.Fatalf("heap order = %+v", heap)
 	}
-	if len(sites) != 1 {
-		t.Fatalf("sites len = %d, want 1", len(sites))
+	allocs := topMemorySites(sites, func(site *memoryProfileSite) int64 { return site.CumulativeBytes })
+	if allocs[0].CumulativeBytes != 900 {
+		t.Fatalf("allocs order = %+v", allocs)
 	}
-	if sites[0].Stack != "test.first\ntest.second" {
-		t.Fatalf("stack = %q", sites[0].Stack)
-	}
-	if sites[0].InUseObjects != 3 || sites[0].InUseBytes != 250 ||
-		sites[0].CumulativeObjects != 5 || sites[0].CumulativeBytes != 450 {
-		t.Fatalf("aggregated site = %+v", sites[0])
+	if !strings.Contains(allocs[0].Stack, "forensics.testStack") || !strings.Contains(allocs[0].Stack, "memory_analysis_test.go:") {
+		t.Fatalf("stack = %q", allocs[0].Stack)
 	}
 }
 
-func TestTopProfileSitesEmpty(t *testing.T) {
-	sites, err := topProfileSites(readerOnce(strings.NewReader("")))
-	if err != nil {
-		t.Fatal(err)
+func TestTopMemorySitesSkipsEmptyAndCaps(t *testing.T) {
+	sites := map[[32]uintptr]*memoryProfileSite{}
+	for i := range maxProfileSites + 5 {
+		sites[[32]uintptr{uintptr(i + 1)}] = &memoryProfileSite{InUseBytes: int64(i)}
 	}
-	if len(sites) != 0 {
-		t.Fatalf("sites = %#v, want empty", sites)
+	heap := topMemorySites(sites, func(site *memoryProfileSite) int64 { return site.InUseBytes })
+	if len(heap) != maxProfileSites {
+		t.Fatalf("len = %d, want %d", len(heap), maxProfileSites)
 	}
-}
-
-func TestTopProfileSitesPropagatesReaderError(t *testing.T) {
-	wantErr := errors.New("profile read failed")
-	reader := errorReader{err: wantErr}
-	_, err := topProfileSites(func() (io.ReadCloser, error) { return io.NopCloser(reader), nil })
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("error = %v, want %v", err, wantErr)
+	for _, site := range heap {
+		if site.InUseBytes == 0 {
+			t.Fatal("kept a site with no live bytes")
+		}
 	}
 }
 
-type errorReader struct {
-	err error
-}
+func TestMemoryProfileSitesFindsLiveAllocation(t *testing.T) {
+	previous := runtime.MemProfileRate
+	runtime.MemProfileRate = 1
+	t.Cleanup(func() { runtime.MemProfileRate = previous })
 
-func (reader errorReader) Read([]byte) (int, error) {
-	return 0, reader.err
+	kept := make([][]byte, 0, 64)
+	for range 64 {
+		kept = append(kept, make([]byte, 64<<10))
+	}
+	runtime.GC()
+	runtime.GC()
+
+	heap, allocs := memoryProfileSites()
+	runtime.KeepAlive(kept)
+	if len(heap) == 0 || len(allocs) == 0 {
+		t.Fatalf("heap = %d sites, allocs = %d sites", len(heap), len(allocs))
+	}
+	found := false
+	for _, site := range heap {
+		if strings.Contains(site.Stack, "TestMemoryProfileSitesFindsLiveAllocation") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("test allocation missing from heap sites: %+v", heap)
+	}
 }

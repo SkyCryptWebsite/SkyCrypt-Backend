@@ -1,13 +1,11 @@
 package forensics
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"hash/fnv"
-	"io"
 	"runtime"
 	"runtime/pprof"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -105,159 +103,87 @@ func collectMemoryAnalysis() memoryAnalysis {
 	if len(analysis.SizeClasses) > 12 {
 		analysis.SizeClasses = analysis.SizeClasses[:12]
 	}
-	analysis.TopHeapSites = profileSites("heap")
-	analysis.TopAllocationSites = profileSites("allocs")
+	analysis.TopHeapSites, analysis.TopAllocationSites = memoryProfileSites()
 	return analysis
-}
-
-func profileSites(name string) []memoryProfileSite {
-	profile := pprof.Lookup(name)
-	if profile == nil {
-		return nil
-	}
-	sites, err := topProfileSites(func() (io.ReadCloser, error) {
-		reader, writer := io.Pipe()
-		go func() {
-			_ = writer.CloseWithError(profile.WriteTo(writer, 1))
-		}()
-		return reader, nil
-	})
-	if err != nil {
-		return nil
-	}
-	return sites
 }
 
 const maxProfileSites = 15
 
-type siteCounts struct {
-	inUseObjects, inUseBytes, cumulativeObjects, cumulativeBytes int64
+// memoryProfileSites returns the largest sites by live bytes and by bytes allocated since start, adding up the
+// records of each stack. It reads the runtime's records directly and only symbolizes the stacks it returns:
+// writing the heap profile as text symbolized every stack, twice per list, and took most of a core for the many
+// seconds it ran, long enough that the dashboard timed out behind the proxy.
+func memoryProfileSites() (heap, allocs []memoryProfileSite) {
+	sites := map[[32]uintptr]*memoryProfileSite{}
+	for _, record := range memProfileRecords() {
+		site := sites[record.Stack0]
+		if site == nil {
+			site = &memoryProfileSite{}
+			sites[record.Stack0] = site
+		}
+		site.InUseObjects += record.InUseObjects()
+		site.InUseBytes += record.InUseBytes()
+		site.CumulativeObjects += record.AllocObjects
+		site.CumulativeBytes += record.AllocBytes
+	}
+	heap = topMemorySites(sites, func(site *memoryProfileSite) int64 { return site.InUseBytes })
+	allocs = topMemorySites(sites, func(site *memoryProfileSite) int64 { return site.CumulativeBytes })
+	return heap, allocs
 }
 
-// topProfileSites returns the profile's largest sites by live bytes, adding up records whose stacks name the same
-// functions. It reads the profile twice: once summing counts per stack hash, then once more for the winners'
-// stack text. Keeping every stack as a string instead held a few hundred MB for a long-running process's
-// allocation profile, each time the dashboard was built.
-func topProfileSites(open func() (io.ReadCloser, error)) ([]memoryProfileSite, error) {
-	counts := map[uint64]*siteCounts{}
-	err := scanProfileFile(open, func(record siteCounts, frames []string) {
-		key := hashFrames(frames)
-		total := counts[key]
-		if total == nil {
-			total = &siteCounts{}
-			counts[key] = total
+func memProfileRecords() []runtime.MemProfileRecord {
+	n, _ := runtime.MemProfile(nil, true)
+	for {
+		// Room for records added between the two calls.
+		records := make([]runtime.MemProfileRecord, n+64)
+		count, ok := runtime.MemProfile(records, true)
+		if ok {
+			return records[:count]
 		}
-		total.inUseObjects += record.inUseObjects
-		total.inUseBytes += record.inUseBytes
-		total.cumulativeObjects += record.cumulativeObjects
-		total.cumulativeBytes += record.cumulativeBytes
-	})
-	if err != nil || len(counts) == 0 {
-		return nil, err
+		n = count
 	}
-
-	keys := make([]uint64, 0, len(counts))
-	for key := range counts {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool { return counts[keys[i]].inUseBytes > counts[keys[j]].inUseBytes })
-	if len(keys) > maxProfileSites {
-		keys = keys[:maxProfileSites]
-	}
-	stacks := make(map[uint64]string, len(keys))
-	for _, key := range keys {
-		stacks[key] = ""
-	}
-	err = scanProfileFile(open, func(_ siteCounts, frames []string) {
-		key := hashFrames(frames)
-		if stack, wanted := stacks[key]; wanted && stack == "" {
-			stacks[key] = strings.Join(frames, "\n")
-		}
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	sites := make([]memoryProfileSite, 0, len(keys))
-	for _, key := range keys {
-		total := counts[key]
-		sites = append(sites, memoryProfileSite{
-			InUseObjects: total.inUseObjects, InUseBytes: total.inUseBytes,
-			CumulativeObjects: total.cumulativeObjects, CumulativeBytes: total.cumulativeBytes,
-			Stack: stacks[key],
-		})
-	}
-	return sites, nil
 }
 
-func scanProfileFile(open func() (io.ReadCloser, error), visit func(siteCounts, []string)) error {
-	reader, err := open()
-	if err != nil {
-		return err
+func topMemorySites(sites map[[32]uintptr]*memoryProfileSite, value func(*memoryProfileSite) int64) []memoryProfileSite {
+	stacks := make([][32]uintptr, 0, len(sites))
+	for stack, site := range sites {
+		if value(site) > 0 {
+			stacks = append(stacks, stack)
+		}
 	}
-	err = scanProfile(reader, visit)
-	_ = reader.Close()
-	return err
+	sort.Slice(stacks, func(i, j int) bool { return value(sites[stacks[i]]) > value(sites[stacks[j]]) })
+	if len(stacks) > maxProfileSites {
+		stacks = stacks[:maxProfileSites]
+	}
+	out := make([]memoryProfileSite, 0, len(stacks))
+	for _, stack := range stacks {
+		site := *sites[stack]
+		site.Stack = symbolizeStack(stack)
+		out = append(out, site)
+	}
+	return out
 }
 
-// scanProfile calls visit once per record of a text (debug=1) heap profile, with its counts and frame names. The
-// frames slice is reused between records.
-func scanProfile(reader io.Reader, visit func(siteCounts, []string)) error {
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 4096), 1024*1024)
-	var pending *siteCounts
-	var frames []string
-	flush := func() {
-		if pending != nil && len(frames) > 0 {
-			visit(*pending, frames)
-		}
-		pending = nil
-		frames = frames[:0]
+// symbolizeStack writes one "function file:line" line per frame, as the text heap profile did.
+func symbolizeStack(stack [32]uintptr) string {
+	pcs := stack[:]
+	if end := slices.Index(pcs, 0); end >= 0 {
+		pcs = pcs[:end]
 	}
-	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
-		if len(fields) < 2 || !strings.HasSuffix(fields[0], ":") {
-			if pending != nil && strings.HasPrefix(strings.TrimSpace(line), "#") {
-				if frame := profileStackName(line); frame != "" {
-					frames = append(frames, frame)
-				}
+	var out strings.Builder
+	frames := runtime.CallersFrames(pcs)
+	for {
+		frame, more := frames.Next()
+		if frame.Function != "" {
+			if out.Len() > 0 {
+				out.WriteByte('\n')
 			}
-			continue
+			fmt.Fprintf(&out, "%s %s:%d", frame.Function, frame.File, frame.Line)
 		}
-		objects, objectErr := strconv.ParseInt(strings.TrimSuffix(fields[0], ":"), 10, 64)
-		bytesUsed, bytesErr := strconv.ParseInt(fields[1], 10, 64)
-		if objectErr != nil || bytesErr != nil {
-			continue
-		}
-		flush()
-		pending = &siteCounts{inUseObjects: objects, inUseBytes: bytesUsed}
-		if len(fields) >= 4 {
-			cumulativeObjects := strings.TrimSuffix(strings.TrimPrefix(fields[2], "["), ":")
-			pending.cumulativeObjects, _ = strconv.ParseInt(cumulativeObjects, 10, 64)
-			pending.cumulativeBytes, _ = strconv.ParseInt(strings.TrimSuffix(fields[3], "]"), 10, 64)
+		if !more {
+			return out.String()
 		}
 	}
-	flush()
-	return scanner.Err()
-}
-
-// hashFrames identifies a stack by its frame names.
-func hashFrames(frames []string) uint64 {
-	h := fnv.New64a()
-	for _, frame := range frames {
-		_, _ = h.Write([]byte(frame))
-		_, _ = h.Write([]byte{'\n'})
-	}
-	return h.Sum64()
-}
-
-func profileStackName(line string) string {
-	fields := strings.Fields(strings.TrimSpace(line))
-	if len(fields) < 3 {
-		return ""
-	}
-	return strings.Join(fields[2:], " ")
 }
 
 // Sampling rates for the contention profiles, set only while forensics is on. One in mutexProfileFraction

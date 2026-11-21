@@ -143,6 +143,7 @@ func withRenderItemGlobals(t testing.TB) {
 	previousRenderer := customResourceRenderer
 	previousItems := constants.ItemsSnapshot()
 	previousCache := itemTextureCache
+	previousOrderedCache := orderedTextureCache
 	previousRenderedIndex := renderedSkyBlockIndex
 	previousRenderedCacheDir := renderedTextureIndexCacheDir
 	previousRenderedReload := renderedTextureIndexLastLazyReload
@@ -154,6 +155,7 @@ func withRenderItemGlobals(t testing.TB) {
 	customResourceRenderer = nil
 	constants.SetItems(map[string]models.ProcessedHypixelItem{})
 	itemTextureCache = map[string]AppliedItemTexture{}
+	orderedTextureCache = map[string]AppliedItemTexture{}
 	itemTextureResolutionGroup = singleflight.Group{}
 	renderedSkyBlockIndex = map[string]struct{}{}
 	renderedTextureIndexCacheDir = ""
@@ -167,6 +169,7 @@ func withRenderItemGlobals(t testing.TB) {
 		customResourceRenderer = previousRenderer
 		constants.SetItems(previousItems)
 		itemTextureCache = previousCache
+		orderedTextureCache = previousOrderedCache
 		renderedSkyBlockIndex = previousRenderedIndex
 		renderedTextureIndexCacheDir = previousRenderedCacheDir
 		renderedTextureIndexLastLazyReload = previousRenderedReload

@@ -95,14 +95,12 @@ func TestStableTextureKeysDoNotUseGenericKeysForSkyBlockItems(t *testing.T) {
 }
 
 func TestSkyBlockCacheDoesNotReuseDifferentItemsGenericModelTexture(t *testing.T) {
-	previousCache := itemTextureCache
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		"FSR|itemmodel:minecraft:iron_sword": {
 			Texture:     "crypt-dreadlord-texture",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 
 	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS", "FSR"})
 	_, ok, _ := cachedTextureForInputDetailed(ItemTextureInput{
@@ -116,14 +114,12 @@ func TestSkyBlockCacheDoesNotReuseDifferentItemsGenericModelTexture(t *testing.T
 }
 
 func TestCachedTextureLookupDoesNotLeakAcrossPackOrders(t *testing.T) {
-	previousCache := itemTextureCache
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		"FSR,HYPIXEL_PLUS|skyblock:ORDERED_CACHE": {
 			Texture:     "fsr-texture",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 
 	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS", "FSR"})
 	if texture, ok := cachedTextureForStableKey("skyblock:ORDERED_CACHE", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet); ok {
@@ -132,8 +128,7 @@ func TestCachedTextureLookupDoesNotLeakAcrossPackOrders(t *testing.T) {
 }
 
 func TestCachedTextureLookupUsesFirstEnabledPackWithTexture(t *testing.T) {
-	previousCache := itemTextureCache
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		"HYPIXEL_PLUS|skyblock:OVERLAP": {
 			Texture:     "hplus-texture",
 			TexturePack: "HYPIXEL_PLUS",
@@ -142,8 +137,7 @@ func TestCachedTextureLookupUsesFirstEnabledPackWithTexture(t *testing.T) {
 			Texture:     "fsr-texture",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 
 	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS", "FSR"})
 	texture, ok := cachedTextureForStableKey("skyblock:OVERLAP", context.PackSignature, context.EnabledPackIDs, context.EnabledPackSet)
@@ -156,15 +150,13 @@ func TestCachedTextureLookupUsesFirstEnabledPackWithTexture(t *testing.T) {
 }
 
 func TestApplyTextureInputReturnsCachedCustomSkullWithoutRendering(t *testing.T) {
-	previousCache := itemTextureCache
 	context := NewTextureApplyContext([]string{"FSR"})
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		textureCacheKey(context.PackSignature, "skyblock:PROCESS_CACHED_SKULL"): {
 			Texture:     "/cache/process-cached-skull.png",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 	context.DisableRuntimeRender = true
 
 	texture := ApplyTextureInput(ItemTextureInput{
@@ -188,15 +180,13 @@ func TestApplyTextureInputReturnsCachedCustomSkullWithoutRendering(t *testing.T)
 }
 
 func TestApplyTextureInputIgnoresDisabledPackSkullCache(t *testing.T) {
-	previousCache := itemTextureCache
 	disabledContext := NewTextureApplyContext([]string{"FSR"})
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		textureCacheKey(disabledContext.PackSignature, "skyblock:PROCESS_DISABLED_SKULL"): {
 			Texture:     "/cache/process-disabled-skull.png",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 	context := NewTextureApplyContext([]string{"HYPIXEL_PLUS"})
 	context.DisableRuntimeRender = true
 
@@ -214,15 +204,13 @@ func TestApplyTextureInputIgnoresDisabledPackSkullCache(t *testing.T) {
 }
 
 func TestApplyTextureInputRejectsGenericPackedSkullCache(t *testing.T) {
-	previousCache := itemTextureCache
 	context := NewTextureApplyContext([]string{"FSR"})
-	itemTextureCache = map[string]AppliedItemTexture{
+	useTextureCache(t, map[string]AppliedItemTexture{
 		textureCacheKey(context.PackSignature, "skyblock:PROCESS_PLACEHOLDER_SKULL"): {
 			Texture:     "/cache/model=minecraft_item_template_skull&tex1=block_soul_sand.png",
 			TexturePack: "FSR",
 		},
-	}
-	t.Cleanup(func() { itemTextureCache = previousCache })
+	})
 	context.DisableRuntimeRender = true
 
 	texture := ApplyTextureInput(ItemTextureInput{
@@ -275,11 +263,9 @@ func TestApplyTextureInputRejectsVanillaCustomSkullCache(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			previousCache := itemTextureCache
-			itemTextureCache = map[string]AppliedItemTexture{
+			useTextureCache(t, map[string]AppliedItemTexture{
 				textureCacheKey(test.cacheKey, "skyblock:BURNING_KUUDRA_CORE"): test.texture,
-			}
-			t.Cleanup(func() { itemTextureCache = previousCache })
+			})
 
 			context := NewTextureApplyContext(test.enabledPacks)
 			context.DisableRuntimeRender = true
@@ -340,4 +326,16 @@ func TestSortResourcePackConfigsUsesPriorityThenID(t *testing.T) {
 			t.Fatalf("configs[%d].Id = %q, want %q", index, configs[index].Id, id)
 		}
 	}
+}
+
+// useTextureCache swaps in a texture cache holding entries for the test, routing each key to the map it belongs in.
+func useTextureCache(t *testing.T, entries map[string]AppliedItemTexture) {
+	t.Helper()
+	previousCache, previousOrdered := itemTextureCache, orderedTextureCache
+	itemTextureCache = map[string]AppliedItemTexture{}
+	orderedTextureCache = map[string]AppliedItemTexture{}
+	for key, texture := range entries {
+		textureCacheFor(key)[key] = texture
+	}
+	t.Cleanup(func() { itemTextureCache, orderedTextureCache = previousCache, previousOrdered })
 }

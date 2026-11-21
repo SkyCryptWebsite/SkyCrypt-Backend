@@ -284,7 +284,7 @@ func cachedTextureByKey(key string, enabledPacks map[string]struct{}) (AppliedIt
 	}
 
 	itemTextureCacheMu.RLock()
-	texture := itemTextureCache[key]
+	texture := textureCacheFor(key)[key]
 	itemTextureCacheMu.RUnlock()
 
 	if !validCachedTexture(texture, enabledPacks) {
@@ -342,13 +342,11 @@ func (b *textureCacheBatch) set(packSignature string, stableKey string, texture 
 func (b *textureCacheBatch) apply(clearPackSignatures bool) {
 	itemTextureCacheMu.Lock()
 	if clearPackSignatures {
-		for key := range itemTextureCache {
-			if strings.HasPrefix(key, orderedPackSignaturePrefix) {
-				delete(itemTextureCache, key)
-			}
-		}
+		orderedTextureCache = make(map[string]AppliedItemTexture)
 	}
-	maps.Copy(itemTextureCache, b.textures)
+	for key, texture := range b.textures {
+		textureCacheFor(key)[key] = texture
+	}
 	itemTextureCacheMu.Unlock()
 
 	if len(b.skyblockIDs) == 0 {
@@ -361,9 +359,17 @@ func (b *textureCacheBatch) apply(clearPackSignatures bool) {
 
 func itemTextureCacheLen() int {
 	itemTextureCacheMu.RLock()
-	length := len(itemTextureCache)
+	length := len(itemTextureCache) + len(orderedTextureCache)
 	itemTextureCacheMu.RUnlock()
 	return length
+}
+
+// textureCacheFor returns the map that holds key. The caller holds itemTextureCacheMu.
+func textureCacheFor(key string) map[string]AppliedItemTexture {
+	if strings.HasPrefix(key, orderedPackSignaturePrefix) {
+		return orderedTextureCache
+	}
+	return itemTextureCache
 }
 
 func cachedTextureFromRawMap(itemMap map[string]any, textureCtx TextureApplyContext) (AppliedItemTexture, bool) {

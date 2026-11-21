@@ -3,7 +3,6 @@ package forensics
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -302,27 +302,40 @@ func buildRepeatVisitEntries(aggs map[string]*repeatVisitAgg) []repeatVisitEntry
 // so the full parse can skip the oldest and keep the newest when there are more than the limit.
 func countWindowSummaries(reader io.Reader, cutoff time.Time) int {
 	marker := []byte(`"forensic_request_summary"`)
-	stampKey := []byte(`"timestamp":"`)
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 512*1024), 1024*1024)
 	count := 0
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if !bytes.Contains(line, marker) {
+		if !bytes.Contains(line, marker) || lineBefore(line, cutoff) {
 			continue
-		}
-		if i := bytes.Index(line, stampKey); i >= 0 {
-			rest := line[i+len(stampKey):]
-			if end := bytes.IndexByte(rest, '"'); end >= 0 {
-				if ts, err := parseLogTimestamp(string(rest[:end])); err == nil && ts.Before(cutoff) {
-					continue
-				}
-			}
 		}
 		count++
 	}
 	return count
 }
+
+// lineBefore reports whether a log line's timestamp is before cutoff, reading only the timestamp. Lines without
+// a readable one are kept.
+func lineBefore(line []byte, cutoff time.Time) bool {
+	i := bytes.Index(line, logTimestampKey)
+	if i < 0 {
+		return false
+	}
+	rest := line[i+len(logTimestampKey):]
+	end := bytes.IndexByte(rest, '"')
+	if end < 0 {
+		return false
+	}
+	ts, err := parseLogTimestamp(string(rest[:end]))
+	return err == nil && ts.Before(cutoff)
+}
+
+var logTimestampKey = []byte(`"timestamp":"`)
+
+// logDecoder decodes log lines. The dashboard decodes every line in the window, a few hundred thousand per hour of
+// traffic, and with encoding/json that took long enough for the report to time out behind the proxy.
+var logDecoder = sonic.ConfigStd
 
 type logStatsReport struct {
 	LinesProcessed int    `json:"lines_processed"`
@@ -523,12 +536,12 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if len(line) == 0 || line[0] != '{' {
+		if len(line) == 0 || line[0] != '{' || lineBefore(line, cutoff) {
 			continue
 		}
 
 		var entry logLine
-		if err := json.Unmarshal(line, &entry); err != nil {
+		if err := logDecoder.Unmarshal(line, &entry); err != nil {
 			continue
 		}
 		report.LogStats.LinesProcessed++

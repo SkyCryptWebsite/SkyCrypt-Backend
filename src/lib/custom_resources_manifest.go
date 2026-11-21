@@ -486,6 +486,7 @@ func packIDFromRenderedFilename(fileName string) string {
 func resetRenderedTextureIndex() {
 	itemTextureCacheMu.Lock()
 	itemTextureCache = make(map[string]AppliedItemTexture)
+	orderedTextureCache = make(map[string]AppliedItemTexture)
 	itemTextureCacheMu.Unlock()
 
 	renderedSkyBlockIndexMu.Lock()
