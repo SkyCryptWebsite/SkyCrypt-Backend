@@ -451,6 +451,13 @@ func fetchGardenFresh(ctx context.Context, profileId string) (*skycrypttypes.Gar
 // cache as current data. A definite "not found" from upstream is passed on, never answered with old data.
 func withFallback(ctx context.Context, key string, fetch func() ([]byte, error), load func(context.Context) ([]byte, time.Time, bool)) (body []byte, fresh bool, err error) {
 	state := requestState(ctx)
+	if state != nil && state.PreferStored && !state.CacheOnly {
+		if stored, fetchedAt, ok := load(ctx); ok && time.Since(fetchedAt) < preferStoredMaxAge {
+			state.stale.Store(true)
+			state.markStaleFetchedAt(fetchedAt.UnixMilli())
+			return stored, false, nil
+		}
+	}
 	if state == nil || !state.CacheOnly {
 		body, err = fetch()
 		if err == nil {
@@ -488,6 +495,9 @@ func withFallback(ctx context.Context, key string, fetch func() ([]byte, error),
 	}
 	return stale, false, nil
 }
+
+// preferStoredMaxAge is how old stored data a PreferStored request accepts before asking Hypixel.
+const preferStoredMaxAge = 24 * time.Hour
 
 // cacheFresh caches a good upstream body in Redis and queues it for the long-term store, which reads it back from
 // Redis, so a body that didn't make it into Redis isn't queued.

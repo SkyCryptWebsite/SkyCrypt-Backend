@@ -19,6 +19,7 @@ func RequestTracingMiddleware() fiber.Handler {
 		if baseCtx == nil {
 			baseCtx = context.Background()
 		}
+		requestMetrics.knownBot = c.Get("X-Known-Bot") == "true"
 		metricsCtx := WithRequestMetrics(baseCtx, requestMetrics)
 		c.SetContext(metricsCtx)
 

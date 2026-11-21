@@ -163,17 +163,21 @@ type cacheLatencyEntry struct {
 }
 
 type responseCacheEntry struct {
-	Endpoint  string  `json:"endpoint"`
-	Route     string  `json:"route"`
-	Method    string  `json:"method"`
-	Count     int     `json:"count"`
-	RedisHits int     `json:"redis_hits"`
-	Cold      int     `json:"cold"`
-	HitRate   float64 `json:"hit_rate_percent"`
-	AvgMs     float64 `json:"avg_ms"`
-	P50Ms     float64 `json:"p50_ms"`
-	P95Ms     float64 `json:"p95_ms"`
-	MaxMs     float64 `json:"max_ms"`
+	Endpoint  string `json:"endpoint"`
+	Route     string `json:"route"`
+	Method    string `json:"method"`
+	Count     int    `json:"count"`
+	RedisHits int    `json:"redis_hits"`
+	Cold      int    `json:"cold"`
+	// Bots and BotsCold count requests from Cloudflare-verified bots (X-Known-Bot); BotsCold are those that were
+	// built, not served from the response cache.
+	Bots     int     `json:"bots"`
+	BotsCold int     `json:"bots_cold"`
+	HitRate  float64 `json:"hit_rate_percent"`
+	AvgMs    float64 `json:"avg_ms"`
+	P50Ms    float64 `json:"p50_ms"`
+	P95Ms    float64 `json:"p95_ms"`
+	MaxMs    float64 `json:"max_ms"`
 }
 
 type recentRequestEntry struct {
@@ -378,6 +382,7 @@ type logLine struct {
 	UpstreamWallByHost    map[string]float64     `json:"upstream_wall_by_host,omitempty"`
 	BuildWaitMs           float64                `json:"build_wait_ms,omitempty"`
 	SharedWaitMs          float64                `json:"shared_wait_ms,omitempty"`
+	KnownBot              bool                   `json:"known_bot,omitempty"`
 	Dependencies          []DependencySummary    `json:"dependencies,omitempty"`
 	RepeatedDeps          []RepeatedDependency   `json:"repeated_dependencies,omitempty"`
 	PID                   int                    `json:"pid,omitempty"`
@@ -428,6 +433,8 @@ type responseCacheAgg struct {
 	Durations []int64
 	RedisHits int
 	Cold      int
+	Bots      int
+	BotsCold  int
 }
 
 func dashboardOptionsFromCtx(c fiber.Ctx) dashboardOptions {
@@ -636,6 +643,12 @@ func parseLogFile(report *dashboardReport, opts dashboardOptions) {
 					responseCache[responseKey] = responseAgg
 				}
 				responseAgg.Durations = append(responseAgg.Durations, entry.DurationMs)
+				if entry.KnownBot {
+					responseAgg.Bots++
+					if entry.ResponseCacheStatus == "cold" {
+						responseAgg.BotsCold++
+					}
+				}
 				// The response cache lives in Redis only; there is no in-memory layer to count.
 				switch entry.ResponseCacheStatus {
 				case "redis":
@@ -932,6 +945,8 @@ func buildResponseCacheEntries(responseCache map[string]*responseCacheAgg) []res
 			Count:     count,
 			RedisHits: agg.RedisHits,
 			Cold:      agg.Cold,
+			Bots:      agg.Bots,
+			BotsCold:  agg.BotsCold,
 			HitRate:   float64(hits) / float64(count) * 100,
 			AvgMs:     avgDuration(agg.Durations),
 			P50Ms:     percentileDuration(agg.Durations, 0.50),
@@ -1339,10 +1354,10 @@ func renderResponseCacheTable(entries []responseCacheEntry) string {
 	if len(entries) == 0 {
 		return out + `<div class="empty">No response-cache summaries recorded yet.</div>`
 	}
-	out += `<table id="response-cache-table"><tr><th>Endpoint</th><th>Route</th><th>Method</th><th>Count</th><th>Redis</th><th>Cold</th><th>Hit</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th></tr>`
+	out += `<table id="response-cache-table"><tr><th>Endpoint</th><th>Route</th><th>Method</th><th>Count</th><th>Redis</th><th>Cold</th><th>Bots</th><th>Bots cold</th><th>Hit</th><th>Avg</th><th>P50</th><th>P95</th><th>Max</th></tr>`
 	for _, e := range entries {
-		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
-			esc(e.Endpoint), esc(e.Route), esc(e.Method), e.Count, e.RedisHits, e.Cold, e.HitRate, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs)
+		out += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%.1f%%</td><td>%.1f</td><td>%.1f</td><td>%.1f</td><td>%.1f</td></tr>`,
+			esc(e.Endpoint), esc(e.Route), esc(e.Method), e.Count, e.RedisHits, e.Cold, e.Bots, e.BotsCold, e.HitRate, e.AvgMs, e.P50Ms, e.P95Ms, e.MaxMs)
 	}
 	return out + `</table>`
 }
