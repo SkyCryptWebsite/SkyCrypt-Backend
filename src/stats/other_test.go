@@ -24,3 +24,17 @@ func TestGetProfileNeverReturnsTheCachedProfile(t *testing.T) {
 		}
 	}
 }
+
+// A member whose name the caller already has is listed under it without a lookup.
+func TestFormatMembersUsesKnownPlayer(t *testing.T) {
+	uuid := "0123456789abcdef0123456789abcdef"
+	profile := &skycrypttypes.Profile{ProfileID: "p", CuteName: "Apple", Members: map[string]skycrypttypes.Member{uuid: {}}}
+
+	members, err := FormatMembersContext(t.Context(), profile, &models.MowojangResponse{UUID: uuid, Name: "Known"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 || members[0].Name != "Known" || members[0].UUID != uuid {
+		t.Fatalf("members = %+v", members)
+	}
+}

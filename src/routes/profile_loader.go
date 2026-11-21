@@ -51,7 +51,19 @@ func loadProfileData(ctx context.Context, mowojang *models.MowojangResponse, pro
 
 	var resolveErr error
 	resolved := make(chan struct{})
+	// The name from Hypixel's player data, used when no identity is cached. The mowojang mirror fails or answers in
+	// about a second for most players it hasn't seen, and the Mojang fallback is often rate limited, so this lookup
+	// was most of a cold embed's time.
+	nameFromPlayer := false
 	if parts.name && mowojang.Name == "" {
+		if cached, ok := api.CachedPlayerContext(ctx, uuid); ok {
+			data.Mowojang = cached
+			parts.name = false
+		} else if parts.player {
+			nameFromPlayer = true
+		}
+	}
+	if parts.name && mowojang.Name == "" && !nameFromPlayer {
 		go func() {
 			defer close(resolved)
 			player, err := api.ResolvePlayerContext(ctx, uuid)
@@ -130,6 +142,15 @@ func loadProfileData(ctx context.Context, mowojang *models.MowojangResponse, pro
 
 	err := g.Wait()
 	<-resolved
+	if nameFromPlayer && err == nil {
+		if data.Player != nil && data.Player.DisplayName != "" {
+			data.Mowojang = &models.MowojangResponse{UUID: uuid, Name: data.Player.DisplayName}
+		} else if player, lookupErr := api.ResolvePlayerContext(ctx, uuid); lookupErr != nil {
+			resolveErr = failedTo("Failed to resolve player", lookupErr)
+		} else {
+			data.Mowojang = player
+		}
+	}
 	// A failed lookup wins, as it did when the lookup ran before the fetch.
 	if resolveErr != nil {
 		return nil, resolveErr

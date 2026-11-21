@@ -367,24 +367,30 @@ func uniqueUnresolvedUsernames(uuids []string, usernames map[string]string) []st
 }
 
 func resolvePlayerByUUIDContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {
-	var post models.MowojangResponse
+	if player, ok := CachedPlayerContext(ctx, uuid); ok {
+		return player, nil
+	}
+	return resolvePlayerByUUIDFreshContext(ctx, uuid)
+}
 
+// CachedPlayerContext returns the player's identity when this process or Redis already has it, without asking
+// mowojang or Mojang.
+func CachedPlayerContext(ctx context.Context, uuid string) (*models.MowojangResponse, bool) {
 	// A UUID and its name are the whole answer, so a name this process already knows needs no Redis or Mojang call.
 	if name, ok, _ := usernameLocalCache.Get(fmt.Sprintf("username:%s", uuid)); ok && name != "" {
-		return &models.MowojangResponse{UUID: uuid, Name: name}, nil
+		return &models.MowojangResponse{UUID: uuid, Name: name}, true
 	}
 
-	key := fmt.Sprintf("mowojangUUID:%s", uuid)
-	cache, err := redis.GetContext(ctx, key)
-	if err == nil && cache != "" {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err = json.Unmarshal([]byte(cache), &post)
-		if err == nil {
-			return &post, nil
-		}
+	cache, err := redis.GetContext(ctx, fmt.Sprintf("mowojangUUID:%s", uuid))
+	if err != nil || cache == "" {
+		return nil, false
 	}
-
-	return resolvePlayerByUUIDFreshContext(ctx, uuid)
+	var post models.MowojangResponse
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal([]byte(cache), &post); err != nil || post.UUID == "" {
+		return nil, false
+	}
+	return &post, true
 }
 
 func resolvePlayerByUUIDFreshContext(ctx context.Context, uuid string) (*models.MowojangResponse, error) {

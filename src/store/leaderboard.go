@@ -37,9 +37,13 @@ var modeNames = map[int16]string{0: "normal", 1: "ironman", 2: "stranded", 3: "b
 const (
 	defaultBoardSize = 1000
 	readyKey         = "lb:ready"
-	boardsKey        = "lb:boards"
-	rebuildEvery     = 24 * time.Hour
-	checkEvery       = 10 * time.Minute
+	// rebuiltKey is set for rebuildEvery after a full rebuild. It lives in Redis so that a restart, which every
+	// deploy is, doesn't rebuild the boards again: a rebuild scans every stored member and took most of the CPU and
+	// a few hundred MB for the first minutes after each start.
+	rebuiltKey   = "lb:rebuilt"
+	boardsKey    = "lb:boards"
+	rebuildEvery = 24 * time.Hour
+	checkEvery   = 10 * time.Minute
 )
 
 var (
@@ -252,15 +256,13 @@ func runLeaderboards() {
 	if client, err := db.Redis(); err == nil {
 		_ = putScript.Load(context.Background(), client).Err()
 	}
-	lastRebuild := time.Time{}
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 		if client, err := db.Redis(); err == nil {
 			ready, _ := client.Get(ctx, readyKey).Result()
-			if ready != readyValue() || time.Since(lastRebuild) >= rebuildEvery {
-				if err := rebuildBoards(ctx); err == nil {
-					lastRebuild = time.Now()
-				} else if !errors.Is(err, errNoRebuildLock) {
+			recent, recentErr := client.Exists(ctx, rebuiltKey).Result()
+			if recentErr == nil && (ready != readyValue() || recent == 0) {
+				if err := rebuildBoards(ctx); err != nil && !errors.Is(err, errNoRebuildLock) {
 					fmt.Printf("[STORE] could not rebuild the leaderboards: %v\n", err)
 				}
 			}
@@ -287,6 +289,22 @@ func (t *topEntries) Pop() any {
 type boardSet struct {
 	size   int
 	boards map[string]*topEntries
+	// keys caches boardKey per stat and mode: building two keys for every value of every record was a large part of
+	// what a rebuild allocated.
+	keys map[[2]string]string
+}
+
+func (b *boardSet) key(stat, mode string) string {
+	parts := [2]string{stat, mode}
+	if key, ok := b.keys[parts]; ok {
+		return key
+	}
+	if b.keys == nil {
+		b.keys = map[[2]string]string{}
+	}
+	key := boardKey(stat, mode)
+	b.keys[parts] = key
+	return key
 }
 
 func (b *boardSet) add(board string, score float64, entity string) {
@@ -309,8 +327,8 @@ func (b *boardSet) addRecord(entity string, mode int16, values valueSet) {
 	modeName := modeNames[mode]
 	for key, value := range values {
 		score := boardScore(key, value.value)
-		b.add(boardKey(key, "all"), score, entity)
-		b.add(boardKey(key, modeName), score, entity)
+		b.add(b.key(key, "all"), score, entity)
+		b.add(b.key(key, modeName), score, entity)
 	}
 }
 
@@ -406,6 +424,9 @@ func rebuildBoards(ctx context.Context) error {
 	}
 
 	if err := client.Set(ctx, readyKey, readyValue(), 0).Err(); err != nil {
+		return err
+	}
+	if err := client.Set(ctx, rebuiltKey, 1, rebuildEvery).Err(); err != nil {
 		return err
 	}
 	fmt.Printf("[STORE] rebuilt %d leaderboards from %d records in %v (%d changed during it)\n",

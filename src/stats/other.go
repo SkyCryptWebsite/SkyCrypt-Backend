@@ -6,6 +6,7 @@ import (
 	"skycrypt/src/api"
 	"skycrypt/src/constants"
 	"skycrypt/src/models"
+	"slices"
 	"sort"
 	"strings"
 
@@ -65,12 +66,25 @@ func FormatMembers(profile *skycrypttypes.Profile) ([]*models.MemberStats, error
 	return FormatMembersContext(context.Background(), profile)
 }
 
-func FormatMembersContext(ctx context.Context, profile *skycrypttypes.Profile) ([]*models.MemberStats, error) {
+// FormatMembersContext lists the profile's members with their names. Players in known already have a name and are
+// not looked up again.
+func FormatMembersContext(ctx context.Context, profile *skycrypttypes.Profile, known ...*models.MowojangResponse) ([]*models.MemberStats, error) {
 	memberUUIDs := make([]string, 0, len(profile.Members))
 	for memberUUID := range profile.Members {
-		memberUUIDs = append(memberUUIDs, memberUUID)
+		if !slices.ContainsFunc(known, func(player *models.MowojangResponse) bool {
+			return player != nil && player.Name != "" && player.UUID == memberUUID
+		}) {
+			memberUUIDs = append(memberUUIDs, memberUUID)
+		}
 	}
 	resolvedMembers := api.ResolvePlayersContext(ctx, memberUUIDs)
+	for _, player := range known {
+		if player != nil && player.Name != "" {
+			if _, ok := profile.Members[player.UUID]; ok {
+				resolvedMembers[player.UUID] = player
+			}
+		}
+	}
 	members := make([]*models.MemberStats, 0, len(profile.Members))
 	for memberUUID, memberData := range profile.Members {
 		mowojang := resolvedMembers[memberUUID]

@@ -126,7 +126,7 @@ func computeStatsContext(ctx context.Context, mowojang *models.MowojangResponse,
 		return nil, fmt.Errorf("failed to load profile: %w", err)
 	}
 
-	members, err := stats.FormatMembersContext(ctx, data.Profile)
+	members, err := stats.FormatMembersContext(ctx, data.Profile, data.Mowojang)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format members: %v", err)
 	}
