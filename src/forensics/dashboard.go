@@ -169,7 +169,7 @@ type responseCacheEntry struct {
 	Count     int    `json:"count"`
 	RedisHits int    `json:"redis_hits"`
 	Cold      int    `json:"cold"`
-	// Bots and BotsCold count requests from Cloudflare-verified bots (X-Known-Bot); BotsCold are those that were
+	// Bots and BotsCold count requests from Cloudflare-verified bots and Discord (X-Verified-Bot); BotsCold are those that were
 	// built, not served from the response cache.
 	Bots     int     `json:"bots"`
 	BotsCold int     `json:"bots_cold"`

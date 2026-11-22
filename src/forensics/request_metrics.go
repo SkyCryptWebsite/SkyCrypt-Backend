@@ -70,7 +70,7 @@ type RequestSummary struct {
 	// lookup another request had already started.
 	BuildWaitMs  float64 `json:"build_wait_ms,omitempty"`
 	SharedWaitMs float64 `json:"shared_wait_ms,omitempty"`
-	// KnownBot is set for crawlers and link previews Cloudflare verified (X-Known-Bot).
+	// KnownBot is set for crawlers and link previews Cloudflare verified (X-Verified-Bot).
 	KnownBot             bool                 `json:"known_bot,omitempty"`
 	Dependencies         []DependencySummary  `json:"dependencies"`
 	RepeatedDependencies []RepeatedDependency `json:"repeated_dependencies"`
