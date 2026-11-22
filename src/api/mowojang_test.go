@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"skycrypt/src/models"
@@ -131,5 +132,36 @@ func TestResolvePlayerFallsBackWhenMirrorStalls(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("lookup took %s with a stalled mirror", elapsed)
+	}
+}
+
+// A name no player has is remembered: asking again must not cost another Mojang call.
+func TestMissingPlayerIsCached(t *testing.T) {
+	const username = "NoSuchPlayer_Cached"
+
+	originalClient := HTTPClient
+	t.Cleanup(func() { HTTPClient = originalClient })
+
+	var mojangCalls atomic.Int32
+	HTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Host, "api.mojang.com") {
+				mojangCalls.Add(1)
+				return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(bytes.NewReader(nil))}, nil
+			}
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader([]byte("player not found")))}, nil
+		}),
+	}
+
+	for range 3 {
+		if _, err := GetUUIDContext(context.Background(), username); !errors.Is(err, ErrPlayerNotFound) {
+			t.Fatalf("err = %v, want ErrPlayerNotFound", err)
+		}
+	}
+	if uuid, err := GetUUIDContext(context.Background(), strings.ToUpper(username), false); uuid != "" || err != nil {
+		t.Fatalf("got %q, %v; want an empty answer without an error", uuid, err)
+	}
+	if got := mojangCalls.Load(); got != 1 {
+		t.Fatalf("Mojang called %d times, want 1", got)
 	}
 }

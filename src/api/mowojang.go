@@ -30,6 +30,10 @@ const identityCacheTTL = 24 * time.Hour
 // burst of requests, short enough that a renamed player shows up soon.
 const storedNameCacheTTL = 5 * time.Minute
 
+// missingPlayerTTL keeps "no player has this name", so a mistyped link or a bot retrying it doesn't cost a mowojang
+// and a Mojang call every time. Short, because someone can register the name or rename to it.
+const missingPlayerTTL = 30 * time.Minute
+
 var (
 	usernameLocalCache = localcache.NewLocalCache[string](8192)
 	uuidLocalCache     = localcache.NewLocalCache[string](8192)
@@ -100,6 +104,21 @@ func GetUUIDContext(ctx context.Context, username string, throwAnError ...bool) 
 	if err == nil && cachedUUID != "" {
 		uuidLocalCache.Set(key, cachedUUID, identityCacheTTL, identityCacheTTL)
 		return cachedUUID, nil
+	}
+
+	missingKey := missingPlayerKey(username)
+	_, missing, _ := uuidLocalCache.Get(missingKey)
+	if !missing {
+		if value, err := redis.GetContext(ctx, missingKey); err == nil && value != "" {
+			uuidLocalCache.Set(missingKey, value, missingPlayerTTL, missingPlayerTTL)
+			missing = true
+		}
+	}
+	if missing {
+		if shouldThrowError {
+			return "", fmt.Errorf("%w: invalid username or UUID provided", ErrPlayerNotFound)
+		}
+		return "", nil
 	}
 
 	// Concurrent lookups of one name share a single Mojang call.
@@ -448,6 +467,7 @@ func getUUIDFromMojangContext(ctx context.Context, username string, shouldThrowE
 	}
 
 	if mojangNotFound(resp.StatusCode) {
+		rememberMissingPlayer(ctx, username)
 		if shouldThrowError {
 			return "", fmt.Errorf("%w: invalid username or UUID provided", ErrPlayerNotFound)
 		}
@@ -535,6 +555,16 @@ func resolvePlayerFromMojangContext(ctx context.Context, uuid string) (*models.M
 	cacheMowojangIdentity(ctx, mojangResp.Name, mojangResp.ID, string(mojangBytes), true)
 
 	return post, nil
+}
+
+func missingPlayerKey(username string) string {
+	return "uuidmissing:" + strings.ToLower(username)
+}
+
+func rememberMissingPlayer(ctx context.Context, username string) {
+	key := missingPlayerKey(username)
+	uuidLocalCache.Set(key, "1", missingPlayerTTL, missingPlayerTTL)
+	_ = redis.SetContext(ctx, key, "1", int(missingPlayerTTL.Seconds()))
 }
 
 // mojangNotFound reports a Mojang answer that means the player doesn't exist: 404, 204 (no content) or 400 (not a
