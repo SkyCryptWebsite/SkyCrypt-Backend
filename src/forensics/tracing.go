@@ -19,7 +19,9 @@ func RequestTracingMiddleware() fiber.Handler {
 		if baseCtx == nil {
 			baseCtx = context.Background()
 		}
-		requestMetrics.knownBot = c.Get("X-Known-Bot") == "true"
+		// Cloudflare sets X-Verified-Bot on every request, overwriting what the client sent. X-Known-Bot can be sent by
+		// anyone on purpose (it only picks stored data), so it would let spoofers into the bot counts.
+		requestMetrics.knownBot = c.Get("X-Verified-Bot") == "true"
 		metricsCtx := WithRequestMetrics(baseCtx, requestMetrics)
 		c.SetContext(metricsCtx)
 
